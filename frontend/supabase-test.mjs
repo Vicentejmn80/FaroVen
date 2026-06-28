@@ -1,0 +1,1 @@
+import { createClient } from '@supabase/supabase-js'; const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY); const res = await supabase.from('hospitals').select('*').limit(1); console.log('res=', res);
