@@ -6,8 +6,8 @@
 
 ```
 ┌─────────────────────────────────────┐
-│  ⚠ OPERACIÓN RESCATE               │
-│  Plataforma de Consulta Oficial     │
+│  🗼 FaroVen                         │
+│  Información verificada en Venezuela │
 │  Última actualización: [fecha/hora] │
 ├─────────────────────────────────────┤
 │                                     │

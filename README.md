@@ -1,6 +1,8 @@
-# Operación Rescate
+# FaroVen
 
-Plataforma ligera para consultar necesidades verificadas y que coordinadores en hospitales o centros de acopio actualicen datos en sitio.
+Plataforma ligera para consultar necesidades verificadas en Venezuela. Los coordinadores en hospitales y centros de acopio actualizan datos en sitio; el público consulta sin cuenta.
+
+**Repo sugerido en GitHub:** `faroven`
 
 ## Estructura
 

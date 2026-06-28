@@ -22,7 +22,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ThemeProvider defaultTheme="dark" storageKey="rescate-theme">
+        <ThemeProvider defaultTheme="dark" storageKey="faroven-theme">
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
       </BrowserRouter>

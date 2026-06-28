@@ -1,5 +1,9 @@
-export const APP_NAME = 'Operación Rescate'
-export const APP_DESCRIPTION = 'Plataforma oficial de consulta de personas afectadas durante emergencias'
+export const APP_NAME = 'FaroVen'
+export const APP_SLUG = 'faroven'
+export const APP_ICON = '🗼'
+export const APP_TAGLINE = 'Tu faro de información verificada en Venezuela'
+export const APP_DESCRIPTION =
+  'Consulta necesidades, hospitales y centros de acopio con datos verificados por coordinadores en sitio.'
 export const SEARCH_MIN_LENGTH = 2
 export const SEARCH_DEBOUNCE_MS = 300
 export const MAX_SEARCH_RESULTS = 20

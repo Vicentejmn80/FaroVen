@@ -8,6 +8,7 @@ import { useCoordinatorProfile, useSaveCoordinatorSite } from '@/hooks/useCoordi
 import { useSitesRegistry } from '@/hooks/useSitesRegistry'
 import type { CoordinatorSiteType } from '@/lib/types'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
+import { APP_NAME } from '@/lib/constants'
 
 const SITE_TYPE_LABELS: Record<CoordinatorSiteType, string> = {
   hospital: 'Hospital',
@@ -70,7 +71,7 @@ export function VolunteerSiteSetupPage() {
   return (
     <div>
       <div className="mb-6 text-center">
-        <Badge variant="info" className="mb-3">Coordinador verificado</Badge>
+        <Badge variant="info" className="mb-3">{APP_NAME} · Coordinador</Badge>
         <h1 className="text-lg sm:text-xl font-bold mb-2">¿Dónde coordinas hoy?</h1>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           Elige tu hospital o centro de acopio. Si ya existe en la lista, selecciónalo. Si no,

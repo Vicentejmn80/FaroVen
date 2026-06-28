@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/auth-provider'
-import { APP_NAME } from '@/lib/constants'
+import { APP_NAME, APP_ICON } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 
 export function Header() {
@@ -10,8 +10,8 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between gap-2">
         <Link to="/" className="flex items-center gap-2 font-bold text-sm shrink-0">
-          <span className="text-primary text-lg">⚠</span>
-          <span className="hidden sm:inline">{APP_NAME}</span>
+          <span className="text-primary text-lg">{APP_ICON}</span>
+          <span className="font-bold text-sm">{APP_NAME}</span>
         </Link>
 
         <div className="flex items-center gap-2">

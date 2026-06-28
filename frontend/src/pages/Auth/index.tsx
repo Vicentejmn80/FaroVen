@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
+import { APP_NAME } from '@/lib/constants'
 
 type Step = 'email' | 'check-email' | 'code'
 
@@ -181,7 +182,7 @@ export function AuthPage() {
         <Link to="/" className="text-xs text-muted-foreground hover:text-primary">
           ← Volver al inicio
         </Link>
-        <Badge variant="info" className="mt-4 mb-3">Coordinador en sitio</Badge>
+        <Badge variant="info" className="mt-4 mb-3">{APP_NAME} · Coordinador</Badge>
         <h1 className="text-xl font-bold mb-2">Iniciar sesión</h1>
         <p className="text-sm text-muted-foreground">
           Te enviamos un enlace seguro al correo. No hay contraseña.

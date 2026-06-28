@@ -1,7 +1,7 @@
 {
-  "name": "Operación Rescate",
-  "short_name": "Rescate",
-  "description": "Información verificada: personas, necesidades y dónde llevar ayuda",
+  "name": "FaroVen",
+  "short_name": "FaroVen",
+  "description": "FaroVen — información verificada: necesidades, hospitales y centros de acopio en Venezuela",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

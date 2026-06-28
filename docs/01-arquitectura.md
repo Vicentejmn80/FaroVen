@@ -1,4 +1,4 @@
-# ARQUITECTURA DEL SISTEMA — Plataforma de Consulta de Personas Afectadas (Emergencia)
+# ARQUITECTURA DEL SISTEMA — FaroVen
 
 ## 1. Arquitectura General
 

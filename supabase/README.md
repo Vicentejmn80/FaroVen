@@ -1,4 +1,4 @@
-# Supabase migrations (project bootstrap)
+# Supabase migrations — FaroVen
 
 This folder contains idempotent migrations to bootstrap the core schema and keep compatibility with a manually-created `hospitals` table.
 

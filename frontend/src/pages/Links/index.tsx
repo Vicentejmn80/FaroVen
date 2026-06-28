@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { APP_NAME } from '@/lib/constants'
+import { APP_NAME, APP_ICON } from '@/lib/constants'
 import { copyToClipboard, getShareUrl } from '@/lib/utils'
 
 const links = [
@@ -32,10 +32,10 @@ export function LinksPage() {
   return (
     <div className="max-w-md mx-auto py-8 px-2">
       <div className="text-center mb-8">
-        <div className="text-4xl mb-3">⚠</div>
+        <div className="text-4xl mb-3">{APP_ICON}</div>
         <h1 className="text-xl font-bold">{APP_NAME}</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          Enlace oficial para consultar y coordinar ayuda verificada
+          Enlace oficial de {APP_NAME} para consultar y coordinar ayuda verificada
         </p>
       </div>
 
@@ -64,7 +64,7 @@ export function LinksPage() {
       <Card className="mt-6">
         <CardContent className="py-4 text-xs text-muted-foreground space-y-2">
           <p className="font-medium text-foreground text-sm">Cómo usarlo en Instagram</p>
-          <p>1. Crea perfil: <strong>@operacionrescate.ve</strong> (o similar).</p>
+          <p>1. Crea perfil: <strong>@faroven.ve</strong> (o similar).</p>
           <p>2. En “Enlace en bio”, pega: <code className="text-foreground">{shareUrl.replace('https://', '')}</code></p>
           <p>3. Publica 1 story al día con “link en bio” + captura del boletín verificado.</p>
           <p>4. No repostees todo: solo cambios confirmados con fuente y hora.</p>

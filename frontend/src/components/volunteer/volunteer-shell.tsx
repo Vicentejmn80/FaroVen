@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/auth-provider'
+import { APP_NAME } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getInitials } from '@/lib/utils'
@@ -15,7 +16,7 @@ function emailInitials(email: string) {
 
 export function VolunteerShell() {
   const { user, signOut } = useAuth()
-  const email = user?.email ?? 'voluntario'
+  const email = user?.email ?? 'coordinador'
 
   return (
     <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background p-4 sm:p-5 mb-5">
@@ -26,7 +27,7 @@ export function VolunteerShell() {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <p className="font-semibold truncate">Coordinador en sitio</p>
+              <p className="font-semibold truncate">{APP_NAME} · Coordinador</p>
               <Badge variant="success">Sesión activa</Badge>
             </div>
             <p className="text-sm text-muted-foreground truncate">{email}</p>
@@ -36,14 +37,10 @@ export function VolunteerShell() {
         <div className="flex flex-wrap gap-2">
           <Link to="/">
             <Button variant="outline" size="sm">
-              Ver sitio público
+              Ver {APP_NAME}
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => signOut()}
-          >
+          <Button variant="ghost" size="sm" onClick={() => signOut()}>
             Cerrar sesión
           </Button>
         </div>
