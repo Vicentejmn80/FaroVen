@@ -1,0 +1,245 @@
+import type { ActivityEvent, BlufMetric, Center, Event, Need, Report, Site, SiteNeed } from '@/lib/types'
+import { GUIDE_LIBRARY } from '@/data/guide-library'
+import { SUMMARY_LABELS } from '@/lib/summary-labels'
+import { isValidCoord, parseCoord } from '@/lib/utils'
+
+export interface FaroDataset {
+  centers: Center[]
+  needs: Need[]
+  reports: Report[]
+  events: Event[]
+}
+
+export const EMPTY_FARO_DATASET: FaroDataset = {
+  centers: [],
+  needs: [],
+  reports: [],
+  events: [],
+}
+
+function coverage(need: Need): number {
+  return Math.max(0, Math.min(100, Math.round((need.available / Math.max(need.required, 1)) * 100)))
+}
+
+function toSiteNeed(need: Need): SiteNeed {
+  return {
+    id: need.id,
+    item: need.type,
+    priority: need.priority,
+    coverage: coverage(need),
+  }
+}
+
+function statusLabel(center: Center): string {
+  if (center.type === 'hospital' || center.type === 'shelter' || center.type === 'medical_center') {
+    return `Saturación ${Math.round((center.capacity.current / Math.max(center.capacity.total, 1)) * 100)}%`
+  }
+  if (center.type === 'supply_center') return center.status === 'operational' ? 'Operativo · recibe' : 'Capacidad media'
+  return 'Monitoreo activo'
+}
+
+function fallbackMapPoint(index: number) {
+  const points = [
+    { x: 0.36, y: 0.3 },
+    { x: 0.55, y: 0.46 },
+    { x: 0.7, y: 0.36 },
+    { x: 0.2, y: 0.52 },
+    { x: 0.42, y: 0.62 },
+  ]
+  return points[index % points.length]
+}
+
+export function toSite(center: Center, needsByCenter: Map<string, Need[]>, index: number): Site {
+  const point = fallbackMapPoint(index)
+  const lat = parseCoord(center.location.coordinates.lat)
+  const lng = parseCoord(center.location.coordinates.lng)
+  return {
+    id: center.id,
+    name: center.name,
+    type: center.type,
+    status: center.status,
+    statusLabel: statusLabel(center),
+    zone: center.location.zone,
+    lat: isValidCoord(lat, lng) ? lat : NaN,
+    lng: isValidCoord(lat, lng) ? lng : NaN,
+    mapX: point.x,
+    mapY: point.y,
+    needs: (needsByCenter.get(center.id) ?? []).map(toSiteNeed),
+    updatedAt: center.updatedAt,
+    verified: center.confidence !== 'low',
+  }
+}
+
+function summarizeNeedEvent(need: Need, center: Center): Event | null {
+  const pct = coverage(need)
+  if (need.priority === 'critical' && pct < 45) {
+    return {
+      id: `evt-need-${need.id}`,
+      kind: 'request',
+      title: `${center.name} necesita ${need.type}`,
+      detail: `${need.type} con cobertura de ${pct}%.`,
+      centerId: center.id,
+      status: 'critical',
+      createdAt: need.updatedAt,
+    }
+  }
+  if (need.status === 'covered' || pct >= 85) {
+    return {
+      id: `evt-covered-${need.id}`,
+      kind: 'resolved',
+      title: `${center.name} estabilizó ${need.type}`,
+      detail: `${need.type} se encuentra cubierta en ${pct}%.`,
+      centerId: center.id,
+      status: 'operational',
+      createdAt: need.updatedAt,
+    }
+  }
+  return null
+}
+
+function centerStatusEvent(center: Center): Event {
+  const occupancy = Math.round((center.capacity.current / Math.max(center.capacity.total, 1)) * 100)
+  return {
+    id: `evt-center-${center.id}-${center.updatedAt.getTime()}`,
+    kind: 'saturation',
+    title: `${center.name} actualizó su estado`,
+    detail: `Ocupación en ${occupancy}% (${center.location.zone}).`,
+    centerId: center.id,
+    status: center.status,
+    createdAt: center.updatedAt,
+  }
+}
+
+function reportToEvent(report: Report, centerName?: string): Event {
+  return {
+    id: `evt-report-${report.id}`,
+    kind: 'report',
+    title: centerName ? `Reporte verificado en ${centerName}` : 'Nuevo reporte ciudadano verificado',
+    detail: report.description,
+    centerId: report.centerId,
+    reportId: report.id,
+    status: report.status === 'verified' ? 'info' : 'warning',
+    createdAt: report.createdAt,
+  }
+}
+
+export function buildTimelineEvents(
+  dataset: FaroDataset = EMPTY_FARO_DATASET,
+  options?: { authoritativeEvents?: boolean },
+): Event[] {
+  if (options?.authoritativeEvents && dataset.events.length) {
+    return [...dataset.events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  }
+
+  const centerById = new Map(dataset.centers.map((center) => [center.id, center]))
+
+  const generatedFromCenters = dataset.centers.map(centerStatusEvent)
+  const generatedFromNeeds = dataset.needs
+    .map((need) => {
+      const center = centerById.get(need.centerId)
+      return center ? summarizeNeedEvent(need, center) : null
+    })
+    .filter((event): event is Event => event !== null)
+  const generatedFromReports = dataset.reports.map((report) =>
+    reportToEvent(report, report.centerId ? centerById.get(report.centerId)?.name : undefined),
+  )
+
+  return [...generatedFromCenters, ...generatedFromNeeds, ...generatedFromReports].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  )
+}
+
+export function getSites(dataset: FaroDataset = EMPTY_FARO_DATASET): Site[] {
+  const needsByCenter = new Map<string, Need[]>()
+  for (const need of dataset.needs) {
+    const list = needsByCenter.get(need.centerId) ?? []
+    list.push(need)
+    needsByCenter.set(need.centerId, list)
+  }
+  return dataset.centers.map((center, index) => toSite(center, needsByCenter, index))
+}
+
+export function getCenterById(id: string, dataset: FaroDataset = EMPTY_FARO_DATASET): Center | undefined {
+  return dataset.centers.find((center) => center.id === id)
+}
+
+export function getCriticalCenters(dataset: FaroDataset = EMPTY_FARO_DATASET): Center[] {
+  return dataset.centers.filter((center) => center.status === 'critical' || center.priority === 'critical')
+}
+
+export function getReportsByCenter(centerId: string, dataset: FaroDataset = EMPTY_FARO_DATASET): Report[] {
+  return dataset.reports
+    .filter((report) => report.centerId === centerId)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+}
+
+export function getCriticalNeeds(dataset: FaroDataset = EMPTY_FARO_DATASET): Need[] {
+  return dataset.needs.filter((need) => need.priority === 'critical' || coverage(need) < 40)
+}
+
+export function getLatestActivity(limit = 8, dataset: FaroDataset = EMPTY_FARO_DATASET): Event[] {
+  return buildTimelineEvents(dataset, { authoritativeEvents: dataset.events.length > 0 }).slice(0, limit)
+}
+
+export function toActivityEvent(event: Event, siteName?: string): ActivityEvent {
+  const allowedKind: ActivityEvent['kind'] =
+    event.kind === 'inventory' ||
+    event.kind === 'saturation' ||
+    event.kind === 'report' ||
+    event.kind === 'request' ||
+    event.kind === 'resolved'
+      ? event.kind
+      : 'report'
+  return {
+    id: event.id,
+    kind: allowedKind,
+    title: event.title,
+    detail: event.detail,
+    siteName,
+    status: event.status,
+    at: event.createdAt,
+  }
+}
+
+export function getActivityFeed(limit = 8, dataset: FaroDataset = EMPTY_FARO_DATASET): ActivityEvent[] {
+  const centerById = new Map(dataset.centers.map((center) => [center.id, center.name]))
+  return getLatestActivity(limit, dataset).map((event) => toActivityEvent(event, event.centerId ? centerById.get(event.centerId) : undefined))
+}
+
+export function getTimelineByCenter(centerId: string, dataset: FaroDataset = EMPTY_FARO_DATASET): Event[] {
+  return buildTimelineEvents(dataset, { authoritativeEvents: dataset.events.length > 0 }).filter(
+    (event) => event.centerId === centerId,
+  )
+}
+
+export function getSummary(dataset: FaroDataset = EMPTY_FARO_DATASET): BlufMetric[] {
+  const timeline = buildTimelineEvents(dataset, { authoritativeEvents: dataset.events.length > 0 })
+  const criticalCenters = getCriticalCenters(dataset).length
+  const criticalNeeds = getCriticalNeeds(dataset).length
+  const operationalCenters = dataset.centers.filter((center) => center.status === 'operational').length
+  const recentUpdates = timeline.filter((event) => Date.now() - event.createdAt.getTime() < 24 * 60 * 60 * 1000).length
+
+  return [
+    { id: 'sm-1', label: SUMMARY_LABELS.criticalCenters, value: criticalCenters, status: 'critical', trend: 'up' },
+    { id: 'sm-2', label: SUMMARY_LABELS.criticalNeeds, value: criticalNeeds, status: 'warning', trend: 'down' },
+    {
+      id: 'sm-3',
+      label: SUMMARY_LABELS.operationalCenters,
+      value: operationalCenters,
+      status: 'operational',
+      trend: 'flat',
+    },
+    {
+      id: 'sm-4',
+      label: SUMMARY_LABELS.recentUpdates,
+      value: recentUpdates,
+      unit: '24 h',
+      status: 'info',
+      trend: 'up',
+    },
+  ]
+}
+
+export function getGuideLibrary() {
+  return GUIDE_LIBRARY
+}

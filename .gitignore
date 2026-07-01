@@ -4,10 +4,20 @@ dist/
 .env.local
 .env.*.local
 !.env.example
-frontend/.env
 *.log
 .DS_Store
 .vscode/
 .cursor/
 *.tsbuildinfo
 Thumbs.db
+
+# Proyectos archivados de fases anteriores
+legacy-next/node_modules/
+legacy-next/.next/
+legacy-next/dist/
+legacy-frontend/node_modules/
+legacy-frontend/.next/
+legacy-frontend/dist/
+frontend/node_modules/
+frontend/.next/
+frontend/dist/

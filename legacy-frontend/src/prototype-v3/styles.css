@@ -1,0 +1,995 @@
+/* ─────────────────────────────────────────────────────────────
+   FaroVen · Prototype v3 — Design System v2
+   Mobile-first · App-like · Operacional
+   ───────────────────────────────────────────────────────────── */
+
+/* ── 1. Reset & font ──────────────────────────────────────── */
+.pv3-body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #F2F3F7;
+}
+
+/* ── 2. Design tokens ─────────────────────────────────────── */
+.pv3, .pv3--operational {
+  /* Backgrounds */
+  --bg:          #F2F3F7;
+  --surface:     #FFFFFF;
+  --surface-2:   #F7F8FA;
+  --surface-3:   #EDEEF2;
+
+  /* Text */
+  --text:        #0F1117;
+  --text-2:      #4B5265;
+  --text-3:      #9AA3B2;
+
+  /* Borders */
+  --line:        rgba(15, 17, 23, 0.10);
+  --line-strong: rgba(15, 17, 23, 0.18);
+
+  /* Semantic — subtle tints */
+  --red-bg:      #FFF1F1;
+  --red-border:  #FCBBBB;
+  --red-text:    #C0392B;
+  --red-num:     #E53935;
+
+  --yellow-bg:   #FFFBEE;
+  --yellow-border:#F5D060;
+  --yellow-text: #9A6700;
+  --yellow-num:  #E09000;
+
+  --green-bg:    #F1FBF4;
+  --green-border:#9CDDB0;
+  --green-text:  #1A7A40;
+  --green-num:   #22A355;
+
+  --slate-bg:    #F7F8FA;
+  --slate-border:#D8DCE6;
+  --slate-text:  #6B7280;
+
+  /* Shadows — neumorphic lite */
+  --shadow-sm:   0 1px 3px rgba(15, 17, 23, 0.07);
+  --shadow-md:   0 4px 16px rgba(15, 17, 23, 0.08);
+  --shadow-lg:   0 12px 40px rgba(15, 17, 23, 0.14);
+  --shadow-inset:inset 0 1px 3px rgba(15, 17, 23, 0.06);
+
+  /* Shape */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   18px;
+  --radius-xl:   24px;
+  --radius-full: 999px;
+
+  /* Touch targets */
+  --touch:       48px;
+  --touch-lg:    56px;
+
+  /* Transitions */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Content width */
+  --app-width:   500px;
+
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.pv3 *, .pv3 *::before, .pv3 *::after,
+.pv3--operational *, .pv3--operational *::before, .pv3--operational *::after {
+  box-sizing: border-box;
+}
+
+/* ── 3. App shell (operational, no sidebar) ───────────────── */
+.pv3--operational {
+  display: block;
+  background: var(--bg);
+}
+
+/* Centered narrow column — feels like a native app on desktop */
+.triage,
+.pv3-auth-gate,
+.pv3-onboarding {
+  max-width: var(--app-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── 4. Loading state ─────────────────────────────────────── */
+.pv3-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* ── 5. Auth gate ─────────────────────────────────────────── */
+.pv3-auth-gate {
+  padding: 32px 20px max(env(safe-area-inset-bottom), 32px);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ── 6. Onboarding / registration ────────────────────────── */
+.pv3-onboarding {
+  padding: 20px 20px max(env(safe-area-inset-bottom), 32px);
+}
+
+/* ── 7. Triage dashboard shell ────────────────────────────── */
+.triage {
+  display: grid;
+  gap: 12px;
+  padding: 16px 16px max(env(safe-area-inset-bottom), 32px);
+  min-height: 100vh;
+  align-content: start;
+}
+
+/* ── 8. Triage header ─────────────────────────────────────── */
+.triage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.triage-header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.triage-header__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.triage-site-name {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  color: var(--text);
+}
+
+.triage-site-type {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.triage-sync {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.triage-header__signout {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  letter-spacing: 0.01em;
+}
+
+.triage-header__signout:hover { color: var(--text-2); }
+
+/* ── 9. Status card ───────────────────────────────────────── */
+.triage-status {
+  border-radius: var(--radius-xl);
+  padding: 24px 22px 20px;
+  display: grid;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s var(--ease-out), border-color 0.3s var(--ease-out);
+}
+
+/* Subtle left accent stripe */
+.triage-status::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+
+.triage-status--critical {
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  box-shadow: 0 2px 16px rgba(224, 57, 53, 0.08);
+}
+.triage-status--critical::before { background: var(--red-num); }
+
+.triage-status--high {
+  background: var(--yellow-bg);
+  border: 1px solid var(--yellow-border);
+  box-shadow: 0 2px 16px rgba(224, 144, 0, 0.07);
+}
+.triage-status--high::before { background: var(--yellow-num); }
+
+.triage-status--ok {
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  box-shadow: 0 2px 16px rgba(34, 163, 85, 0.07);
+}
+.triage-status--ok::before { background: var(--green-num); }
+
+.triage-status--empty {
+  background: var(--slate-bg);
+  border: 1px solid var(--slate-border);
+}
+.triage-status--empty::before { background: var(--slate-text); }
+
+.triage-status__level {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin: 0;
+  padding-left: 8px;
+}
+
+.triage-status--critical .triage-status__level { color: var(--red-text); }
+.triage-status--high     .triage-status__level { color: var(--yellow-text); }
+.triage-status--ok       .triage-status__level { color: var(--green-text); }
+.triage-status--empty    .triage-status__level { color: var(--slate-text); }
+
+.triage-status__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-left: 8px;
+}
+
+.triage-status__pct {
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.triage-status--critical .triage-status__pct { color: var(--red-num); }
+.triage-status--high     .triage-status__pct { color: var(--yellow-num); }
+.triage-status--ok       .triage-status__pct { color: var(--green-num); }
+.triage-status--empty    .triage-status__pct { color: var(--slate-text); }
+
+.triage-status__headline {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.triage-status__detail {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 0;
+  line-height: 1.45;
+  padding-left: 8px;
+}
+
+.triage-status__not-accepts {
+  margin: 4px 0 0;
+  font-size: 12px;
+  padding: 8px 12px;
+  background: rgba(224, 57, 53, 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--red-text);
+  line-height: 1.4;
+  margin-left: 8px;
+}
+
+/* ── 10. Primary action buttons ───────────────────────────── */
+.triage-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.triage-action-btn {
+  min-height: 100px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  /* Neumorphic shadow */
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 0.5px rgba(255,255,255,0.9) inset;
+  transition:
+    transform  0.12s var(--ease-spring),
+    box-shadow 0.12s ease,
+    border-color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.triage-action-btn:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md), 0 0 0 0.5px rgba(255,255,255,0.9) inset;
+}
+
+.triage-action-btn:active {
+  transform: scale(0.96);
+  box-shadow: var(--shadow-sm);
+}
+
+.triage-action-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.triage-action-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.triage-action-desc {
+  font-size: 10px;
+  color: var(--text-3);
+  line-height: 1.25;
+}
+
+/* ── 11. Triage footer ────────────────────────────────────── */
+.triage-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 2px;
+}
+
+.triage-footer__link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  letter-spacing: 0.01em;
+  transition: color 0.1s;
+}
+
+.triage-footer__link:hover { color: var(--text-2); }
+
+/* ── 12. Bottom sheet ─────────────────────────────────────── */
+.action-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 20, 0.48);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: sheet-backdrop 0.18s ease;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.action-sheet {
+  width: 100%;
+  max-width: var(--app-width);
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding-bottom: max(env(safe-area-inset-bottom), 24px);
+  max-height: 90vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: sheet-rise 0.28s var(--ease-out);
+  box-shadow: 0 -4px 40px rgba(10, 12, 20, 0.18);
+}
+
+.action-sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--surface-3);
+  border-radius: var(--radius-full);
+  margin: 14px auto 0;
+}
+
+.action-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0;
+  gap: 8px;
+}
+
+.action-sheet-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text);
+}
+
+.action-sheet-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+
+.action-sheet-close:hover { background: var(--surface-3); }
+
+.action-sheet-body {
+  padding: 14px 20px 0;
+  display: grid;
+  gap: 12px;
+}
+
+/* ── 13. Triage forms ─────────────────────────────────────── */
+.triage-form {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+/* One big Enviar button */
+.triage-submit {
+  width: 100%;
+  min-height: 54px;
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  margin-top: 4px;
+  transition: opacity 0.1s, transform 0.1s var(--ease-spring);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.triage-submit:hover   { opacity: 0.9; }
+.triage-submit:active  { transform: scale(0.98); }
+.triage-submit:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+/* Big qty input */
+.triage-qty {
+  font-size: 36px;
+  font-weight: 900;
+  text-align: center;
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 12px;
+  font-family: inherit;
+  background: var(--surface-2);
+  color: var(--text);
+  letter-spacing: -0.03em;
+  transition: border-color 0.15s;
+}
+
+.triage-qty:focus {
+  outline: none;
+  border-color: var(--text);
+  background: var(--surface);
+}
+
+/* Pills */
+.triage-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.triage-pill {
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-2);
+  line-height: 1.3;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.triage-pill:hover { background: var(--surface-3); border-color: var(--line-strong); }
+
+.triage-pill--critical {
+  border-color: var(--red-border);
+  background: var(--red-bg);
+  color: var(--red-text);
+}
+
+.triage-pill--high {
+  border-color: var(--yellow-border);
+  background: var(--yellow-bg);
+  color: var(--yellow-text);
+}
+
+.triage-pill.is-active {
+  border-color: var(--text);
+  background: var(--text);
+  color: #fff;
+}
+
+/* ── 14. Shared inputs & labels ───────────────────────────── */
+.pv3-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+}
+
+.pv3-input:focus {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px rgba(15, 17, 23, 0.06);
+}
+
+.pv3-input::placeholder { color: var(--text-3); }
+
+.pv3 input[type='checkbox'], .pv3 input[type='radio'],
+.pv3--operational input[type='checkbox'], .pv3--operational input[type='radio'] {
+  width: 16px; height: 16px; min-height: 16px;
+  margin: 0; padding: 0;
+  accent-color: var(--text);
+}
+
+.pv3-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 5px;
+}
+
+/* ── 15. Shared button ────────────────────────────────────── */
+.pv3-btn {
+  min-height: var(--touch);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  padding: 10px 16px;
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pv3-btn:hover   { background: var(--surface-2); }
+.pv3-btn:active  { background: var(--surface-3); }
+.pv3-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pv3-btn--primary { background: var(--text); color: #fff; border-color: var(--text); }
+.pv3-btn--primary:hover { background: #2a2d3e; }
+
+.pv3-btn--google {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  font-weight: 600;
+}
+
+/* ── 16. Shared view header & title ───────────────────────── */
+.pv3-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pv3-view-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* ── 17. Cards ────────────────────────────────────────────── */
+.pv3-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.pv3-cards { display: grid; gap: 10px; }
+.pv3-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.pv3-card h3 { margin: 0 0 2px; font-size: 15px; font-weight: 700; }
+
+/* ── 18. Badges ───────────────────────────────────────────── */
+.pv3-badge {
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.pv3-badge--critical { background: var(--red-bg);    color: var(--red-text); }
+.pv3-badge--high     { background: var(--yellow-bg); color: var(--yellow-text); }
+.pv3-badge--medium   { background: #FFFBEE;          color: #9A6700; }
+.pv3-badge--covered  { background: var(--green-bg);  color: var(--green-text); }
+.pv3-badge--pending  { background: var(--surface-3); color: var(--text-2); }
+.pv3-badge--high-conf   { background: var(--green-bg); color: var(--green-text); }
+.pv3-badge--medium-conf { background: #FFFBEE; color: #9A6700; }
+.pv3-badge--low-conf    { background: var(--red-bg); color: var(--red-text); }
+
+/* ── 19. Progress bar ─────────────────────────────────────── */
+.pv3-bar { height: 6px; border-radius: var(--radius-full); background: var(--surface-3); overflow: hidden; }
+.pv3-bar > span { display: block; height: 100%; border-radius: var(--radius-full); transition: width 0.4s var(--ease-out); }
+
+/* ── 20. Form elements ────────────────────────────────────── */
+.pv3 label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 10px 0 5px;
+  font-weight: 600;
+}
+
+.pv3 input:not([type='checkbox']):not([type='radio']),
+.pv3 select, .pv3 textarea {
+  width: 100%;
+  min-height: var(--touch);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+
+.pv3 textarea { min-height: 100px; resize: vertical; }
+
+.pv3-form { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; }
+.pv3-form-actions { display: grid; gap: 8px; margin-top: 14px; }
+.pv3-progress { height: 4px; border-radius: var(--radius-full); background: var(--surface-3); overflow: hidden; margin: 10px 0 18px; }
+.pv3-progress > span { display: block; height: 100%; background: var(--text); transition: width 200ms ease; }
+
+/* ── 21. Auth tabs ────────────────────────────────────────── */
+.pv3-auth-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+
+/* ── 22. Toast ────────────────────────────────────────────── */
+.pv3-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(env(safe-area-inset-bottom), 20px);
+  background: var(--text);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 400;
+  box-shadow: var(--shadow-lg);
+  white-space: nowrap;
+  max-width: 90vw;
+  text-align: center;
+  letter-spacing: -0.01em;
+  animation: toast-pop 0.25s var(--ease-spring);
+}
+
+/* ── 23. Empty / banner ───────────────────────────────────── */
+.pv3-empty {
+  text-align: center;
+  color: var(--text-3);
+  padding: 24px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.pv3-banner {
+  border: 1px solid var(--red-border);
+  background: var(--red-bg);
+  color: var(--red-text);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* ── 24. Location picker ──────────────────────────────────── */
+.pv3-location-picker { display: grid; gap: 10px; }
+
+.pv3-location-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.pv3-location-hint { margin: 0; font-size: 11px; color: var(--text-3); }
+
+.pv3-location-results {
+  display: grid;
+  gap: 4px;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  background: var(--surface);
+}
+
+.pv3-location-result {
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 9px 11px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+
+.pv3-location-result:hover { background: var(--surface-2); }
+
+.pv3-location-map {
+  width: 100%;
+  height: 220px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.pv3-location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.pv3-location-draft,
+.pv3-location-confirmed {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--surface-2);
+}
+
+.pv3-location-confirmed { background: var(--green-bg); border-color: var(--green-border); }
+.pv3-location-confirmed__label { margin: 0 0 4px; font-size: 10px; font-weight: 700; color: var(--green-text); text-transform: uppercase; letter-spacing: 0.06em; }
+.pv3-location-draft__name { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: var(--text); }
+.pv3-location-draft__addr { margin: 0 0 10px; font-size: 12px; color: var(--text-2); line-height: 1.4; }
+.pv3-location-error { margin: 0; font-size: 12px; color: var(--red-text); }
+
+/* ── 25. Person list ──────────────────────────────────────── */
+.pv3-person-list__existing {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.pv3-person-list__count { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.pv3-person-list__existing-list { margin: 0; padding: 0 0 0 18px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.pv3-person-list__status { margin-left: 6px; font-size: 11px; color: var(--text-3); }
+.pv3-person-list__more { list-style: none; margin-left: -18px; font-style: italic; }
+.pv3-person-list__modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.pv3-person-list__photo-preview { width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+.pv3-person-list__table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.pv3-person-list__table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pv3-person-list__table th { text-align: left; padding: 8px 10px; background: var(--surface-2); font-weight: 600; color: var(--text-2); border-bottom: 1px solid var(--line); }
+.pv3-person-list__table td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.pv3-person-list__cell-input { min-height: 34px; padding: 5px 8px; font-size: 12px; }
+
+/* ── 26. Site cards (SitesView) ───────────────────────────── */
+.pv3-sub   { color: var(--text-2); font-size: 13px; }
+.pv3-item  { margin-top: 8px; }
+.pv3-item__line { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.pv3-warn { margin-top: 8px; font-size: 12px; color: #8a3e00; background: #fff5ea; border: 1px solid #ffd9ba; border-radius: var(--radius-sm); padding: 8px 10px; }
+.pv3-nollevar { margin-top: 8px; font-size: 12px; color: #7c4b00; background: #fff5ea; border: 1px solid #ffd7b8; border-radius: var(--radius-sm); padding: 8px 10px; }
+.pv3-card-actions { margin-top: 12px; display: grid; gap: 8px; }
+.pv3-note { background: #EEF1FF; border: 1px solid #D2D8FF; color: #2f3261; border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; margin-bottom: 10px; }
+
+/* ── 27. Filters & chips ──────────────────────────────────── */
+.pv3-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.pv3-chip {
+  min-height: 36px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+.pv3-chip.is-active { background: var(--surface-3); color: var(--text); border-color: var(--line-strong); }
+
+/* ── 28. Map (CoverageMap) ────────────────────────────────── */
+.pv3-coverage { position: relative; }
+.pv3-map { width: 100%; height: 68vh; min-height: 420px; border-radius: var(--radius-lg); overflow: hidden; }
+.pv3-legend {
+  position: absolute; left: 12px; bottom: 12px; z-index: 500;
+  background: rgba(255,255,255,0.96);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 8px 12px; font-size: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.pv3-legend__row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.pv3-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.pv3-pin-wrap { background: transparent; border: 0; }
+.pv3-pin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.2); }
+.pv3-panel {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  width: min(360px, 92vw);
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  padding: 14px; z-index: 600; overflow-y: auto;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.08);
+}
+.pv3-panel__close {
+  width: 34px; height: 34px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface-2);
+  cursor: pointer; float: right; font-family: inherit;
+}
+
+/* ── 29. Report view ──────────────────────────────────────── */
+.pv3-report-success {
+  text-align: center; padding: 32px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  max-width: 400px;
+}
+.pv3-report-success__icon {
+  width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%;
+  background: var(--green-bg); color: var(--green-text); font-size: 1.75rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.pv3-report-success h3 { margin: 0 0 8px; font-size: 17px; font-weight: 800; }
+.pv3-report-success p  { margin: 0 0 18px; font-size: 14px; color: var(--text-2); line-height: 1.45; }
+
+.pv3-step-label    { font-size: 13px; color: var(--text-2); font-weight: 600; }
+.pv3-pill-note     { font-size: 12px; color: #7c4b00; background: #fff5ea; border: 1px solid #ffd7b8; border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 8px; }
+.pv3-report-site-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: var(--radius-full); line-height: 1.3; }
+.pv3-report-site-badge--linked  { background: var(--green-bg); color: var(--green-text); }
+.pv3-report-site-badge--type    { background: #EEF2FF; color: #3730a3; }
+.pv3-report-site-badge--orphan  { background: var(--yellow-bg); color: var(--yellow-text); }
+.pv3-results { display: grid; gap: 10px; }
+.pv3-status-line { display: inline-block; margin-top: 4px; border-radius: var(--radius-full); padding: 4px 8px; font-size: 12px; font-weight: 700; background: var(--surface-2); color: var(--text-2); }
+.pv3-meta-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.pv3-report-steps { margin: 6px 0 8px; padding-left: 1.25rem; line-height: 1.5; }
+.pv3-report-steps li { margin-bottom: 2px; }
+.pv3-report-intro__label { margin: 8px 0 0; }
+.pv3-report-intro__after { margin: 8px 0 0; }
+.pv3-report-examples { margin-bottom: 10px; }
+.pv3-report-source-hint { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
+
+/* ── 30. Notifications bell ───────────────────────────────── */
+.pv3-notif { position: relative; display: inline-flex; }
+.pv3-notif__bell { position: relative; min-width: 36px; min-height: 36px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 8px; }
+.pv3-notif__badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-full); background: var(--red-num); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--surface); }
+.pv3-notif__dropdown { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; width: min(280px, 90vw); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); padding: 10px; }
+.pv3-notif__title { font-size: 12px; font-weight: 700; color: var(--text-2); margin: 0 0 8px; }
+.pv3-notif__empty { font-size: 12px; color: var(--text-3); margin: 0 0 8px; }
+.pv3-notif__list  { list-style: none; margin: 0 0 8px; padding: 0; }
+.pv3-notif__item  { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; font-family: inherit; }
+.pv3-notif__item:hover { background: var(--surface-2); }
+.pv3-notif__item-type { display: block; font-size: 12px; font-weight: 600; }
+.pv3-notif__item-meta { display: block; font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.pv3-notif__all { width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); padding: 8px 10px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.pv3-notif__all:hover { background: var(--surface-3); }
+
+/* ── 31. Link button / misc ───────────────────────────────── */
+.pv3-link-btn {
+  background: none; border: none; padding: 0;
+  color: var(--text); font-weight: 600; text-decoration: underline;
+  cursor: pointer; font-family: inherit; font-size: inherit;
+}
+
+/* Site picker */
+.pv3-site-picker { display: grid; gap: 12px; }
+.pv3-site-picker__modes { border: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pv3-site-picker__modes legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+.pv3-site-picker__hint { margin: 0; font-size: 12px; color: var(--text-2); line-height: 1.45; }
+.pv3-site-picker__combobox { display: grid; gap: 8px; position: relative; }
+.pv3-site-picker__list { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.pv3-site-picker__group { padding: 6px 0; }
+.pv3-site-picker__group + .pv3-site-picker__group { border-top: 1px solid var(--line); }
+.pv3-site-picker__group-label { margin: 0; padding: 4px 12px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.pv3-site-option { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 10px 12px; border: none; background: transparent; cursor: pointer; font: inherit; color: var(--text); }
+.pv3-site-option:hover { background: var(--surface-2); }
+.pv3-site-option--active, .pv3-site-option--selected { background: #EEF4FF; }
+.pv3-site-option__kind { flex-shrink: 0; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-3); padding-top: 2px; }
+.pv3-site-option__name { font-size: 13px; line-height: 1.35; }
+.pv3-site-picker__other { display: grid; gap: 10px; }
+
+/* ── 32. Admin panel helpers ──────────────────────────────── */
+.pv3-content { padding: 16px; max-width: 860px; width: 100%; margin: 0 auto; }
+
+/* ── 33. Keyframe animations ──────────────────────────────── */
+@keyframes sheet-backdrop {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes sheet-rise {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes toast-pop {
+  from { transform: translateX(-50%) scale(0.85); opacity: 0; }
+  to   { transform: translateX(-50%) scale(1);    opacity: 1; }
+}
+
+/* ── 34. Desktop refinements (still app-narrow) ───────────── */
+@media (min-width: 600px) {
+  .triage        { padding: 24px 0 40px; }
+  .pv3-auth-gate { padding: 48px 0; }
+  .pv3-onboarding { padding: 24px 0 48px; }
+
+  .triage-action-btn { min-height: 110px; }
+  .triage-action-icon { font-size: 34px; }
+  .triage-action-label { font-size: 13px; }
+
+  .pv3-content { padding: 24px; }
+  .pv3-card-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pv3-form-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

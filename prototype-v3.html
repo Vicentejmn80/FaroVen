@@ -1,0 +1,1603 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FARO — Centro de Coordinación Humanitaria</title>
+  <meta name="description" content="FARO — Prototipo V3 para coordinación humanitaria en emergencias." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <style>
+    :root {
+      --bg: #f8f8f6;
+      --surface: #ffffff;
+      --surface-soft: #f4f5f2;
+      --text: #1a1a2e;
+      --muted: #5f6373;
+      --line: rgba(26, 26, 46, 0.14);
+      --primary: #1a1a2e;
+      --critical: #f2b4b4;
+      --critical-text: #7d1f1f;
+      --high: #ffd6b0;
+      --high-text: #91582a;
+      --medium: #ffe8a3;
+      --medium-text: #796114;
+      --covered: #c9efcd;
+      --covered-text: #1c6a25;
+      --radius-lg: 12px;
+      --radius-md: 8px;
+      --shadow: 0 2px 8px rgba(10, 10, 20, 0.05);
+      --touch: 48px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+      display: none;
+      border-right: 0.5px solid var(--line);
+      background: var(--surface);
+      padding: 18px 14px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: #1a1a2e;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+
+    .nav-btn {
+      width: 100%;
+      min-height: var(--touch);
+      border: 0.5px solid transparent;
+      border-radius: var(--radius-md);
+      background: transparent;
+      text-align: left;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+
+    .nav-btn.active {
+      background: var(--surface-soft);
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .content {
+      padding: 16px;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .topbar-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .event-title {
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .live-pill {
+      font-size: 0.8rem;
+      background: var(--surface-soft);
+      border: 0.5px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .mobile-nav {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .mobile-nav button {
+      min-height: var(--touch);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      cursor: pointer;
+      padding: 6px;
+    }
+
+    .mobile-nav button.active {
+      color: var(--text);
+      background: var(--surface-soft);
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .hero {
+      text-align: center;
+      padding: 22px 0 8px;
+    }
+
+    .hero h1 {
+      font-size: clamp(1.3rem, 4vw, 2.2rem);
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .action-btn {
+      min-height: 56px;
+      border-radius: var(--radius-lg);
+      border: 0.5px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-start;
+      padding: 12px 14px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+
+    .view-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .view-title {
+      font-size: 1.15rem;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .chip {
+      min-height: 38px;
+      border-radius: 999px;
+      border: 0.5px solid var(--line);
+      background: var(--surface);
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .chip.active {
+      background: #eceef8;
+      color: var(--text);
+      border-color: #c7cbe2;
+    }
+
+    .cards {
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .card h3 {
+      margin: 0 0 2px;
+      font-size: 1rem;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .badge {
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 9px;
+      white-space: nowrap;
+    }
+
+    .badge.critical { background: var(--critical); color: var(--critical-text); }
+    .badge.high { background: var(--high); color: var(--high-text); }
+    .badge.medium { background: var(--medium); color: var(--medium-text); }
+    .badge.covered { background: var(--covered); color: var(--covered-text); }
+    .badge.pending { background: #e8e9f6; color: #2f3261; }
+
+    .item-row { margin-top: 8px; }
+    .item-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.84rem;
+      margin-bottom: 4px;
+    }
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #ececec;
+      overflow: hidden;
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+    }
+
+    .warn {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: #8a3e00;
+      background: #fff5ea;
+      border: 0.5px solid #ffd9ba;
+      border-radius: var(--radius-md);
+      padding: 8px;
+    }
+
+    .card-actions {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      min-height: var(--touch);
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      padding: 10px;
+    }
+
+    .btn.primary {
+      background: #1a1a2e;
+      color: white;
+      border-color: #1a1a2e;
+    }
+
+    #coverageView {
+      position: relative;
+    }
+
+    #coverageMap {
+      width: 100%;
+      height: 72vh;
+      min-height: 440px;
+      border-radius: 0;
+    }
+
+    .legend {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 500;
+      background: rgba(255,255,255,0.95);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 8px 10px;
+      font-size: 0.78rem;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 3px 0;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .sidepanel {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: min(360px, 92vw);
+      background: var(--surface);
+      border-left: 0.5px solid var(--line);
+      padding: 14px;
+      z-index: 600;
+      transform: translateX(102%);
+      transition: transform 180ms ease;
+      overflow-y: auto;
+      box-shadow: -4px 0 14px rgba(0,0,0,0.06);
+    }
+
+    .sidepanel.open { transform: translateX(0); }
+
+    .side-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 0.5px solid var(--line);
+      background: var(--surface-soft);
+      cursor: pointer;
+      float: right;
+    }
+
+    .form-wrap {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: #e9eaef;
+      overflow: hidden;
+      margin: 10px 0 16px;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      background: #1a1a2e;
+      width: 33.33%;
+      transition: width 180ms ease;
+    }
+
+    .step { display: none; }
+    .step.active { display: block; }
+
+    label {
+      display: block;
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin: 8px 0 5px;
+      font-weight: 600;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: var(--touch);
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--line);
+      padding: 10px 11px;
+      font-size: 0.9rem;
+      background: #fff;
+      color: var(--text);
+      font-family: inherit;
+    }
+
+    textarea { min-height: 110px; resize: vertical; }
+
+    .inline {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .source-grid {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .source-option {
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+
+    .source-option input { width: 18px; min-height: auto; }
+
+    .form-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    #pinPickerMap {
+      width: 100%;
+      height: 210px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--line);
+      margin-top: 8px;
+    }
+
+    .pill-note {
+      font-size: 0.8rem;
+      color: #7c4b00;
+      background: #fff5ea;
+      border: 0.5px solid #ffd7b8;
+      border-radius: var(--radius-md);
+      padding: 8px;
+      margin-top: 8px;
+    }
+
+    .note {
+      background: #eef1ff;
+      border: 0.5px solid #d2d8ff;
+      color: #2f3261;
+      border-radius: var(--radius-md);
+      padding: 10px;
+      font-size: 0.84rem;
+      margin-bottom: 10px;
+    }
+
+    .people-results { display: grid; gap: 10px; }
+
+    .person-card {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 11px;
+      box-shadow: var(--shadow);
+    }
+
+    .status-line {
+      display: inline-block;
+      margin-top: 4px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      background: #eceff8;
+      color: #2c3364;
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      border: 0.5px dashed var(--line);
+      border-radius: var(--radius-md);
+      background: #fff;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 16px;
+      background: #1a1a2e;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 0.86rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+      z-index: 999;
+    }
+
+    .toast.show { opacity: 1; }
+
+    .marker-pin {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+    }
+
+    @media (min-width: 860px) {
+      .app {
+        grid-template-columns: 240px 1fr;
+      }
+
+      .sidebar { display: block; }
+      .mobile-nav { display: none; }
+      .content { padding: 22px; }
+      .actions-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .card-actions { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .inline { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .form-actions { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">F</div>
+        <div>
+          <div style="font-weight:800;letter-spacing:.02em;">FARO</div>
+          <div style="font-size:.78rem;color:var(--muted)">Coordinación Humanitaria</div>
+        </div>
+      </div>
+      <button class="nav-btn active" data-view="home">Inicio</button>
+      <button class="nav-btn" data-view="sites">Sitios</button>
+      <button class="nav-btn" data-view="coverage">Cobertura</button>
+      <button class="nav-btn" data-view="report">Reportar</button>
+      <button class="nav-btn" data-view="people">Personas</button>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div class="topbar-main">
+          <div>
+            <div class="brand" style="margin:0">
+              <div class="logo" style="width:30px;height:30px">F</div>
+              <div>
+                <div style="font-weight:800;letter-spacing:.02em;">FARO</div>
+                <div class="event-title" id="emergencyName"></div>
+              </div>
+            </div>
+          </div>
+          <div class="live-pill" id="globalLive"></div>
+        </div>
+
+        <div class="mobile-nav">
+          <button data-view="home" class="active">Inicio</button>
+          <button data-view="sites">Sitios</button>
+          <button data-view="coverage">Mapa</button>
+          <button data-view="report">Reporte</button>
+          <button data-view="people">Personas</button>
+        </div>
+      </header>
+
+      <section id="homeView" class="view active">
+        <div class="hero">
+          <h1>¿Qué necesitas hacer?</h1>
+        </div>
+        <div class="actions-grid">
+          <button class="action-btn" data-quick="acopio">📦 Ver qué falta en centros de acopio</button>
+          <button class="action-btn" data-quick="refugio">🏠 Ver qué falta en refugios</button>
+          <button class="action-btn" data-quick="hospital">🏥 Ver qué falta en hospitales</button>
+          <button class="action-btn" data-go="coverage">🗺️ Ver zonas con poca cobertura</button>
+          <button class="action-btn" data-go="report">✍️ Reportar un cambio</button>
+          <button class="action-btn" data-go="people">🔎 Buscar una persona</button>
+        </div>
+      </section>
+
+      <section id="sitesView" class="view">
+        <div class="view-header">
+          <h2 class="view-title" id="sitesTitle">Sitios</h2>
+          <button class="btn" id="backHomeFromSites">Volver a inicio</button>
+        </div>
+        <div class="filters" id="siteFilters"></div>
+        <div class="cards" id="sitesCards"></div>
+      </section>
+
+      <section id="coverageView" class="view">
+        <div class="view-header">
+          <h2 class="view-title">Zonas con poca cobertura</h2>
+          <button class="btn" id="backHomeFromCoverage">Volver a inicio</button>
+        </div>
+        <div id="coverageMap"></div>
+        <div class="legend">
+          <div class="legend-row"><span class="dot" style="background:#e36c6c"></span> Roja: baja cobertura</div>
+          <div class="legend-row"><span class="dot" style="background:#f2c463"></span> Amarilla: cobertura parcial</div>
+          <div class="legend-row"><span class="dot" style="background:#7bc67f"></span> Verde: buena cobertura</div>
+        </div>
+
+        <aside class="sidepanel" id="mapPanel">
+          <button class="side-close" id="closePanel">✕</button>
+          <div id="panelContent"></div>
+        </aside>
+      </section>
+
+      <section id="reportView" class="view">
+        <div class="view-header">
+          <h2 class="view-title">Reportar un cambio</h2>
+          <button class="btn" id="backHomeFromReport">Volver a inicio</button>
+        </div>
+
+        <div class="form-wrap">
+          <div style="font-size:.85rem;color:var(--muted);font-weight:600;" id="stepLabel">Paso 1 de 3 — ¿Dónde?</div>
+          <div class="progress"><span id="progressBar"></span></div>
+
+          <form id="reportForm">
+            <div class="step active" data-step="1">
+              <label>¿Quieres reportar un sitio existente o agregar uno nuevo?</label>
+              <div class="inline">
+                <button class="btn primary" type="button" id="chooseExisting">Usar sitio existente</button>
+                <button class="btn" type="button" id="chooseNew">Agregar sitio nuevo</button>
+              </div>
+
+              <div id="existingSiteFields">
+                <label for="siteSearch">Buscar sitio</label>
+                <input id="siteSearch" list="sitesDataList" placeholder="Escribe nombre del sitio" />
+                <datalist id="sitesDataList"></datalist>
+              </div>
+
+              <div id="newSiteFields" style="display:none">
+                <div class="inline">
+                  <div>
+                    <label for="newSiteName">Nombre del sitio</label>
+                    <input id="newSiteName" placeholder="Ej. Punto solidario Catia" />
+                  </div>
+                  <div>
+                    <label for="newSiteType">Tipo</label>
+                    <select id="newSiteType">
+                      <option value="acopio">Centro de acopio</option>
+                      <option value="refugio">Refugio</option>
+                      <option value="hospital">Hospital</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="inline">
+                  <div>
+                    <label for="newSiteLocation">Barrio / Municipio</label>
+                    <input id="newSiteLocation" placeholder="Ej. Catia" />
+                  </div>
+                  <div>
+                    <label for="newSiteMunicipality">Municipio / Ciudad</label>
+                    <input id="newSiteMunicipality" placeholder="Ej. Libertador, Caracas" />
+                  </div>
+                </div>
+                <label>Ubicación en mapa (toca para colocar pin)</label>
+                <div id="pinPickerMap"></div>
+                <div class="pill-note" id="pinHint">Pin no colocado todavía.</div>
+              </div>
+            </div>
+
+            <div class="step" data-step="2">
+              <label>¿Qué cambió?</label>
+              <div id="supplyRows"></div>
+              <button type="button" class="btn" id="addCustomSupply" style="margin-top:10px">+ Agregar insumo</button>
+
+              <label for="extraContext">Contexto adicional (opcional)</label>
+              <textarea id="extraContext" placeholder="Ej. Llegó una donación parcial, sigue faltando agua potable."></textarea>
+            </div>
+
+            <div class="step" data-step="3">
+              <label>¿Quién reporta?</label>
+              <div class="source-grid">
+                <label class="source-option"><input type="radio" name="sourceType" value="personal" checked /> Lo vi personalmente</label>
+                <label class="source-option"><input type="radio" name="sourceType" value="org" /> Me lo informó la organización</label>
+                <label class="source-option"><input type="radio" name="sourceType" value="social" /> Lo vi en redes sociales</label>
+              </div>
+
+              <label for="reporterAlias">Nombre o alias (opcional)</label>
+              <input id="reporterAlias" placeholder="Ej. Voluntario Ana" />
+
+              <label class="source-option" style="margin-top:10px">
+                <input type="checkbox" id="verifiedVolunteer" /> Soy voluntario verificado en este sitio
+              </label>
+
+              <div class="pill-note">El reporte quedará como <strong>Pendiente de verificación</strong>. Se sumará al conteo del sitio, pero no reemplaza el dato oficial.</div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn" id="prevStep">Paso anterior</button>
+              <button type="button" class="btn" id="nextStep">Siguiente paso</button>
+              <button type="submit" class="btn primary" id="submitReport" style="display:none">Enviar reporte</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="peopleView" class="view">
+        <div class="view-header">
+          <h2 class="view-title">Buscar una persona</h2>
+          <button class="btn" id="backHomeFromPeople">Volver a inicio</button>
+        </div>
+
+        <div class="note">Esta información proviene de listas publicadas por los propios centros. Puede no estar completa. Si no aparece, sigue intentando.</div>
+
+        <label for="personSearch">Nombre</label>
+        <input id="personSearch" placeholder="Ej. María González" />
+
+        <div class="people-results" id="peopleResults" style="margin-top:12px"></div>
+
+        <div id="missingContainer" style="display:none; margin-top:14px;" class="form-wrap">
+          <h3 style="margin:0 0 8px">Reportar como desaparecido</h3>
+          <form id="missingForm">
+            <div class="inline">
+              <div>
+                <label for="missingName">Nombre</label>
+                <input id="missingName" required />
+              </div>
+              <div>
+                <label for="missingAge">Edad</label>
+                <input id="missingAge" type="number" min="0" max="120" required />
+              </div>
+            </div>
+            <label for="missingPhoto">Fotografía (URL)</label>
+            <input id="missingPhoto" placeholder="https://..." />
+            <label for="missingLastSeen">Último lugar visto</label>
+            <input id="missingLastSeen" required placeholder="Ej. Plaza Venezuela, 3:30 PM" />
+            <label for="missingContact">Contacto familiar</label>
+            <input id="missingContact" required placeholder="Teléfono o WhatsApp" />
+            <button class="btn primary" type="submit" style="margin-top:10px">Enviar reporte de desaparición</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = 'faro_v3_state';
+      const STORAGE_VERSION = 1;
+      const EMERGENCY_NAME = 'Terremoto Venezuela — Junio 2026';
+
+      const COMMON_SUPPLIES = [
+        'Agua potable', 'Cobijas', 'Pañales', 'Leche infantil', 'Medicinas básicas', 'Suero', 'Alimentos no perecederos'
+      ];
+
+      const STATUS_LABELS = {
+        critical: 'Crítico',
+        high: 'Alto',
+        medium: 'Medio',
+        covered: 'Cubierto'
+      };
+
+      const PEOPLE_STATUS = {
+        hospital: 'Ingresado al hospital',
+        shelter: 'En refugio',
+        safe: 'Localizado a salvo',
+        pending: 'Pendiente de confirmar'
+      };
+
+      const state = loadState();
+
+      let currentView = 'home';
+      let siteTypeView = 'acopio';
+      let siteFilter = 'all';
+      let reportStep = 1;
+      let reportMode = 'existing';
+      let selectedSiteId = null;
+      let coverageMap = null;
+      let clusterLayer = null;
+      let markerBySiteId = new Map();
+      let pinPickerMap = null;
+      let pinPickerMarker = null;
+      let newSitePin = null;
+
+      const els = {
+        emergencyName: document.getElementById('emergencyName'),
+        globalLive: document.getElementById('globalLive'),
+        views: {
+          home: document.getElementById('homeView'),
+          sites: document.getElementById('sitesView'),
+          coverage: document.getElementById('coverageView'),
+          report: document.getElementById('reportView'),
+          people: document.getElementById('peopleView')
+        },
+        sitesTitle: document.getElementById('sitesTitle'),
+        siteFilters: document.getElementById('siteFilters'),
+        sitesCards: document.getElementById('sitesCards'),
+        panel: document.getElementById('mapPanel'),
+        panelContent: document.getElementById('panelContent'),
+        closePanel: document.getElementById('closePanel'),
+        progressBar: document.getElementById('progressBar'),
+        stepLabel: document.getElementById('stepLabel'),
+        reportForm: document.getElementById('reportForm'),
+        steps: Array.from(document.querySelectorAll('.step')),
+        prevStep: document.getElementById('prevStep'),
+        nextStep: document.getElementById('nextStep'),
+        submitReport: document.getElementById('submitReport'),
+        chooseExisting: document.getElementById('chooseExisting'),
+        chooseNew: document.getElementById('chooseNew'),
+        existingSiteFields: document.getElementById('existingSiteFields'),
+        newSiteFields: document.getElementById('newSiteFields'),
+        siteSearch: document.getElementById('siteSearch'),
+        sitesDataList: document.getElementById('sitesDataList'),
+        newSiteName: document.getElementById('newSiteName'),
+        newSiteType: document.getElementById('newSiteType'),
+        newSiteLocation: document.getElementById('newSiteLocation'),
+        newSiteMunicipality: document.getElementById('newSiteMunicipality'),
+        pinHint: document.getElementById('pinHint'),
+        supplyRows: document.getElementById('supplyRows'),
+        addCustomSupply: document.getElementById('addCustomSupply'),
+        extraContext: document.getElementById('extraContext'),
+        reporterAlias: document.getElementById('reporterAlias'),
+        verifiedVolunteer: document.getElementById('verifiedVolunteer'),
+        personSearch: document.getElementById('personSearch'),
+        peopleResults: document.getElementById('peopleResults'),
+        missingContainer: document.getElementById('missingContainer'),
+        missingForm: document.getElementById('missingForm'),
+        missingName: document.getElementById('missingName'),
+        toast: document.getElementById('toast')
+      };
+
+      init();
+
+      function init() {
+        bindNavigation();
+        bindHomeActions();
+        bindReportForm();
+        bindPeople();
+        populateSiteDatalist();
+        seedSupplyRows();
+        renderGlobal();
+        renderSites();
+      }
+
+      function loadState() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.version === STORAGE_VERSION) return parsed;
+          } catch (_) {}
+        }
+        const seeded = createInitialState();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+        return seeded;
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function createInitialState() {
+        const now = Date.now();
+        const ago = (minutes) => new Date(now - minutes * 60 * 1000).toISOString();
+
+        return {
+          version: STORAGE_VERSION,
+          emergencyName: EMERGENCY_NAME,
+          sites: [
+            { id:'s1', type:'acopio', name:'Centro de Acopio Plaza Venezuela', location:'Plaza Venezuela', municipality:'Libertador, Caracas', lat:10.4906, lng:-66.8915, volunteerReports:2, pendingReports:1, updatedAt:ago(35), items:[{name:'Agua potable',current:24,target:100},{name:'Cobijas',current:60,target:100},{name:'Pañales',current:40,target:100}] },
+            { id:'s2', type:'acopio', name:'Punto Solidario Catia', location:'Catia', municipality:'Libertador, Caracas', lat:10.5164, lng:-66.9443, volunteerReports:1, pendingReports:0, updatedAt:ago(190), items:[{name:'Alimentos no perecederos',current:42,target:100},{name:'Leche infantil',current:22,target:100},{name:'Medicinas básicas',current:30,target:100}] },
+            { id:'s3', type:'acopio', name:'Centro de Acopio Chacao', location:'Chacao', municipality:'Chacao, Caracas', lat:10.4975, lng:-66.8537, volunteerReports:5, pendingReports:2, updatedAt:ago(70), items:[{name:'Agua potable',current:84,target:100},{name:'Cobijas',current:92,target:100},{name:'Pañales',current:78,target:100}] },
+            { id:'s4', type:'refugio', name:'Refugio Parque del Este', location:'Parque del Este', municipality:'Sucre, Caracas', lat:10.4986, lng:-66.8430, volunteerReports:3, pendingReports:1, updatedAt:ago(55), items:[{name:'Cobijas',current:18,target:100},{name:'Pañales',current:34,target:100},{name:'Leche infantil',current:26,target:100}] },
+            { id:'s5', type:'refugio', name:'Refugio Caraballeda Costero', location:'Caraballeda', municipality:'La Guaira', lat:10.6125, lng:-66.8438, volunteerReports:1, pendingReports:0, updatedAt:ago(460), items:[{name:'Agua potable',current:28,target:100},{name:'Alimentos no perecederos',current:40,target:100},{name:'Medicinas básicas',current:25,target:100}] },
+            { id:'s6', type:'refugio', name:'Refugio Los Palos Grandes', location:'Los Palos Grandes', municipality:'Chacao, Caracas', lat:10.4881, lng:-66.8486, volunteerReports:4, pendingReports:0, updatedAt:ago(85), items:[{name:'Cobijas',current:75,target:100},{name:'Pañales',current:81,target:100},{name:'Alimentos no perecederos',current:70,target:100}] },
+            { id:'s7', type:'hospital', name:'Hospital Universitario de Caracas', location:'Los Chaguaramos', municipality:'Libertador, Caracas', lat:10.4878, lng:-66.8869, volunteerReports:6, pendingReports:1, updatedAt:ago(28), items:[{name:'Suero',current:40,target:100},{name:'Medicinas básicas',current:36,target:100},{name:'Agua potable',current:58,target:100}] },
+            { id:'s8', type:'hospital', name:'Hospital Miguel Pérez Carreño', location:'San Martín', municipality:'Libertador, Caracas', lat:10.4861, lng:-66.9436, volunteerReports:2, pendingReports:3, updatedAt:ago(240), items:[{name:'Suero',current:21,target:100},{name:'Medicinas básicas',current:18,target:100},{name:'Cobijas',current:52,target:100}] },
+            { id:'s9', type:'hospital', name:'Hospital Dr. Domingo Luciani', location:'El Llanito', municipality:'Sucre, Caracas', lat:10.4767, lng:-66.8004, volunteerReports:4, pendingReports:0, updatedAt:ago(92), items:[{name:'Suero',current:68,target:100},{name:'Medicinas básicas',current:72,target:100},{name:'Pañales',current:62,target:100}] },
+            { id:'s10', type:'acopio', name:'Punto Comunitario Maiquetía', location:'Maiquetía', municipality:'La Guaira', lat:10.5960, lng:-66.9564, volunteerReports:2, pendingReports:0, updatedAt:ago(320), items:[{name:'Agua potable',current:55,target:100},{name:'Alimentos no perecederos',current:50,target:100},{name:'Leche infantil',current:32,target:100}] }
+          ],
+          people: [
+            { name:'María González', site:'Hospital Universitario de Caracas', date:ago(72), status:'hospital' },
+            { name:'José Pineda', site:'Refugio Parque del Este', date:ago(103), status:'shelter' },
+            { name:'Ana Rojas', site:'Refugio Los Palos Grandes', date:ago(44), status:'safe' },
+            { name:'Luis Martínez', site:'Hospital Miguel Pérez Carreño', date:ago(90), status:'hospital' },
+            { name:'Carmen Rivero', site:'Refugio Caraballeda Costero', date:ago(140), status:'pending' },
+            { name:'Carlos Pérez', site:'Hospital Dr. Domingo Luciani', date:ago(65), status:'hospital' },
+            { name:'Daniela Suárez', site:'Refugio Parque del Este', date:ago(170), status:'shelter' },
+            { name:'Miguel Torres', site:'Refugio Los Palos Grandes', date:ago(38), status:'safe' },
+            { name:'Sofía Méndez', site:'Hospital Universitario de Caracas', date:ago(50), status:'hospital' },
+            { name:'Pedro Molina', site:'Refugio Caraballeda Costero', date:ago(260), status:'pending' },
+            { name:'Elena Campos', site:'Hospital Miguel Pérez Carreño', date:ago(125), status:'hospital' },
+            { name:'Javier Fuentes', site:'Refugio Parque del Este', date:ago(76), status:'shelter' },
+            { name:'Valentina Leal', site:'Hospital Dr. Domingo Luciani', date:ago(31), status:'safe' },
+            { name:'Raúl Bastidas', site:'Refugio Los Palos Grandes', date:ago(95), status:'shelter' },
+            { name:'Patricia Rondón', site:'Hospital Universitario de Caracas', date:ago(180), status:'pending' },
+            { name:'Orlando Vera', site:'Refugio Caraballeda Costero', date:ago(350), status:'shelter' },
+            { name:'Laura Betancourt', site:'Hospital Miguel Pérez Carreño', date:ago(58), status:'safe' },
+            { name:'Diego Colmenares', site:'Hospital Dr. Domingo Luciani', date:ago(40), status:'hospital' }
+          ],
+          reports: [],
+          missingReports: []
+        };
+      }
+
+      function bindNavigation() {
+        document.querySelectorAll('[data-view]').forEach((btn) => {
+          btn.addEventListener('click', () => goToView(btn.dataset.view));
+        });
+
+        document.getElementById('backHomeFromSites').addEventListener('click', () => goToView('home'));
+        document.getElementById('backHomeFromCoverage').addEventListener('click', () => goToView('home'));
+        document.getElementById('backHomeFromReport').addEventListener('click', () => goToView('home'));
+        document.getElementById('backHomeFromPeople').addEventListener('click', () => goToView('home'));
+      }
+
+      function bindHomeActions() {
+        document.querySelectorAll('[data-go]').forEach((btn) => {
+          btn.addEventListener('click', () => goToView(btn.dataset.go));
+        });
+
+        document.querySelectorAll('[data-quick]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            siteTypeView = btn.dataset.quick;
+            goToView('sites');
+            renderSites();
+          });
+        });
+      }
+
+      function goToView(view) {
+        currentView = view;
+        Object.entries(els.views).forEach(([key, node]) => {
+          node.classList.toggle('active', key === view);
+        });
+
+        document.querySelectorAll('.nav-btn').forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.view === view);
+        });
+        document.querySelectorAll('.mobile-nav button').forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.view === view);
+        });
+
+        if (view === 'sites') renderSites();
+        if (view === 'coverage') {
+          initCoverageMap();
+          renderCoverageMap();
+        }
+        if (view === 'people') renderPeopleResults();
+      }
+
+      function renderGlobal() {
+        els.emergencyName.textContent = state.emergencyName;
+        const activeSites = state.sites.length;
+        const lastUpdated = maxGlobalUpdate();
+        els.globalLive.textContent = `${activeSites} sitios activos · última actualización ${timeAgo(lastUpdated)}`;
+      }
+
+      function maxGlobalUpdate() {
+        const siteTimes = state.sites.map(s => +new Date(s.updatedAt));
+        const reportTimes = state.reports.map(r => +new Date(r.createdAt));
+        const max = Math.max(...siteTimes, ...(reportTimes.length ? reportTimes : [0]));
+        return new Date(max).toISOString();
+      }
+
+      function getCoveragePercent(item) {
+        if (!item.target) return 0;
+        return Math.min(100, Math.round((item.current / item.target) * 100));
+      }
+
+      function itemSeverity(item) {
+        const pct = getCoveragePercent(item);
+        if (pct < 30) return 'critical';
+        if (pct < 60) return 'high';
+        if (pct < 90) return 'medium';
+        return 'covered';
+      }
+
+      function siteSeverity(site) {
+        let worstRank = 3;
+        site.items.forEach((item) => {
+          const sev = itemSeverity(item);
+          const rank = sev === 'critical' ? 0 : sev === 'high' ? 1 : sev === 'medium' ? 2 : 3;
+          if (rank < worstRank) worstRank = rank;
+        });
+        return ['critical','high','medium','covered'][worstRank];
+      }
+
+      function staleHours(site) {
+        const diffMs = Date.now() - +new Date(site.updatedAt);
+        return diffMs / 3600000;
+      }
+
+      function renderSites() {
+        const typeLabel = siteTypeView === 'acopio' ? 'Centros de acopio' : siteTypeView === 'refugio' ? 'Refugios' : 'Hospitales';
+        els.sitesTitle.textContent = typeLabel;
+
+        const filters = [
+          { id:'all', label:'Todos' },
+          { id:'critical', label:'Crítico' },
+          { id:'high', label:'Alto' },
+          { id:'recent', label:'Actualizado hace menos de 2h' }
+        ];
+
+        els.siteFilters.innerHTML = filters.map(f => `<button class="chip ${siteFilter===f.id?'active':''}" data-filter="${f.id}">${f.label}</button>`).join('');
+        els.siteFilters.querySelectorAll('[data-filter]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            siteFilter = btn.dataset.filter;
+            renderSites();
+          });
+        });
+
+        let list = state.sites.filter(s => s.type === siteTypeView);
+
+        if (siteFilter === 'critical') list = list.filter(s => siteSeverity(s) === 'critical');
+        if (siteFilter === 'high') list = list.filter(s => {
+          const sev = siteSeverity(s);
+          return sev === 'high' || sev === 'critical';
+        });
+        if (siteFilter === 'recent') list = list.filter(s => staleHours(s) < 2);
+
+        list.sort((a,b) => {
+          const rank = (s) => ({critical:0,high:1,medium:2,covered:3})[siteSeverity(s)];
+          const r = rank(a) - rank(b);
+          if (r !== 0) return r;
+          return +new Date(b.updatedAt) - +new Date(a.updatedAt);
+        });
+
+        if (!list.length) {
+          els.sitesCards.innerHTML = `<div class="empty">No hay sitios para este filtro.</div>`;
+          return;
+        }
+
+        els.sitesCards.innerHTML = list.map(site => {
+          const sev = siteSeverity(site);
+          const stale = staleHours(site) > 6;
+          const itemHtml = site.items.map(item => {
+            const pct = getCoveragePercent(item);
+            const iSev = itemSeverity(item);
+            const color = iSev === 'critical' ? '#e36c6c' : iSev === 'high' ? '#f1b75c' : iSev === 'medium' ? '#e7cf6e' : '#7bc67f';
+            const text = iSev === 'covered' ? 'OK' : STATUS_LABELS[iSev].toUpperCase();
+            return `
+              <div class="item-row">
+                <div class="item-line"><span>${escapeHtml(item.name)} — ${item.current} / ${item.target}</span><strong>${text}</strong></div>
+                <div class="bar"><span style="width:${pct}%;background:${color}"></span></div>
+              </div>
+            `;
+          }).join('');
+
+          const waText = encodeURIComponent(
+            `FARO · ${site.name}\nUbicación: ${site.location} (${site.municipality})\nEstado: ${STATUS_LABELS[sev]}\n${site.items.map(i => `- ${i.name}: ${i.current}/${i.target}`).join('\n')}\nActualizado: ${timeAgo(site.updatedAt)}`
+          );
+
+          const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.lat + ',' + site.lng)}`;
+
+          return `
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <h3>${escapeHtml(site.name)}</h3>
+                  <div class="sub">${escapeHtml(site.location)} · ${escapeHtml(site.municipality)}</div>
+                </div>
+                <span class="badge ${sev}">${STATUS_LABELS[sev]}</span>
+              </div>
+              ${itemHtml}
+              <div class="sub" style="margin-top:8px">Última actualización: ${timeAgo(site.updatedAt)}</div>
+              ${stale ? `<div class="warn">Dato posiblemente desactualizado</div>` : ''}
+              ${site.pendingReports ? `<div style="margin-top:8px"><span class="badge pending">${site.pendingReports} pendiente(s) de verificación</span></div>` : ''}
+              <div class="card-actions">
+                <button class="btn primary" data-update-site="${site.id}">Actualizar información</button>
+                <a class="btn" href="${mapHref}" target="_blank" rel="noopener">Abrir en Google Maps</a>
+                <a class="btn" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">Compartir por WhatsApp</a>
+              </div>
+            </article>
+          `;
+        }).join('');
+
+        els.sitesCards.querySelectorAll('[data-update-site]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            selectedSiteId = btn.dataset.updateSite;
+            reportMode = 'existing';
+            els.siteSearch.value = state.sites.find(s => s.id === selectedSiteId)?.name || '';
+            updateReportModeUI();
+            goToView('report');
+          });
+        });
+      }
+
+      function getSiteCoverageLevel(site) {
+        const need = site.items.reduce((sum, item) => sum + Math.max(item.target - item.current, 0), 0);
+        const target = site.items.reduce((sum, item) => sum + item.target, 0) || 1;
+        const shortageRatio = need / target; // 0 a 1
+        const volunteerFactor = Math.min(1, (site.volunteerReports || 0) / 6);
+        const score = (1 - shortageRatio) * 0.7 + volunteerFactor * 0.3;
+        if (score < 0.35) return 'red';
+        if (score < 0.7) return 'yellow';
+        return 'green';
+      }
+
+      function initCoverageMap() {
+        if (coverageMap) {
+          setTimeout(() => coverageMap.invalidateSize(), 50);
+          return;
+        }
+
+        coverageMap = L.map('coverageMap').setView([10.4806, -66.9036], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(coverageMap);
+
+        clusterLayer = L.markerClusterGroup();
+        coverageMap.addLayer(clusterLayer);
+
+        els.closePanel.addEventListener('click', () => {
+          els.panel.classList.remove('open');
+        });
+      }
+
+      function renderCoverageMap() {
+        if (!coverageMap || !clusterLayer) return;
+
+        clusterLayer.clearLayers();
+        markerBySiteId.clear();
+
+        const bounds = [];
+        state.sites.forEach((site) => {
+          const level = getSiteCoverageLevel(site);
+          const color = level === 'red' ? '#e36c6c' : level === 'yellow' ? '#f2c463' : '#7bc67f';
+          const icon = L.divIcon({
+            className: '',
+            html: `<div class="marker-pin" style="background:${color}"></div>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
+          });
+
+          const marker = L.marker([site.lat, site.lng], { icon });
+          marker.on('click', () => openMapPanel(site));
+          clusterLayer.addLayer(marker);
+          markerBySiteId.set(site.id, marker);
+          bounds.push([site.lat, site.lng]);
+        });
+
+        if (bounds.length) {
+          coverageMap.fitBounds(bounds, { padding: [30, 30] });
+        }
+      }
+
+      function openMapPanel(site) {
+        const sev = siteSeverity(site);
+        const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.lat + ',' + site.lng)}`;
+
+        els.panelContent.innerHTML = `
+          <h3 style="margin:6px 0 4px">${escapeHtml(site.name)}</h3>
+          <div class="sub" style="margin-bottom:8px">${escapeHtml(site.location)} · ${escapeHtml(site.municipality)}</div>
+          <span class="badge ${sev}">${STATUS_LABELS[sev]}</span>
+          <div style="margin-top:10px;display:grid;gap:6px">
+            ${site.items.map(i => `<div class="sub">• ${escapeHtml(i.name)}: ${i.current}/${i.target}</div>`).join('')}
+          </div>
+          <div class="sub" style="margin-top:10px">Última actualización: ${timeAgo(site.updatedAt)}</div>
+          <div style="display:grid;gap:8px;margin-top:12px">
+            <button class="btn primary" id="panelUpdateBtn">Actualizar información</button>
+            <a class="btn" href="${mapHref}" target="_blank" rel="noopener">Ir al sitio</a>
+          </div>
+        `;
+
+        const updateBtn = document.getElementById('panelUpdateBtn');
+        if (updateBtn) {
+          updateBtn.addEventListener('click', () => {
+            selectedSiteId = site.id;
+            reportMode = 'existing';
+            els.siteSearch.value = site.name;
+            updateReportModeUI();
+            goToView('report');
+            els.panel.classList.remove('open');
+          });
+        }
+
+        els.panel.classList.add('open');
+      }
+
+      function bindReportForm() {
+        els.chooseExisting.addEventListener('click', () => {
+          reportMode = 'existing';
+          updateReportModeUI();
+        });
+        els.chooseNew.addEventListener('click', () => {
+          reportMode = 'new';
+          updateReportModeUI();
+          initPinPickerMap();
+        });
+
+        els.prevStep.addEventListener('click', () => {
+          if (reportStep > 1) {
+            reportStep -= 1;
+            updateReportStepUI();
+          }
+        });
+
+        els.nextStep.addEventListener('click', () => {
+          if (!validateStep(reportStep)) return;
+          if (reportStep < 3) {
+            reportStep += 1;
+            updateReportStepUI();
+          }
+        });
+
+        els.reportForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          if (!validateStep(3)) return;
+          submitReport();
+        });
+
+        els.siteSearch.addEventListener('input', () => {
+          const found = state.sites.find(s => s.name.toLowerCase() === els.siteSearch.value.trim().toLowerCase());
+          selectedSiteId = found ? found.id : null;
+        });
+
+        els.addCustomSupply.addEventListener('click', () => {
+          addCustomSupplyRow();
+        });
+
+        updateReportModeUI();
+        updateReportStepUI();
+      }
+
+      function updateReportModeUI() {
+        const isExisting = reportMode === 'existing';
+        els.chooseExisting.classList.toggle('primary', isExisting);
+        els.chooseNew.classList.toggle('primary', !isExisting);
+        els.existingSiteFields.style.display = isExisting ? 'block' : 'none';
+        els.newSiteFields.style.display = isExisting ? 'none' : 'block';
+      }
+
+      function updateReportStepUI() {
+        els.steps.forEach((step) => {
+          step.classList.toggle('active', Number(step.dataset.step) === reportStep);
+        });
+        els.progressBar.style.width = `${(reportStep / 3) * 100}%`;
+        els.stepLabel.textContent = reportStep === 1
+          ? 'Paso 1 de 3 — ¿Dónde?'
+          : reportStep === 2
+            ? 'Paso 2 de 3 — ¿Qué cambió?'
+            : 'Paso 3 de 3 — ¿Quién reporta?';
+
+        els.prevStep.style.visibility = reportStep === 1 ? 'hidden' : 'visible';
+        els.nextStep.style.display = reportStep === 3 ? 'none' : 'inline-flex';
+        els.submitReport.style.display = reportStep === 3 ? 'inline-flex' : 'none';
+
+        if (reportStep === 1 && reportMode === 'new') {
+          setTimeout(initPinPickerMap, 50);
+        }
+      }
+
+      function validateStep(step) {
+        if (step === 1) {
+          if (reportMode === 'existing') {
+            if (!selectedSiteId) {
+              toast('Selecciona un sitio existente.');
+              return false;
+            }
+            return true;
+          }
+          if (!els.newSiteName.value.trim() || !els.newSiteLocation.value.trim() || !els.newSiteMunicipality.value.trim()) {
+            toast('Completa nombre y ubicación del nuevo sitio.');
+            return false;
+          }
+          if (!newSitePin) {
+            toast('Coloca un pin en el mapa para el nuevo sitio.');
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      function submitReport() {
+        const sourceType = document.querySelector('input[name="sourceType"]:checked')?.value || 'personal';
+        const updates = collectSupplyUpdates();
+
+        const report = {
+          id: 'r' + Math.random().toString(36).slice(2, 9),
+          createdAt: new Date().toISOString(),
+          pending: true,
+          sourceType,
+          alias: els.reporterAlias.value.trim() || null,
+          verifiedVolunteer: !!els.verifiedVolunteer.checked,
+          context: els.extraContext.value.trim() || null,
+          updates,
+          siteId: null
+        };
+
+        if (reportMode === 'existing') {
+          const site = state.sites.find(s => s.id === selectedSiteId);
+          if (!site) {
+            toast('No se encontró el sitio seleccionado.');
+            return;
+          }
+          report.siteId = site.id;
+          site.pendingReports = (site.pendingReports || 0) + 1;
+        } else {
+          const newSite = {
+            id: 's' + Math.random().toString(36).slice(2, 9),
+            type: els.newSiteType.value,
+            name: els.newSiteName.value.trim(),
+            location: els.newSiteLocation.value.trim(),
+            municipality: els.newSiteMunicipality.value.trim(),
+            lat: newSitePin.lat,
+            lng: newSitePin.lng,
+            volunteerReports: 0,
+            pendingReports: 1,
+            updatedAt: new Date().toISOString(),
+            items: updates.length ? updates.map(u => ({ name: u.name, current: levelToCurrent(u.level), target: 100 })) : [
+              { name: 'Agua potable', current: 45, target: 100 },
+              { name: 'Alimentos no perecederos', current: 45, target: 100 }
+            ]
+          };
+          report.siteId = newSite.id;
+          state.sites.push(newSite);
+        }
+
+        state.reports.push(report);
+        saveState();
+        renderGlobal();
+        populateSiteDatalist();
+        renderSites();
+        if (coverageMap) renderCoverageMap();
+
+        resetReportForm();
+        toast('Reporte enviado como pendiente de verificación.');
+      }
+
+      function levelToCurrent(level) {
+        if (level === 'critical') return 20;
+        if (level === 'low') return 45;
+        if (level === 'enough') return 80;
+        if (level === 'extra') return 100;
+        return 50;
+      }
+
+      function seedSupplyRows() {
+        els.supplyRows.innerHTML = '';
+        COMMON_SUPPLIES.forEach((name) => {
+          els.supplyRows.appendChild(createSupplyRow(name, false));
+        });
+      }
+
+      function addCustomSupplyRow() {
+        els.supplyRows.appendChild(createSupplyRow('', true));
+      }
+
+      function createSupplyRow(name, custom) {
+        const wrap = document.createElement('div');
+        wrap.className = 'inline';
+        wrap.style.marginTop = '8px';
+        wrap.dataset.custom = custom ? '1' : '0';
+
+        wrap.innerHTML = `
+          <input class="supply-name" value="${escapeHtml(name)}" ${custom ? 'placeholder="Nombre del insumo"' : 'readonly'}>
+          <select class="supply-level">
+            <option value="">Sin cambio</option>
+            <option value="critical">Crítico</option>
+            <option value="low">Poco</option>
+            <option value="enough">Suficiente</option>
+            <option value="extra">Sobra</option>
+          </select>
+        `;
+
+        if (custom) {
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'btn';
+          remove.textContent = 'Quitar';
+          remove.addEventListener('click', () => wrap.remove());
+          wrap.appendChild(remove);
+        }
+
+        return wrap;
+      }
+
+      function collectSupplyUpdates() {
+        const rows = Array.from(els.supplyRows.querySelectorAll('.inline'));
+        const updates = [];
+
+        rows.forEach((row) => {
+          const name = row.querySelector('.supply-name')?.value.trim();
+          const level = row.querySelector('.supply-level')?.value;
+          if (!name || !level) return;
+          updates.push({ name, level });
+        });
+
+        return updates;
+      }
+
+      function resetReportForm() {
+        reportStep = 1;
+        reportMode = 'existing';
+        selectedSiteId = null;
+        newSitePin = null;
+        els.siteSearch.value = '';
+        els.newSiteName.value = '';
+        els.newSiteLocation.value = '';
+        els.newSiteMunicipality.value = '';
+        els.newSiteType.value = 'acopio';
+        els.extraContext.value = '';
+        els.reporterAlias.value = '';
+        els.verifiedVolunteer.checked = false;
+        seedSupplyRows();
+        els.pinHint.textContent = 'Pin no colocado todavía.';
+        if (pinPickerMarker) {
+          pinPickerMap.removeLayer(pinPickerMarker);
+          pinPickerMarker = null;
+        }
+        updateReportModeUI();
+        updateReportStepUI();
+      }
+
+      function initPinPickerMap() {
+        if (pinPickerMap) {
+          setTimeout(() => pinPickerMap.invalidateSize(), 60);
+          return;
+        }
+
+        pinPickerMap = L.map('pinPickerMap').setView([10.4806, -66.9036], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(pinPickerMap);
+
+        pinPickerMap.on('click', (e) => {
+          const { lat, lng } = e.latlng;
+          newSitePin = { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
+
+          if (pinPickerMarker) pinPickerMarker.remove();
+          pinPickerMarker = L.marker([lat, lng]).addTo(pinPickerMap);
+
+          els.pinHint.textContent = `Pin colocado: ${newSitePin.lat}, ${newSitePin.lng}`;
+        });
+      }
+
+      function bindPeople() {
+        els.personSearch.addEventListener('input', renderPeopleResults);
+
+        els.missingForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const payload = {
+            id: 'm' + Math.random().toString(36).slice(2,9),
+            name: document.getElementById('missingName').value.trim(),
+            age: Number(document.getElementById('missingAge').value),
+            photo: document.getElementById('missingPhoto').value.trim() || null,
+            lastSeen: document.getElementById('missingLastSeen').value.trim(),
+            contact: document.getElementById('missingContact').value.trim(),
+            createdAt: new Date().toISOString(),
+            pending: true
+          };
+
+          state.missingReports.push(payload);
+          saveState();
+          toast('Reporte de desaparición enviado.');
+          els.missingForm.reset();
+          els.missingContainer.style.display = 'none';
+        });
+      }
+
+      function renderPeopleResults() {
+        const q = els.personSearch.value.trim().toLowerCase();
+        let list = state.people;
+        if (q) list = list.filter(p => p.name.toLowerCase().includes(q));
+
+        if (!q) {
+          els.peopleResults.innerHTML = '<div class="empty">Escribe un nombre para buscar.</div>';
+          els.missingContainer.style.display = 'none';
+          return;
+        }
+
+        if (!list.length) {
+          els.peopleResults.innerHTML = `
+            <div class="empty">
+              No encontramos coincidencias para <strong>${escapeHtml(els.personSearch.value)}</strong>.
+              <div style="margin-top:10px"><button class="btn primary" id="openMissingBtn">Reportar como desaparecido</button></div>
+            </div>
+          `;
+
+          document.getElementById('openMissingBtn')?.addEventListener('click', () => {
+            els.missingContainer.style.display = 'block';
+            els.missingName.value = els.personSearch.value.trim();
+            els.missingContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          return;
+        }
+
+        els.missingContainer.style.display = 'none';
+        els.peopleResults.innerHTML = list.map(p => `
+          <article class="person-card">
+            <div style="font-weight:700">${escapeHtml(p.name)}</div>
+            <div class="sub">${escapeHtml(p.site)}</div>
+            <div class="sub">Registro: ${formatDateTime(p.date)}</div>
+            <span class="status-line">${PEOPLE_STATUS[p.status]}</span>
+          </article>
+        `).join('');
+      }
+
+      function populateSiteDatalist() {
+        els.sitesDataList.innerHTML = state.sites.map(s => `<option value="${escapeHtml(s.name)}"></option>`).join('');
+      }
+
+      function formatDateTime(iso) {
+        const d = new Date(iso);
+        return d.toLocaleString('es-VE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      }
+
+      function timeAgo(iso) {
+        const diff = Date.now() - +new Date(iso);
+        const min = Math.round(diff / 60000);
+        if (min < 1) return 'hace unos segundos';
+        if (min < 60) return `hace ${min} min`;
+        const h = Math.round(min / 60);
+        if (h < 24) return `hace ${h} h`;
+        const d = Math.round(h / 24);
+        return `hace ${d} día${d>1?'s':''}`;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      let toastTimer = null;
+      function toast(message) {
+        els.toast.textContent = message;
+        els.toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2200);
+      }
+    })();
+  </script>
+</body>
+</html>
