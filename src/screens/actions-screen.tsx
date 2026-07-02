@@ -2,7 +2,6 @@ import { motion } from 'framer-motion'
 import {
   Activity,
   ChevronDown,
-  MapPin,
   PackagePlus,
   PenLine,
   Truck,
@@ -32,7 +31,6 @@ interface ActionDef {
 }
 
 const COORDINATOR_ACTIONS: ActionDef[] = [
-  { id: 'register-site', icon: MapPin, label: 'Registrar sitio', hint: 'Hospital, refugio o acopio', accent: 'operational' },
   { id: 'register-need', icon: PackagePlus, label: 'Registrar necesidad', hint: 'Insumos que faltan', accent: 'warning' },
   { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Ocupación del centro', accent: 'critical' },
   { id: 'register-arrival', icon: Truck, label: 'Registrar llegada', hint: 'Donaciones recibidas', accent: 'operational' },

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   AlertTriangle,
@@ -7,12 +7,12 @@ import {
   MapPin,
   Package,
   Route,
-  Search,
   Send,
   Shield,
   Sparkles,
   X,
 } from 'lucide-react'
+import { FaroIcon } from '@/components/brand/faro-icon'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -21,8 +21,9 @@ import { cn } from '@/lib/utils'
 import { SITE_META } from '@/lib/status-config'
 import { siteToNeedableType } from '@/lib/site-utils'
 import { useFaro } from '@/store/faro-context'
-import type { Site, SiteType } from '@/lib/types'
+import type { Site, SiteType, Center } from '@/lib/types'
 import type { RegisterSiteType } from '@/repositories/types'
+import { InvisibleTurnstile, type InvisibleTurnstileHandle } from '@/components/security/invisible-turnstile'
 
 type ReportCategory = 'insumos' | 'seguridad' | 'vialidad' | 'otra'
 type SiteTypeFilter = 'all' | RegisterSiteType
@@ -107,6 +108,7 @@ export function ReportsScreen() {
   const [details, setDetails] = useState('')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const turnstileRef = useRef<InvisibleTurnstileHandle>(null)
 
   const registeredSites = useMemo(
     () =>
@@ -160,6 +162,13 @@ export function ReportsScreen() {
     const description = `Categoría: ${categoryLabel}. ${details.trim()}`
 
     try {
+      if (import.meta.env.VITE_TURNSTILE_SITE_KEY) {
+        const token = await turnstileRef.current?.requestToken()
+        if (!token) {
+          setSubmitError('No pudimos verificar la seguridad del reporte. Inténtalo nuevamente.')
+          return
+        }
+      }
       await submitReport.mutateAsync({
         description,
         siteType: siteToNeedableType(selectedSite),
@@ -170,8 +179,8 @@ export function ReportsScreen() {
         contactInfo: 'Reporte ciudadano',
       })
       setSent(true)
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'No se pudo enviar el reporte.')
+    } catch {
+      setSubmitError('No se pudo enviar el reporte. Inténtalo nuevamente.')
     }
   }
 
@@ -222,86 +231,36 @@ export function ReportsScreen() {
                 registrarlo primero.
               </p>
 
-              {selectedSite ? (
-                <SelectedLocationChip
-                  site={selectedSite}
-                  typeLabel={siteTypeLabel(selectedSite.type)}
-                  address={selectedCenter?.location.address}
-                  onClear={() => setSelectedSite(null)}
-                />
-              ) : registeredSites.length === 0 ? (
+              {registeredSites.length === 0 ? (
                 <GlassCard className="text-sm text-ink-muted">
                   Aún no hay centros registrados en FARO. Cuando un coordinador registre
                   hospitales, refugios o centros de acopio, podrás reportar sobre ellos aquí.
                 </GlassCard>
+              ) : selectedSite ? (
+                <SelectedLocationChip
+                  site={selectedSite}
+                  typeLabel={siteTypeLabel(selectedSite.type)}
+                  address={selectedCenter?.location.address}
+                  onClear={() => {
+                    setSelectedSite(null)
+                    setSearch('')
+                    setTypeFilter('all')
+                  }}
+                />
               ) : (
-                <>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-                    <input
-                      type="search"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Buscar entre centros registrados…"
-                      className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-10 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-info/50"
-                    />
-                  </div>
-
-                  <div className="no-scrollbar flex gap-2 overflow-x-auto pb-0.5">
-                    {TYPE_FILTERS.map((filter) => (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        onClick={() => setTypeFilter(filter.id)}
-                        className={cn(
-                          'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                          typeFilter === filter.id
-                            ? 'border-info/50 bg-info/15 text-ink'
-                            : 'border-white/10 bg-white/[0.04] text-ink-subtle hover:bg-white/[0.08]',
-                        )}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="max-h-[240px] space-y-1.5 overflow-y-auto pr-0.5">
-                    {filteredSites.length === 0 ? (
-                      <GlassCard className="text-sm text-ink-muted">
-                        No encontramos ese centro entre los registrados. Prueba otro nombre o
-                        filtro.
-                      </GlassCard>
-                    ) : (
-                      filteredSites.map((site) => {
-                        const center = state.centers.find((c) => c.id === site.id)
-                        return (
-                          <button
-                            key={site.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedSite(site)
-                              setSearch('')
-                            }}
-                            className="flex w-full items-start gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left transition-colors hover:border-info/30 hover:bg-white/[0.08]"
-                          >
-                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-info" />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium text-ink">{site.name}</span>
-                                <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] uppercase tracking-wide text-ink-subtle">
-                                  {siteTypeLabel(site.type)}
-                                </span>
-                              </span>
-                              <span className="mt-0.5 block text-xs text-ink-subtle">
-                                {center?.location.address ?? site.zone}
-                              </span>
-                            </span>
-                          </button>
-                        )
-                      })
-                    )}
-                  </div>
-                </>
+                <RegisteredCenterPicker
+                  search={search}
+                  typeFilter={typeFilter}
+                  filteredSites={filteredSites}
+                  centers={state.centers}
+                  onSearchChange={setSearch}
+                  onTypeFilterChange={setTypeFilter}
+                  onSelect={(site) => {
+                    setSelectedSite(site)
+                    setSearch('')
+                    setTypeFilter('all')
+                  }}
+                />
               )}
             </section>
 
@@ -394,6 +353,7 @@ export function ReportsScreen() {
           </>
         )}
       </div>
+      <InvisibleTurnstile ref={turnstileRef} action="citizen-report" />
     </ScreenScaffold>
   )
 }
@@ -405,6 +365,138 @@ function StepLabel({ step, title }: { step: number; title: string }) {
         {step}
       </span>
       <p className="text-[15px] font-medium text-ink">{title}</p>
+    </div>
+  )
+}
+
+function RegisteredCenterPicker({
+  search,
+  typeFilter,
+  filteredSites,
+  centers,
+  onSearchChange,
+  onTypeFilterChange,
+  onSelect,
+}: {
+  search: string
+  typeFilter: SiteTypeFilter
+  filteredSites: Site[]
+  centers: Center[]
+  onSearchChange: (value: string) => void
+  onTypeFilterChange: (value: SiteTypeFilter) => void
+  onSelect: (site: Site) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={rootRef} className="relative">
+      <div className="relative">
+        <FaroIcon size={20} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" />
+        <input
+          ref={inputRef}
+          type="search"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="report-center-listbox"
+          aria-autocomplete="list"
+          value={search}
+          onChange={(e) => {
+            onSearchChange(e.target.value)
+            if (!open) setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Toca para buscar un centro registrado…"
+          className={cn(
+            'h-12 w-full rounded-2xl border bg-white/[0.04] pl-10 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint',
+            open ? 'border-info/50 ring-1 ring-info/20' : 'border-white/10 focus:border-info/50',
+          )}
+        />
+      </div>
+
+      {open && (
+        <div
+          id="report-center-listbox"
+          role="listbox"
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-2xl border border-white/10 bg-base-900/95 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        >
+          <div className="border-b border-white/[0.06] px-3 py-2.5">
+            <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+              {TYPE_FILTERS.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => onTypeFilterChange(filter.id)}
+                  className={cn(
+                    'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
+                    typeFilter === filter.id
+                      ? 'border-info/50 bg-info/15 text-ink'
+                      : 'border-white/10 bg-white/[0.04] text-ink-subtle hover:bg-white/[0.08]',
+                  )}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-ink-faint">
+              {filteredSites.length} centro{filteredSites.length === 1 ? '' : 's'} · desplázate en la lista
+            </p>
+          </div>
+
+          <ul className="max-h-[min(280px,45vh)] space-y-1 overflow-y-auto overscroll-contain p-2">
+            {filteredSites.length === 0 ? (
+              <li className="rounded-xl px-3 py-4 text-center text-sm text-ink-muted">
+                No encontramos ese centro. Prueba otro nombre o filtro.
+              </li>
+            ) : (
+              filteredSites.map((site) => {
+                const center = centers.find((c) => c.id === site.id)
+                const subtitle = center?.location.address ?? site.zone
+                return (
+                  <li key={site.id} role="option">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(site)
+                        setOpen(false)
+                      }}
+                      className="flex w-full items-start gap-2.5 rounded-xl border border-transparent px-2.5 py-2 text-left transition-colors hover:border-info/25 hover:bg-white/[0.08]"
+                    >
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium text-ink">{site.name}</span>
+                          <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-subtle">
+                            {siteTypeLabel(site.type)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-ink-subtle">{subtitle}</span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

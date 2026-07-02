@@ -111,8 +111,8 @@ function NeedEditSheet({ need, onClose }: { need: Need; onClose: () => void }) {
         qtyReceived: Number(qtyReceived),
       })
       onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar.')
+    } catch {
+      setError('No se pudo guardar. Inténtalo nuevamente.')
     }
   }
 

@@ -48,8 +48,8 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
         qtyReceived: Number(qtyReceived) || 0,
       })
       setDone(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar la necesidad.')
+    } catch {
+      setError('No se pudo registrar la necesidad. Inténtalo nuevamente.')
     }
   }
 

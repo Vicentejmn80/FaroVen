@@ -10,7 +10,7 @@ import {
   InventoryHighlights,
 } from '@/components/center/center-profile-sections'
 import { CenterActivityTimeline } from '@/components/trust/center-activity-timeline'
-import { CenterTrustStrip } from '@/components/trust/center-trust-strip'
+import { CenterTrustProfile } from '@/components/trust/center-trust-profile'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -30,7 +30,7 @@ export function CenterDetailScreen({ site, onBack }: { site: Site; onBack: () =>
   const trust = useCenterTrust(site)
   const center = state.centers.find((item) => item.id === site.id)
   const centerReports = state.reports
-    .filter((report) => report.centerId === site.id && report.status === 'verified')
+    .filter((report) => report.centerId === site.id && report.status !== 'discarded')
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
   const capacityCurrent = center?.capacity.current ?? 0
@@ -94,7 +94,7 @@ export function CenterDetailScreen({ site, onBack }: { site: Site; onBack: () =>
           confidence={confidenceLabel}
           priority={priorityLabel}
         />
-        {trust && <CenterTrustStrip snapshot={trust} />}
+        {trust && <CenterTrustProfile snapshot={trust} />}
         <CenterStatusSummary summary={statusSummary} />
 
         <div className="relative h-44 overflow-hidden rounded-4xl ring-1 ring-inset ring-white/10">

@@ -1,6 +1,7 @@
 import { Bell } from 'lucide-react'
 import { ConnectivityIndicator } from './live-indicator'
 import { EmergencyButton } from '@/components/ui/emergency-button'
+import { FaroIcon } from '@/components/brand/faro-icon'
 import { cn } from '@/lib/utils'
 import type { ConnectionState } from '@/hooks/useNetworkStatus'
 
@@ -15,12 +16,8 @@ interface EmergencyHeaderProps {
 /** Logotipo FARO — faro minimalista en marca de palabra. */
 function FaroWordmark() {
   return (
-    <div className="flex items-center gap-2">
-      <span className="relative flex h-7 w-7 items-center justify-center">
-        <span className="absolute inset-0 rounded-xl bg-info/20" />
-        <span className="absolute h-3 w-3 rounded-full bg-info shadow-focal" />
-        <span className="absolute h-3 w-3 animate-pulse-ring rounded-full bg-info" />
-      </span>
+    <div className="flex items-center gap-2.5">
+      <FaroIcon size={26} title="FARO" />
       <span className="text-[17px] font-semibold tracking-tight text-ink">FARO</span>
     </div>
   )

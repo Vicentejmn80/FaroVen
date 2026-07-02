@@ -1,0 +1,63 @@
+import { supabase } from '@/lib/supabase'
+import type { Session, User } from '@supabase/supabase-js'
+
+export type SignUpResult = {
+  user: User | null
+  session: Session | null
+  needsEmailConfirmation: boolean
+}
+
+export type AuthCallbackIntent = 'none' | 'password_recovery' | 'email_confirmation'
+
+function readHashType(): string | null {
+  if (typeof window === 'undefined' || !window.location.hash) return null
+  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type')
+}
+
+export async function completeAuthFromUrl(): Promise<{
+  error: string | null
+  intent: AuthCallbackIntent
+}> {
+  if (typeof window === 'undefined') return { error: null, intent: 'none' }
+
+  const params = new URLSearchParams(window.location.search)
+  const errorDescription = params.get('error_description')
+  if (errorDescription) return { error: errorDescription, intent: 'none' }
+
+  const hashType = readHashType()
+  const hasAuthFragment = window.location.hash.includes('access_token')
+  const hasAuthCode = window.location.search.includes('code=')
+
+  if (!hasAuthFragment && !hasAuthCode) {
+    return { error: null, intent: 'none' }
+  }
+
+  let errorMessage: string | null = null
+
+  if (hasAuthCode) {
+    const code = params.get('code')
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      errorMessage = error?.message ?? null
+    }
+  } else {
+    const { error } = await supabase.auth.getSession()
+    errorMessage = error?.message ?? null
+  }
+
+  window.history.replaceState({}, document.title, window.location.pathname)
+
+  if (hashType === 'recovery') {
+    return { error: errorMessage, intent: 'password_recovery' }
+  }
+
+  if (hashType === 'signup' || hashType === 'email' || hashType === 'magiclink') {
+    return { error: errorMessage, intent: 'email_confirmation' }
+  }
+
+  if (hasAuthFragment || hasAuthCode) {
+    return { error: errorMessage, intent: 'email_confirmation' }
+  }
+
+  return { error: errorMessage, intent: 'none' }
+}

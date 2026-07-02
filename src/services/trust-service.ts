@@ -40,6 +40,7 @@ export interface CenterTrustSnapshot {
   freshness: FreshnessResult
   activity: ActivityLevelResult
   timeline: CenterTimelineEntry[]
+  reportCounts: { pending: number; verified: number }
 }
 
 const HOUR_MS = 3_600_000
@@ -195,5 +196,9 @@ export function buildCenterTrustSnapshot(
     freshness,
     activity,
     timeline: buildCenterTimeline(events, options?.timelineLimit ?? 12),
+    reportCounts: {
+      pending: reports.filter((r) => r.status === 'new').length,
+      verified: reports.filter((r) => r.status === 'verified').length,
+    },
   }
 }

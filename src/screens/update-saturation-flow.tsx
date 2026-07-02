@@ -46,8 +46,8 @@ export function UpdateSaturationFlow({ onClose, presetSiteId }: UpdateSaturation
         capacity: capacity ? Number(capacity) : undefined,
       })
       setDone(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo actualizar la saturación.')
+    } catch {
+      setError('No se pudo actualizar la saturación. Inténtalo nuevamente.')
     }
   }
 

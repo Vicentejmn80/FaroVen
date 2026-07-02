@@ -1,17 +1,62 @@
 import { motion } from 'framer-motion'
-import { Activity, FileText, Map, Plus, User, type LucideIcon } from 'lucide-react'
+import {
+  Activity,
+  Building2,
+  FileText,
+  Map,
+  Plus,
+  Settings2,
+  Shield,
+  User,
+  type LucideIcon,
+} from 'lucide-react'
+import { FaroIcon } from '@/components/brand/faro-icon'
 import { cn } from '@/lib/utils'
+import {
+  canAccessAdminPanel,
+  canAccessCoordinatorPanel,
+  canAccessSystemPanel,
+  type FaroRole,
+} from '@/lib/roles'
 
-export type TabId = 'map' | 'reports' | 'activity' | 'profile' | 'ops'
+export type TabId = 'map' | 'reports' | 'activity' | 'profile' | 'ops' | 'admin' | 'system'
 
-export const CITIZEN_TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: 'map', label: 'Situación', icon: Map },
-  { id: 'reports', label: 'Reportes', icon: FileText },
+export interface NavTab {
+  id: TabId
+  label: string
+  icon: LucideIcon
+}
+
+const CITIZEN_BASE: NavTab[] = [
+  { id: 'map', label: 'Mapa', icon: Map },
   { id: 'activity', label: 'Guía', icon: Activity },
+  { id: 'reports', label: 'Reportar', icon: FileText },
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
-export const COORDINATOR_TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
+export function getNavigationTabs(role: FaroRole): NavTab[] {
+  const tabs = [...CITIZEN_BASE]
+
+  if (canAccessCoordinatorPanel(role)) {
+    tabs.splice(1, 0, { id: 'ops', label: 'Mi Centro', icon: Building2 })
+  }
+
+  if (canAccessAdminPanel(role)) {
+    tabs.push({ id: 'admin', label: 'Administración', icon: Shield })
+  }
+
+  if (canAccessSystemPanel(role)) {
+    tabs.push({ id: 'system', label: 'Sistema', icon: Settings2 })
+  }
+
+  return tabs
+}
+
+/** @deprecated Usar getNavigationTabs(role) */
+export const CITIZEN_TABS = CITIZEN_BASE
+
+/** @deprecated Usar getNavigationTabs(role) */
+export const COORDINATOR_TABS: NavTab[] = [
   { id: 'ops', label: 'Panel', icon: Activity },
   { id: 'map', label: 'Centros', icon: Map },
   { id: 'activity', label: 'Guía', icon: FileText },
@@ -22,14 +67,14 @@ interface NavigationProps {
   active: TabId
   onChange: (tab: TabId) => void
   onCreate?: () => void
-  tabs: { id: TabId; label: string; icon: LucideIcon }[]
+  tabs: NavTab[]
   createLabel?: string
 }
 
 /** Mobile — barra inferior en zona del pulgar */
 export function BottomNavigation({ active, onChange, onCreate, tabs, createLabel = 'Acciones' }: NavigationProps) {
-  const left = tabs.slice(0, 2)
-  const right = tabs.slice(2)
+  const left = tabs.slice(0, Math.ceil(tabs.length / 2))
+  const right = tabs.slice(Math.ceil(tabs.length / 2))
 
   return (
     <nav className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 w-full pb-safe lg:hidden">
@@ -69,8 +114,8 @@ export function BottomNavigation({ active, onChange, onCreate, tabs, createLabel
 export function DesktopNavigation({ active, onChange, onCreate, tabs, createLabel = 'Acciones' }: NavigationProps) {
   return (
     <aside className="hidden w-[88px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-base-800/50 py-5 lg:flex">
-      <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-2xl bg-info/20">
-        <span className="relative h-3 w-3 rounded-full bg-info shadow-focal" />
+      <div className="mb-6">
+        <FaroIcon size={28} title="FARO" />
       </div>
 
       <nav className="flex flex-1 flex-col items-center gap-1">

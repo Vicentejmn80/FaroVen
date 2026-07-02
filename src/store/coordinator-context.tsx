@@ -10,14 +10,13 @@ import {
 import type { CoordinatorAssignment } from '@/repositories/types'
 import { supabase } from '@/lib/supabase'
 import type { RegisterSiteType } from '@/repositories/types'
-
-const STORAGE_KEY = 'faro.coordinator.assignment'
+import { canAccessCoordinatorPanel } from '@/lib/roles'
+import { useAuth } from '@/store/auth-context'
 
 interface CoordinatorContextValue {
   assignment: CoordinatorAssignment | null
   loading: boolean
-  bindAssignment: (input: CoordinatorAssignment) => void
-  clearAssignment: () => void
+  refreshAssignment: () => Promise<void>
 }
 
 const CoordinatorContext = createContext<CoordinatorContextValue | undefined>(undefined)
@@ -30,11 +29,7 @@ async function fetchSiteName(siteType: RegisterSiteType, siteId: string): Promis
   return data?.name ?? 'Centro sin nombre'
 }
 
-async function loadAssignmentFromProfile(): Promise<CoordinatorAssignment | null> {
-  const { data: sessionData } = await supabase.auth.getSession()
-  const userId = sessionData.session?.user?.id
-  if (!userId) return null
-
+async function loadAssignmentFromProfile(userId: string): Promise<CoordinatorAssignment | null> {
   const { data, error } = await supabase
     .from('coordinator_profiles')
     .select('site_type, site_id, onboarding_complete')
@@ -48,70 +43,41 @@ async function loadAssignmentFromProfile(): Promise<CoordinatorAssignment | null
   return { siteId: data.site_id, siteType, siteName }
 }
 
-function readStoredAssignment(): CoordinatorAssignment | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as CoordinatorAssignment
-    if (!parsed?.siteId || !parsed?.siteType) return null
-    return parsed
-  } catch {
-    return null
-  }
-}
-
 export function CoordinatorProvider({ children }: { children: ReactNode }) {
+  const { user, role } = useAuth()
   const [assignment, setAssignment] = useState<CoordinatorAssignment | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const refreshAssignment = useCallback(async () => {
+    if (!user || !canAccessCoordinatorPanel(role)) {
+      setAssignment(null)
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    try {
+      const fromProfile = await loadAssignmentFromProfile(user.id)
+      setAssignment(fromProfile)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, role])
+
   useEffect(() => {
-    let mounted = true
+    void refreshAssignment()
+  }, [refreshAssignment])
 
-    async function init() {
-      try {
-        const fromProfile = await loadAssignmentFromProfile()
-        if (!mounted) return
-        if (fromProfile) {
-          setAssignment(fromProfile)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(fromProfile))
-        } else {
-          setAssignment(readStoredAssignment())
-        }
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
-
-    void init()
-
+  useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void loadAssignmentFromProfile().then((next) => {
-        if (next) {
-          setAssignment(next)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-        }
-      })
+      void refreshAssignment()
     })
-
-    return () => {
-      mounted = false
-      sub.subscription.unsubscribe()
-    }
-  }, [])
-
-  const bindAssignment = useCallback((input: CoordinatorAssignment) => {
-    setAssignment(input)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(input))
-  }, [])
-
-  const clearAssignment = useCallback(() => {
-    setAssignment(null)
-    localStorage.removeItem(STORAGE_KEY)
-  }, [])
+    return () => sub.subscription.unsubscribe()
+  }, [refreshAssignment])
 
   const value = useMemo(
-    () => ({ assignment, loading, bindAssignment, clearAssignment }),
-    [assignment, loading, bindAssignment, clearAssignment],
+    () => ({ assignment, loading, refreshAssignment }),
+    [assignment, loading, refreshAssignment],
   )
 
   return <CoordinatorContext.Provider value={value}>{children}</CoordinatorContext.Provider>

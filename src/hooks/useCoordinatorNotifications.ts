@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
 import { useCoordinatorReports } from '@/hooks/useCoordinatorPanel'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
-import { useAppMode } from '@/store/app-mode-context'
+import { usePermissions } from '@/store/auth-context'
 
 /** Reportes pendientes del centro asignado — alimenta la campanita del coordinador. */
 export function useCoordinatorNotifications() {
-  const { mode } = useAppMode()
+  const { canAccessCoordinatorPanel } = usePermissions()
   const { assignment } = useCoordinatorAssignment()
   const pendingReports = useCoordinatorReports('pending')
 
-  const enabled = mode === 'coordinator' && !!assignment
+  const enabled = canAccessCoordinatorPanel && !!assignment
 
   const pendingCount = useMemo(() => {
     if (!enabled) return 0

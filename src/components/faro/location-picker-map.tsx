@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import { LocateFixed, MapPin, Search } from 'lucide-react'
+import { LocateFixed, MapPin } from 'lucide-react'
+import { FaroIcon } from '@/components/brand/faro-icon'
 import { createPickerMarkerIcon } from '@/components/faro/map-marker'
 import { fieldClassName } from '@/components/faro/flow-sheet'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -94,7 +95,7 @@ export function LocationPickerMap({ value, onChange, onNameHint, className }: Lo
   return (
     <div className={cn('space-y-3', className)}>
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle" />
+        <FaroIcon size={20} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
         <input
           className={cn(fieldClassName, 'pl-9')}
           value={query}

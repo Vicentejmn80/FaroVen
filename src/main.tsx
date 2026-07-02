@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import { QueryProvider } from './providers/query-provider'
+import { AuthProvider } from './store/auth-context'
 import { FaroProvider } from './store/faro-context'
-import { AppModeProvider } from './store/app-mode-context'
 import { CoordinatorProvider } from './store/coordinator-context'
 import { ToastProvider } from './store/toast-context'
 import 'leaflet/dist/leaflet.css'
@@ -20,7 +20,7 @@ registerSW({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryProvider>
-      <AppModeProvider>
+      <AuthProvider>
         <ToastProvider>
           <CoordinatorProvider>
             <FaroProvider>
@@ -28,7 +28,7 @@ createRoot(document.getElementById('root')!).render(
             </FaroProvider>
           </CoordinatorProvider>
         </ToastProvider>
-      </AppModeProvider>
+      </AuthProvider>
     </QueryProvider>
   </StrictMode>,
 )

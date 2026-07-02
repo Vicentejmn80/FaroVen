@@ -125,8 +125,8 @@ function ReportReviewSheet({ report, onClose }: { report: Report; onClose: () =>
         reviewNotes: notes.trim() || undefined,
       })
       onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo actualizar el reporte.')
+    } catch {
+      setError('No se pudo actualizar el reporte. Inténtalo nuevamente.')
     }
   }
 

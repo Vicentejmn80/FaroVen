@@ -10,7 +10,6 @@ import {
 } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { GlassCard } from '@/components/ui/glass-card'
-import { EmergencyButton } from '@/components/ui/emergency-button'
 import { EmergencyBadge } from '@/components/faro/emergency-badge'
 import { CoordinatorDashboard } from '@/components/coordinator/coordinator-dashboard'
 import { CoordinatorNeedsModule } from '@/components/coordinator/coordinator-needs-module'
@@ -58,7 +57,7 @@ export function CoordinatorPanelScreen({
   onRegisterArrival,
   onRegisterDispatch,
 }: CoordinatorPanelScreenProps) {
-  const { assignment, clearAssignment } = useCoordinatorAssignment()
+  const { assignment } = useCoordinatorAssignment()
   const site = useCoordinatorSite()
   const dashboard = useCoordinatorDashboard()
   const [internalModule, setInternalModule] = useState<CoordinatorModuleId>('dashboard')
@@ -166,10 +165,6 @@ export function CoordinatorPanelScreen({
         )}
 
         {module === 'history' && <CoordinatorHistoryModule />}
-
-        <EmergencyButton variant="glass" size="md" className="w-full" onClick={clearAssignment}>
-          Cambiar centro asignado
-        </EmergencyButton>
       </div>
     </ScreenScaffold>
   )

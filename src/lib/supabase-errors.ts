@@ -22,7 +22,7 @@ export function humanizeSupabaseError(error: unknown): string {
   }
 
   if (code === '42501' || message.toLowerCase().includes('permission') || message.toLowerCase().includes('policy')) {
-    return `Permiso denegado en Supabase. Ejecuta: 20260630240000_coordinator_report_review.sql. (${message})`
+    return 'No tienes permisos para esta acción.'
   }
 
   if (
@@ -30,10 +30,10 @@ export function humanizeSupabaseError(error: unknown): string {
     message.includes('Cannot coerce the result to a single JSON object') ||
     message.includes('JSON object requested, multiple (or no) rows returned')
   ) {
-    return `No se pudo completar la revisión del reporte. Ejecuta 20260630240000_coordinator_report_review.sql en Supabase. (${message})`
+    return 'No se pudo completar la operación solicitada.'
   }
 
-  return message || 'No se pudo completar la operación en Supabase.'
+  return 'No se pudo completar la operación. Inténtalo nuevamente.'
 }
 
 export { MIGRATION_HINT }

@@ -2,6 +2,7 @@ import { ExternalLink, Share2 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyBadge } from '@/components/faro/emergency-badge'
 import { EmergencyButton } from '@/components/ui/emergency-button'
+import { VerificationBadge } from '@/components/trust/verification-badge'
 import { cn, timeAgo } from '@/lib/utils'
 import type { Need, Report, Site } from '@/lib/types'
 
@@ -220,14 +221,20 @@ export function CenterTimeline({
 export function CitizenReportsPreview({ reports }: { reports: Report[] }) {
   return (
     <section className="space-y-2">
-      <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">Reportes ciudadanos</p>
+      <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+        Reportes ciudadanos
+      </p>
       <GlassCard className="space-y-2">
         {reports.length ? (
           reports.map((report) => (
-            <div key={report.id} className="rounded-2xl bg-white/[0.04] px-3 py-2">
+            <div key={report.id} className="space-y-2 rounded-2xl bg-white/[0.04] px-3 py-2.5">
+              <VerificationBadge
+                kind={report.status === 'verified' ? 'verified' : 'citizen_pending'}
+                validatedBy={report.status === 'verified' ? 'Coordinador del centro' : undefined}
+              />
               <p className="text-sm text-ink">{report.description}</p>
-              <p className="mt-1 text-[11px] text-ink-subtle">
-                {timeAgo(report.createdAt)} · {report.type} · {reportStatusLabel(report.status)}
+              <p className="text-[11px] text-ink-subtle">
+                {timeAgo(report.createdAt)} · {report.type}
               </p>
             </div>
           ))
@@ -340,10 +347,4 @@ function priorityLabel(priority: Need['priority']) {
   if (priority === 'critical') return 'Alta'
   if (priority === 'high') return 'Media'
   return 'Baja'
-}
-
-function reportStatusLabel(status: Report['status']) {
-  if (status === 'verified') return 'Verificado'
-  if (status === 'discarded') return 'Descartado'
-  return 'Pendiente'
 }

@@ -59,6 +59,7 @@ function viewportY(height: number, snaps: ReturnType<typeof snapHeights>) {
  */
 export function SidePanel({ site, onClose, onOpenDetail }: SidePanelProps) {
   const { state } = useFaro()
+  const trust = useCenterTrust(site)
   const [viewportH, setViewportH] = useState(() =>
     typeof window !== 'undefined' ? window.innerHeight : 800,
   )
@@ -136,7 +137,6 @@ export function SidePanel({ site, onClose, onOpenDetail }: SidePanelProps) {
     0,
   )
   const priority = priorityScore >= 3 ? 'Alta' : priorityScore >= 2 ? 'Media' : 'Baja'
-  const trust = useCenterTrust(site)
 
   const onNavigate = () => {
     openExternalNavigation(site.lat, site.lng)

@@ -63,8 +63,8 @@ export function AdjustNeedStockFlow({ onClose, mode, presetSiteId }: AdjustNeedS
         notes: notes.trim() || undefined,
       })
       setDone(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el movimiento.')
+    } catch {
+      setError('No se pudo guardar el movimiento. Inténtalo nuevamente.')
     }
   }
 

@@ -8,8 +8,8 @@ export function cn(...inputs: ClassValue[]) {
 /** "Buenos días" / "Buenas tardes" / "Buenas noches" según la hora local. */
 export function greeting(date = new Date()): string {
   const h = date.getHours()
-  if (h < 12) return 'Buenos días'
-  if (h < 19) return 'Buenas tardes'
+  if (h >= 5 && h < 12) return 'Buenos días'
+  if (h >= 12 && h < 19) return 'Buenas tardes'
   return 'Buenas noches'
 }
 

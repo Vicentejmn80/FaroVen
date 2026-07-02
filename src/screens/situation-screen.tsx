@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search } from 'lucide-react'
+import { FaroIcon } from '@/components/brand/faro-icon'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { SectionTitle } from '@/components/faro/section-title'
@@ -151,7 +151,7 @@ function QuickAnswerBar({
     <section className="mt-3 space-y-2.5">
       <GlassCard inset={false} className="p-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle" />
+          <FaroIcon size={20} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-ink outline-none focus:border-info/60"
             value={query}
