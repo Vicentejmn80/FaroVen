@@ -1,12 +1,29 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+function assertSupabaseEnv(): { url: string; anonKey: string } {
+  const url = import.meta.env.VITE_SUPABASE_URL?.trim()
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
 
-export const isSupabaseEnabled = Boolean(supabaseUrl && supabaseAnonKey)
+  const missing: string[] = []
+  if (!url) missing.push('VITE_SUPABASE_URL')
+  if (!anonKey) missing.push('VITE_SUPABASE_ANON_KEY')
 
-if (!isSupabaseEnabled) {
-  console.warn('[FARO] Supabase env vars are missing. La app no mostrará datos operativos hasta configurar .env')
+  if (missing.length > 0) {
+    const message =
+      `[FARO] Supabase no configurado: faltan ${missing.join(' y ')}. ` +
+      'Define estas variables en Vercel (Environment Variables) y vuelve a desplegar. ' +
+      'Las variables VITE_* deben estar presentes durante el build (npm run build).'
+
+    console.error(message)
+    throw new Error(message)
+  }
+
+  return { url: url as string, anonKey: anonKey as string }
 }
 
-export const supabase = createClient(supabaseUrl ?? 'https://placeholder.invalid', supabaseAnonKey ?? 'placeholder-key')
+const { url: supabaseUrl, anonKey: supabaseAnonKey } = assertSupabaseEnv()
+
+/** Solo true si el módulo cargó — la validación falla antes de crear el cliente. */
+export const isSupabaseEnabled = true
+
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
