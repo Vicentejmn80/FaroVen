@@ -34,6 +34,7 @@ const CITIZEN_BASE: NavTab[] = [
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
+/** Tabs completos — rail lateral en desktop */
 export function getNavigationTabs(role: FaroRole): NavTab[] {
   const tabs = [...CITIZEN_BASE]
 
@@ -51,6 +52,9 @@ export function getNavigationTabs(role: FaroRole): NavTab[] {
 
   return tabs
 }
+
+/** Barra inferior móvil — siempre 4 tabs para no saturar la UI */
+export const MOBILE_PRIMARY_TABS: NavTab[] = CITIZEN_BASE
 
 /** @deprecated Usar getNavigationTabs(role) */
 export const CITIZEN_TABS = CITIZEN_BASE
@@ -71,10 +75,10 @@ interface NavigationProps {
   createLabel?: string
 }
 
-/** Mobile — barra inferior en zona del pulgar */
-export function BottomNavigation({ active, onChange, onCreate, tabs, createLabel = 'Acciones' }: NavigationProps) {
-  const left = tabs.slice(0, Math.ceil(tabs.length / 2))
-  const right = tabs.slice(Math.ceil(tabs.length / 2))
+/** Mobile — barra inferior en zona del pulgar (siempre 4 tabs + botón central) */
+export function BottomNavigation({ active, onChange, onCreate, createLabel = 'Acciones' }: Omit<NavigationProps, 'tabs'>) {
+  const left = MOBILE_PRIMARY_TABS.slice(0, 2)
+  const right = MOBILE_PRIMARY_TABS.slice(2)
 
   return (
     <nav className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 w-full pb-safe lg:hidden">

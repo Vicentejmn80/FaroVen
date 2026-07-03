@@ -7,9 +7,8 @@ export interface ResolvedPlace {
   mapUrl: string
 }
 
-const NOMINATIM = import.meta.env.DEV
-  ? '/api/nominatim'
-  : 'https://nominatim.openstreetmap.org'
+/** Proxy local (dev) y serverless en Vercel — evita bloqueo CSP/CORS en el navegador */
+const NOMINATIM = '/api/nominatim'
 
 const USER_AGENT = 'FARO-Humanitarian-Console/1.0'
 

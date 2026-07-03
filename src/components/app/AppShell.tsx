@@ -35,7 +35,7 @@ import { useFaro } from '@/store/faro-context'
 import { AdjustNeedStockFlow } from '@/screens/adjust-need-stock-flow'
 import type { Site } from '@/lib/types'
 import { usePermissions, useAuth } from '@/store/auth-context'
-import { FARO_ROLES } from '@/lib/roles'
+import { FARO_ROLES, canAccessSystemPanel } from '@/lib/roles'
 import { Skeleton } from '@/components/ui/skeleton'
 
 type FlowId = ActionId | 'menu' | 'auth' | 'coordinator-request'
@@ -179,12 +179,8 @@ export function AppShell() {
   }, [])
 
   const openMenu = () => {
-    if (isCoordinatorOps) {
+    if (isCoordinatorOps || canAccessAdminPanel) {
       openFlow('menu')
-      return
-    }
-    if (canAccessAdminPanel) {
-      openFlow('register-site')
       return
     }
     closeFlow()
@@ -270,7 +266,7 @@ export function AppShell() {
             isCoordinatorOps
               ? 'Acciones de coordinación'
               : canAccessAdminPanel
-                ? 'Registrar nuevo centro'
+                ? 'Menú de administración'
                 : 'Enviar reporte'
           }
         />
@@ -360,12 +356,11 @@ export function AppShell() {
             active={tab}
             onChange={setTab}
             onCreate={openMenu}
-            tabs={tabs}
             createLabel={
               isCoordinatorOps
                 ? 'Acciones de coordinación'
                 : canAccessAdminPanel
-                  ? 'Registrar nuevo centro'
+                  ? 'Menú de administración'
                   : 'Enviar reporte'
             }
           />
@@ -375,9 +370,13 @@ export function AppShell() {
           {flow === 'menu' && (
             <ActionsScreen
               key="menu"
-              mode={isCoordinatorOps ? 'coordinator' : 'citizen'}
+              mode={
+                isCoordinatorOps ? 'coordinator' : canAccessAdminPanel ? 'admin' : 'citizen'
+              }
               onClose={closeFlow}
               onAction={handleAction}
+              onNavigate={setTab}
+              showSystem={canAccessSystemPanel(role)}
             />
           )}
           {flow === 'auth' && (

@@ -1,9 +1,13 @@
 import { motion } from 'framer-motion'
 import {
   Activity,
+  Building2,
   ChevronDown,
   PackagePlus,
   PenLine,
+  PlusCircle,
+  Settings2,
+  Shield,
   Truck,
   TruckIcon,
 } from 'lucide-react'
@@ -11,6 +15,7 @@ import { QuickAction } from '@/components/faro/quick-action'
 import { SectionTitle } from '@/components/faro/section-title'
 import { TimelineItem } from '@/components/faro/timeline-item'
 import { EmergencyButton } from '@/components/ui/emergency-button'
+import type { TabId } from '@/components/faro/app-navigation'
 import type { OperationalStatus } from '@/lib/types'
 import { useFaro } from '@/store/faro-context'
 
@@ -23,14 +28,16 @@ export type ActionId =
   | 'report'
 
 interface ActionDef {
-  id: ActionId
+  id: ActionId | 'navigate'
   icon: typeof Activity
   label: string
   hint: string
   accent: OperationalStatus
+  tab?: TabId
 }
 
 const COORDINATOR_ACTIONS: ActionDef[] = [
+  { id: 'navigate', icon: Building2, label: 'Mi Centro', hint: 'Panel operativo del sitio', accent: 'operational', tab: 'ops' },
   { id: 'register-need', icon: PackagePlus, label: 'Registrar necesidad', hint: 'Insumos que faltan', accent: 'warning' },
   { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Ocupación del centro', accent: 'critical' },
   { id: 'register-arrival', icon: Truck, label: 'Registrar llegada', hint: 'Donaciones recibidas', accent: 'operational' },
@@ -41,15 +48,37 @@ const CITIZEN_ACTIONS: ActionDef[] = [
   { id: 'report', icon: PenLine, label: 'Reportar información', hint: 'Reporte ciudadano', accent: 'info' },
 ]
 
+const ADMIN_ACTIONS: ActionDef[] = [
+  { id: 'register-site', icon: PlusCircle, label: 'Registrar centro', hint: 'Hospital, refugio o acopio', accent: 'operational' },
+  { id: 'navigate', icon: Shield, label: 'Administración', hint: 'Solicitudes y usuarios', accent: 'info', tab: 'admin' },
+  { id: 'navigate', icon: Settings2, label: 'Sistema', hint: 'Configuración global', accent: 'info', tab: 'system' },
+]
+
 interface ActionsScreenProps {
   onClose: () => void
   onAction: (action: ActionId) => void
-  mode: 'citizen' | 'coordinator'
+  onNavigate?: (tab: TabId) => void
+  mode: 'citizen' | 'coordinator' | 'admin'
+  showSystem?: boolean
 }
 
-export function ActionsScreen({ onClose, onAction, mode }: ActionsScreenProps) {
+export function ActionsScreen({ onClose, onAction, onNavigate, mode, showSystem = true }: ActionsScreenProps) {
   const { latestActivity } = useFaro()
-  const actions = mode === 'coordinator' ? COORDINATOR_ACTIONS : CITIZEN_ACTIONS
+  const actions =
+    mode === 'coordinator'
+      ? COORDINATOR_ACTIONS
+      : mode === 'admin'
+        ? ADMIN_ACTIONS.filter((a) => showSystem || a.tab !== 'system')
+        : CITIZEN_ACTIONS
+
+  const handleClick = (action: ActionDef) => {
+    if (action.id === 'navigate' && action.tab) {
+      onNavigate?.(action.tab)
+      onClose()
+      return
+    }
+    onAction(action.id as ActionId)
+  }
 
   return (
     <motion.div
@@ -66,7 +95,11 @@ export function ActionsScreen({ onClose, onAction, mode }: ActionsScreenProps) {
         <div className="w-full px-1 pb-2">
           <p className="text-sm text-ink-muted">Operaciones en vivo</p>
           <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink">
-            {mode === 'coordinator' ? '¿Qué vas a actualizar?' : '¿Qué quieres reportar?'}
+            {mode === 'coordinator'
+              ? '¿Qué vas a actualizar?'
+              : mode === 'admin'
+                ? 'Acciones de administración'
+                : '¿Qué quieres reportar?'}
           </h1>
         </div>
       </div>
@@ -75,13 +108,13 @@ export function ActionsScreen({ onClose, onAction, mode }: ActionsScreenProps) {
         <div className={mode === 'coordinator' ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
           {actions.map((a, i) => (
             <QuickAction
-              key={a.id}
+              key={`${a.id}-${a.tab ?? i}`}
               icon={a.icon}
               label={a.label}
               hint={a.hint}
               accent={a.accent}
               index={i}
-              onClick={() => onAction(a.id)}
+              onClick={() => handleClick(a)}
             />
           ))}
         </div>

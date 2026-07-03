@@ -203,11 +203,11 @@ function PageHeader({ onRegisterSite }: { onRegisterSite?: () => void }) {
           variant="primary"
           size="sm"
           onClick={onRegisterSite}
-          className="mt-1 shrink-0"
+          className="mt-1 hidden shrink-0 lg:inline-flex"
           aria-label="Registrar nuevo centro"
         >
           <PlusCircle className="h-4 w-4" />
-          <span className="hidden sm:inline">Registrar</span>
+          <span>Registrar</span>
         </EmergencyButton>
       )}
     </motion.div>
