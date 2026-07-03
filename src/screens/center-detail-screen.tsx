@@ -1,4 +1,6 @@
-import { ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { ExternalLink, Pencil } from 'lucide-react'
+import { EditCenterSheet } from '@/components/admin/edit-center-sheet'
 import {
   CenterActions,
   CenterProfileHeader,
@@ -25,8 +27,17 @@ import { useCenterTrust } from '@/hooks/useCenterTrust'
  * Detalle de Centro — ficha completa. Mismo lenguaje visual: mapa,
  * estado, prioridad, necesidades, historial y fuentes verificadas.
  */
-export function CenterDetailScreen({ site, onBack }: { site: Site; onBack: () => void }) {
+export function CenterDetailScreen({
+  site,
+  onBack,
+  canEdit,
+}: {
+  site: Site
+  onBack: () => void
+  canEdit?: boolean
+}) {
   const { state } = useFaro()
+  const [editing, setEditing] = useState(false)
   const trust = useCenterTrust(site)
   const center = state.centers.find((item) => item.id === site.id)
   const centerReports = state.reports
@@ -149,7 +160,21 @@ export function CenterDetailScreen({ site, onBack }: { site: Site; onBack: () =>
           onShare={onShare}
           onReport={onReport}
         />
+
+        {canEdit && site.type !== 'organization' && (
+          <EmergencyButton variant="glass" size="lg" className="w-full" onClick={() => setEditing(true)}>
+            <Pencil className="h-[18px] w-[18px]" /> Editar centro
+          </EmergencyButton>
+        )}
       </div>
+
+      {editing && (
+        <EditCenterSheet
+          site={site}
+          center={center}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </ScreenScaffold>
   )
 }

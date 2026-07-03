@@ -9,6 +9,7 @@ import type {
   RegisterSiteInput,
   ReviewReportInput,
   SubmitReportInput,
+  UpdateCenterInput,
   UpdateNeedInput,
   UpdateSaturationInput,
   RegisterSiteType,
@@ -36,6 +37,10 @@ export async function fetchEvents(): Promise<Event[]> {
 
 export async function registerSite(input: RegisterSiteInput): Promise<Center> {
   return centerRepository.create(input)
+}
+
+export async function updateCenter(input: UpdateCenterInput): Promise<Center> {
+  return centerRepository.update(input)
 }
 
 export async function registerNeed(input: RegisterNeedInput): Promise<Need> {

@@ -1,5 +1,22 @@
 export type RegisterSiteType = 'hospital' | 'shelter' | 'supply_center'
 
+export interface UpdateCenterInput {
+  id: string
+  type: RegisterSiteType
+  name: string
+  address?: string
+  municipality?: string
+  state?: string
+  latitude?: number
+  longitude?: number
+  capacity?: number
+  currentOcc?: number
+  contactName?: string
+  contactPhone?: string
+  schedule?: string
+  observations?: string
+}
+
 export interface RegisterSiteInput {
   type: RegisterSiteType
   name: string

@@ -93,6 +93,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadProfile])
 
+  // Sincronizar rol cuando un admin aprueba al coordinador (profiles en vivo).
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+
+    const channel = supabase
+      .channel(`profile-sync-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+        () => {
+          void loadProfile(session.user)
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'coordinator_profiles',
+          filter: `auth_user_id=eq.${userId}`,
+        },
+        () => {
+          void loadProfile(session.user)
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [session?.user, loadProfile])
+
   const role = resolvePublicRole(profile)
 
   const value = useMemo<AuthContextValue>(

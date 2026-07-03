@@ -68,6 +68,13 @@ export function CoordinatorProvider({ children }: { children: ReactNode }) {
     void refreshAssignment()
   }, [refreshAssignment])
 
+  // Re-cargar asignación cuando el rol pasa a coordinador.
+  useEffect(() => {
+    if (user && canAccessCoordinatorPanel(role)) {
+      void refreshAssignment()
+    }
+  }, [user, role, refreshAssignment])
+
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       void refreshAssignment()

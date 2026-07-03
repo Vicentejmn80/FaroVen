@@ -141,6 +141,13 @@ export function AppShell() {
     if (!allowed.includes(tab)) setTab('map')
   }, [tabs, tab])
 
+  // Fallback: si hay notificación de aprobación pero el JWT aún no refleja el rol.
+  useEffect(() => {
+    if (role !== FARO_ROLES.PUBLIC || !userNotif.data?.length) return
+    const approved = userNotif.data.some((n) => n.type === 'coordinator_request_approved')
+    if (approved) void refreshProfile()
+  }, [userNotif.data, role, refreshProfile])
+
   useEffect(() => {
     const listener = (event: Event) => {
       const detail = (event as CustomEvent<{ tab?: TabId; requestId?: string }>).detail
@@ -327,7 +334,11 @@ export function AppShell() {
                   )}
                   {tab === 'map' &&
                     (detailSite ? (
-                      <CenterDetailScreen site={detailSite} onBack={() => setDetailSite(null)} />
+                      <CenterDetailScreen
+                        site={detailSite}
+                        onBack={() => setDetailSite(null)}
+                        canEdit={canAccessAdminPanel}
+                      />
                     ) : (
                       <SituationScreen
                         onOpenDetail={openDetail}

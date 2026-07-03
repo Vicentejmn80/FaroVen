@@ -6,6 +6,7 @@ import {
   registerNeed,
   registerSite,
   submitReport,
+  updateCenter,
   updateSiteSaturation,
 } from '@/services/repository-service'
 import type {
@@ -13,6 +14,7 @@ import type {
   RegisterNeedInput,
   RegisterSiteInput,
   SubmitReportInput,
+  UpdateCenterInput,
   UpdateSaturationInput,
 } from '@/repositories/types'
 import { useToast } from '@/store/toast-context'
@@ -40,6 +42,25 @@ export function useRegisterSite() {
     onSuccess: () => {
       invalidateOperationalData(queryClient)
       showToast('Centro registrado correctamente.', 'success')
+    },
+  })
+}
+
+export function useUpdateCenter() {
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (input: UpdateCenterInput) => {
+      requireSupabase()
+      try {
+        return await updateCenter(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      invalidateOperationalData(queryClient)
+      showToast('Centro actualizado correctamente.', 'success')
     },
   })
 }
