@@ -14,6 +14,12 @@ export interface AdminNotificationRow {
     request_status?: string
     requested_site_type?: string
     requested_site_id?: string
+    feedback_id?: string
+    category?: string
+    category_label?: string
+    message?: string
+    sender_email?: string
+    submitted_at?: string
   }
   related_request_id: string | null
   created_at: string

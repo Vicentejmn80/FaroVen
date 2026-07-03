@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserPlus, X } from 'lucide-react'
+import { MessageSquare, UserPlus, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -50,7 +50,7 @@ export function NotificationCenter({
                 <div>
                   <p className="text-base font-semibold text-ink">Notificaciones</p>
                   <p className="text-xs text-ink-subtle">
-                    {detail ? 'Detalle de la solicitud' : '¿Qué ocurrió?'}
+                    {detail ? 'Detalle' : '¿Qué ocurrió?'}
                   </p>
                 </div>
                 <button
@@ -82,7 +82,7 @@ export function NotificationCenter({
                 <EmptyState
                   icon={UserPlus}
                   title="Sin notificaciones"
-                  description="Cuando alguien solicite ser coordinador, aparecerá aquí."
+                  description="Solicitudes de coordinador y mensajes del Centro de Recursos aparecerán aquí."
                 />
               ) : (
                 <ul className="max-h-[55vh] space-y-2 overflow-y-auto">
@@ -106,6 +106,10 @@ export function NotificationCenter({
   )
 }
 
+function isGuideFeedback(notification: AdminNotificationRow): boolean {
+  return notification.type === 'guide_feedback'
+}
+
 function NotificationListItem({
   notification,
   onView,
@@ -115,6 +119,7 @@ function NotificationListItem({
 }) {
   const payload = notification.payload ?? {}
   const isUnread = notification.status === 'unread'
+  const isFeedback = isGuideFeedback(notification)
 
   return (
     <li>
@@ -126,11 +131,20 @@ function NotificationListItem({
         }`}
       >
         <p className="text-sm font-medium text-ink">{notification.title}</p>
-        <p className="mt-1 text-[15px] text-ink">{payload.applicant_name ?? 'Solicitante'}</p>
-        <p className="text-sm text-ink-subtle">{payload.center_name ?? 'Centro'}</p>
+        {isFeedback ? (
+          <>
+            <p className="mt-1 text-[15px] text-ink">{payload.category_label ?? 'Mensaje'}</p>
+            <p className="line-clamp-2 text-sm text-ink-subtle">{payload.message ?? notification.body}</p>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-[15px] text-ink">{payload.applicant_name ?? 'Solicitante'}</p>
+            <p className="text-sm text-ink-subtle">{payload.center_name ?? 'Centro'}</p>
+          </>
+        )}
         <p className="mt-1 text-[11px] text-ink-faint">{timeAgo(new Date(notification.created_at))}</p>
         <EmergencyButton variant="glass" size="sm" className="mt-3 w-full" onClick={onView}>
-          Ver solicitud
+          {isFeedback ? 'Ver mensaje' : 'Ver solicitud'}
         </EmergencyButton>
       </div>
     </li>
@@ -147,6 +161,7 @@ function NotificationDetail({
   onOpenRequest: () => void
 }) {
   const payload = notification.payload ?? {}
+  const isFeedback = isGuideFeedback(notification)
 
   return (
     <div className="space-y-3">
@@ -154,18 +169,37 @@ function NotificationDetail({
         ← Volver
       </button>
       <GlassCard className="space-y-3 bg-white/[0.03]">
-        <p className="text-sm font-medium text-ink">{notification.title}</p>
-        <div className="space-y-2 text-sm">
-          <Row label="Solicitante" value={payload.applicant_name ?? '—'} />
-          <Row label="Correo" value={payload.applicant_email ?? '—'} />
-          <Row label="Centro" value={payload.center_name ?? '—'} />
-          <Row label="Fecha" value={new Date(notification.created_at).toLocaleString('es-VE')} />
+        <div className="flex items-center gap-2">
+          {isFeedback && <MessageSquare className="h-4 w-4 text-info" />}
+          <p className="text-sm font-medium text-ink">{notification.title}</p>
         </div>
-        <p className="text-sm leading-relaxed text-ink-muted">{notification.body}</p>
+        {isFeedback ? (
+          <div className="space-y-2 text-sm">
+            <Row label="Tipo" value={payload.category_label ?? '—'} />
+            <Row label="Correo" value={payload.sender_email ?? 'No indicado'} />
+            <Row label="Fecha" value={new Date(notification.created_at).toLocaleString('es-VE')} />
+            <div className="pt-1">
+              <p className="text-ink-subtle">Mensaje</p>
+              <p className="mt-1 whitespace-pre-wrap leading-relaxed text-ink">{payload.message ?? notification.body}</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2 text-sm">
+              <Row label="Solicitante" value={payload.applicant_name ?? '—'} />
+              <Row label="Correo" value={payload.applicant_email ?? '—'} />
+              <Row label="Centro" value={payload.center_name ?? '—'} />
+              <Row label="Fecha" value={new Date(notification.created_at).toLocaleString('es-VE')} />
+            </div>
+            <p className="text-sm leading-relaxed text-ink-muted">{notification.body}</p>
+          </>
+        )}
       </GlassCard>
-      <EmergencyButton variant="primary" size="md" className="w-full" onClick={onOpenRequest}>
-        Ir a revisión
-      </EmergencyButton>
+      {!isFeedback && notification.related_request_id && (
+        <EmergencyButton variant="primary" size="md" className="w-full" onClick={onOpenRequest}>
+          Ir a revisión
+        </EmergencyButton>
+      )}
     </div>
   )
 }

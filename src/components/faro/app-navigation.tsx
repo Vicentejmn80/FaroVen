@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import {
-  Activity,
   Building2,
+  BookOpen,
   FileText,
   Map,
   Plus,
@@ -29,7 +29,7 @@ export interface NavTab {
 
 const CITIZEN_BASE: NavTab[] = [
   { id: 'map', label: 'Mapa', icon: Map },
-  { id: 'activity', label: 'Guía', icon: Activity },
+  { id: 'activity', label: 'Recursos', icon: BookOpen },
   { id: 'reports', label: 'Reportar', icon: FileText },
   { id: 'profile', label: 'Perfil', icon: User },
 ]
@@ -57,9 +57,9 @@ export const CITIZEN_TABS = CITIZEN_BASE
 
 /** @deprecated Usar getNavigationTabs(role) */
 export const COORDINATOR_TABS: NavTab[] = [
-  { id: 'ops', label: 'Panel', icon: Activity },
+  { id: 'ops', label: 'Panel', icon: Building2 },
   { id: 'map', label: 'Centros', icon: Map },
-  { id: 'activity', label: 'Guía', icon: FileText },
+  { id: 'activity', label: 'Recursos', icon: BookOpen },
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
