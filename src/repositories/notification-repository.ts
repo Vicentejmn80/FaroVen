@@ -20,6 +20,9 @@ export interface AdminNotificationRow {
     message?: string
     sender_email?: string
     submitted_at?: string
+    user_id?: string
+    user_name?: string
+    user_email?: string
   }
   related_request_id: string | null
   created_at: string

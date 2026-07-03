@@ -1,18 +1,19 @@
 import { useState } from 'react'
-import { Shield, UserCog, Users } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { GlassCard } from '@/components/ui/glass-card'
-import { EmergencyButton } from '@/components/ui/emergency-button'
 import { AuditTimeline } from '@/components/audit/AuditTimeline'
 import { SystemHealthPanel } from '@/components/admin/system-health-panel'
-import { EmptyState } from '@/components/ui/empty-state'
+import { UserManagementPanel } from '@/components/admin/user-management-panel'
 import { RequireRole } from '@/components/auth/require-role'
 import { useAdminProfiles } from '@/hooks/useAuthRequests'
 import { useAuditTimeline } from '@/hooks/useAuditTimeline'
-import { FARO_ROLES, FARO_ROLE_LABELS } from '@/lib/roles'
+import { FARO_ROLES } from '@/lib/roles'
 import { authService } from '@/services/auth-service'
 import { formatAuthError } from '@/lib/auth-errors'
 import { useAuth } from '@/store/auth-context'
+import { useFaro } from '@/store/faro-context'
+import { siteToNeedableType } from '@/lib/site-utils'
 
 interface SystemAdminScreenProps {
   onRequestAuth?: () => void
@@ -27,21 +28,41 @@ export function SystemAdminScreen({ onRequestAuth }: SystemAdminScreenProps) {
 }
 
 function SystemAdminScreenContent() {
-  const { refreshProfile } = useAuth()
+  const { user, refreshProfile } = useAuth()
+  const { sites } = useFaro()
   const { data: profiles = [], refetch } = useAdminProfiles(true)
   const auditTimeline = useAuditTimeline(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function promote(userId: string, role: 'regional_admin' | 'coordinator') {
+  async function promoteAdmin(userId: string) {
     setBusyId(userId)
     setError(null)
     try {
-      await authService.promoteUserRole(userId, role)
+      await authService.promoteUserRole(userId, 'regional_admin')
       await refetch()
       await refreshProfile()
     } catch (err) {
       setError(formatAuthError(err instanceof Error ? err.message : 'No se pudo promover'))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function promoteCoordinator(userId: string, siteId: string) {
+    const site = sites.find((s) => s.id === siteId)
+    if (!site || site.type === 'organization') {
+      setError('Centro no válido.')
+      return
+    }
+
+    setBusyId(userId)
+    setError(null)
+    try {
+      await authService.assignCoordinatorRole(userId, siteToNeedableType(site), siteId)
+      await refetch()
+    } catch (err) {
+      setError(formatAuthError(err instanceof Error ? err.message : 'No se pudo asignar coordinador'))
     } finally {
       setBusyId(null)
     }
@@ -55,7 +76,7 @@ function SystemAdminScreenContent() {
           <div>
             <p className="text-sm font-medium text-ink">Panel global FARO</p>
             <p className="text-xs text-ink-subtle">
-              Tú eres Super Admin. Aquí promueves administradores regionales y ves auditoría.
+              Gestiona usuarios, promueve roles y revisa la auditoría del sistema.
             </p>
           </div>
         </GlassCard>
@@ -64,40 +85,14 @@ function SystemAdminScreenContent() {
 
         <SystemHealthPanel />
 
-        <section className="space-y-2">
-          <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
-            Usuarios registrados
-          </p>
-          {profiles.length === 0 ? (
-            <EmptyState icon={Users} title="Sin perfiles registrados" />
-          ) : (
-            profiles.map((profile) => (
-              <GlassCard key={profile.id} className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-ink">{profile.full_name || profile.email}</p>
-                    <p className="text-xs text-ink-subtle">{profile.email}</p>
-                  </div>
-                  <span className="text-xs text-info">
-                    {profile.role ? FARO_ROLE_LABELS[profile.role] : 'Ciudadano'}
-                  </span>
-                </div>
-
-                {!profile.role && (
-                  <EmergencyButton
-                    variant="glass"
-                    size="sm"
-                    className="w-full"
-                    disabled={busyId === profile.id}
-                    onClick={() => void promote(profile.id, 'regional_admin')}
-                  >
-                    <UserCog className="h-4 w-4" /> Promover a Admin regional
-                  </EmergencyButton>
-                )}
-              </GlassCard>
-            ))
-          )}
-        </section>
+        <UserManagementPanel
+          profiles={profiles}
+          sites={sites}
+          currentUserId={user?.id}
+          busyId={busyId}
+          onPromoteAdmin={promoteAdmin}
+          onPromoteCoordinator={promoteCoordinator}
+        />
 
         <section className="space-y-2">
           <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">Auditoría</p>

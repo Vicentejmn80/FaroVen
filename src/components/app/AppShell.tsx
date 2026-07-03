@@ -215,6 +215,11 @@ export function AppShell() {
     setAdminNotifOpen(false)
   }
 
+  const openSystemUsers = () => {
+    setTab('system')
+    setAdminNotifOpen(false)
+  }
+
   const handleNotifications = () => {
     if (isCoordinatorOps && coordinatorNotif.enabled) {
       setNotifOpen(true)
@@ -442,6 +447,7 @@ export function AppShell() {
           loading={adminNotif.isLoading}
           onClose={() => setAdminNotifOpen(false)}
           onOpenRequest={openAdminRequest}
+          onOpenSystem={openSystemUsers}
           onMarkRead={(id) => void markAdminRead.mutate(id)}
         />
 

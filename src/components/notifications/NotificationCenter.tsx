@@ -13,6 +13,7 @@ interface NotificationCenterProps {
   loading?: boolean
   onClose: () => void
   onOpenRequest: (requestId: string) => void
+  onOpenSystem?: () => void
   onMarkRead: (notificationId: string) => void
 }
 
@@ -22,6 +23,7 @@ export function NotificationCenter({
   loading,
   onClose,
   onOpenRequest,
+  onOpenSystem,
   onMarkRead,
 }: NotificationCenterProps) {
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -73,6 +75,10 @@ export function NotificationCenter({
                       onOpenRequest(detail.related_request_id)
                     }
                   }}
+                  onOpenSystem={() => {
+                    if (detail.status === 'unread') onMarkRead(detail.id)
+                    onOpenSystem?.()
+                  }}
                 />
               ) : loading ? (
                 <p className="rounded-2xl bg-white/[0.04] px-3 py-4 text-sm text-ink-muted">
@@ -82,7 +88,7 @@ export function NotificationCenter({
                 <EmptyState
                   icon={UserPlus}
                   title="Sin notificaciones"
-                  description="Solicitudes de coordinador y mensajes del Centro de Recursos aparecerán aquí."
+                  description="Solicitudes, nuevos usuarios y mensajes del Centro de Recursos aparecerán aquí."
                 />
               ) : (
                 <ul className="max-h-[55vh] space-y-2 overflow-y-auto">
@@ -110,6 +116,10 @@ function isGuideFeedback(notification: AdminNotificationRow): boolean {
   return notification.type === 'guide_feedback'
 }
 
+function isUserSignup(notification: AdminNotificationRow): boolean {
+  return notification.type === 'user_signup'
+}
+
 function NotificationListItem({
   notification,
   onView,
@@ -120,6 +130,7 @@ function NotificationListItem({
   const payload = notification.payload ?? {}
   const isUnread = notification.status === 'unread'
   const isFeedback = isGuideFeedback(notification)
+  const isSignup = isUserSignup(notification)
 
   return (
     <li>
@@ -136,6 +147,11 @@ function NotificationListItem({
             <p className="mt-1 text-[15px] text-ink">{payload.category_label ?? 'Mensaje'}</p>
             <p className="line-clamp-2 text-sm text-ink-subtle">{payload.message ?? notification.body}</p>
           </>
+        ) : isSignup ? (
+          <>
+            <p className="mt-1 text-[15px] text-ink">{payload.user_name ?? 'Nuevo usuario'}</p>
+            <p className="text-sm text-ink-subtle">{payload.user_email ?? notification.body}</p>
+          </>
         ) : (
           <>
             <p className="mt-1 text-[15px] text-ink">{payload.applicant_name ?? 'Solicitante'}</p>
@@ -144,7 +160,7 @@ function NotificationListItem({
         )}
         <p className="mt-1 text-[11px] text-ink-faint">{timeAgo(new Date(notification.created_at))}</p>
         <EmergencyButton variant="glass" size="sm" className="mt-3 w-full" onClick={onView}>
-          {isFeedback ? 'Ver mensaje' : 'Ver solicitud'}
+          {isFeedback ? 'Ver mensaje' : isSignup ? 'Ver usuarios' : 'Ver solicitud'}
         </EmergencyButton>
       </div>
     </li>
@@ -155,13 +171,16 @@ function NotificationDetail({
   notification,
   onBack,
   onOpenRequest,
+  onOpenSystem,
 }: {
   notification: AdminNotificationRow
   onBack: () => void
   onOpenRequest: () => void
+  onOpenSystem: () => void
 }) {
   const payload = notification.payload ?? {}
   const isFeedback = isGuideFeedback(notification)
+  const isSignup = isUserSignup(notification)
 
   return (
     <div className="space-y-3">
@@ -183,6 +202,13 @@ function NotificationDetail({
               <p className="mt-1 whitespace-pre-wrap leading-relaxed text-ink">{payload.message ?? notification.body}</p>
             </div>
           </div>
+        ) : isSignup ? (
+          <div className="space-y-2 text-sm">
+            <Row label="Nombre" value={payload.user_name ?? '—'} />
+            <Row label="Correo" value={payload.user_email ?? '—'} />
+            <Row label="Fecha" value={new Date(notification.created_at).toLocaleString('es-VE')} />
+            <p className="text-sm leading-relaxed text-ink-muted">{notification.body}</p>
+          </div>
         ) : (
           <>
             <div className="space-y-2 text-sm">
@@ -195,7 +221,12 @@ function NotificationDetail({
           </>
         )}
       </GlassCard>
-      {!isFeedback && notification.related_request_id && (
+      {isSignup && (
+        <EmergencyButton variant="primary" size="md" className="w-full" onClick={onOpenSystem}>
+          Ir a gestión de usuarios
+        </EmergencyButton>
+      )}
+      {!isFeedback && !isSignup && notification.related_request_id && (
         <EmergencyButton variant="primary" size="md" className="w-full" onClick={onOpenRequest}>
           Ir a revisión
         </EmergencyButton>

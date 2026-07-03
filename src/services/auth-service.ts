@@ -179,6 +179,20 @@ export const authService = {
     return data
   },
 
+  async assignCoordinatorRole(
+    userId: string,
+    siteType: 'hospital' | 'shelter' | 'supply_center',
+    siteId: string,
+  ) {
+    const { data, error } = await supabase.rpc('assign_coordinator_role', {
+      p_user_id: userId,
+      p_site_type: siteType,
+      p_site_id: siteId,
+    })
+    if (error) throw new Error(formatAuthError(error.message))
+    return data
+  },
+
   async listAuthAudit(limit = 50) {
     return authAuditRepository.listRecent(limit)
   },
