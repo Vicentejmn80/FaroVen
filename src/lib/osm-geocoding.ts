@@ -10,8 +10,6 @@ export interface ResolvedPlace {
 /** Proxy local (dev) y serverless en Vercel — evita bloqueo CSP/CORS en el navegador */
 const NOMINATIM = '/api/nominatim'
 
-const USER_AGENT = 'FARO-Humanitarian-Console/1.0'
-
 export function osmMapUrl(lat: number, lng: number): string {
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`
 }
@@ -40,14 +38,21 @@ function rowToPlace(row: NominatimResult): ResolvedPlace | null {
 }
 
 async function nominatimFetch(path: string, signal?: AbortSignal): Promise<Response> {
-  return fetch(`${NOMINATIM}${path}`, {
+  const res = await fetch(`${NOMINATIM}${path}`, {
     signal,
     headers: {
       Accept: 'application/json',
       'Accept-Language': 'es',
-      'User-Agent': USER_AGENT,
     },
   })
+  return res
+}
+
+function assertJsonResponse(res: Response): void {
+  const type = res.headers.get('content-type') ?? ''
+  if (!type.includes('application/json')) {
+    throw new Error('Geocoding proxy unavailable')
+  }
 }
 
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<ResolvedPlace[]> {
@@ -63,6 +68,7 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
   })
 
   const res = await nominatimFetch(`/search?${params}`, signal)
+  assertJsonResponse(res)
   if (!res.ok) throw new Error('No se pudo buscar. Toca el mapa para marcar el sitio.')
   const data = (await res.json()) as NominatimResult[]
   return data.map(rowToPlace).filter((p): p is ResolvedPlace => p !== null)
@@ -78,6 +84,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Resolved
   })
 
   const res = await nominatimFetch(`/reverse?${params}`)
+  assertJsonResponse(res)
   if (!res.ok) return null
   const data = (await res.json()) as NominatimResult
   return rowToPlace(data)

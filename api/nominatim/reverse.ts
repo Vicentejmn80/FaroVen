@@ -1,17 +1,13 @@
 const USER_AGENT = 'FARO-Humanitarian-Console/1.0 (contact: nex.gen0211@gmail.com)'
-const ALLOWED = new Set(['search', 'reverse'])
 
 export default async function handler(request: Request): Promise<Response> {
-  const url = new URL(request.url)
-  const match = url.pathname.match(/^\/api\/nominatim\/(search|reverse)$/)
-  const path = match?.[1]
-
-  if (!path || !ALLOWED.has(path)) {
-    return Response.json({ error: 'Not found' }, { status: 404 })
+  if (request.method !== 'GET') {
+    return Response.json({ error: 'Method not allowed' }, { status: 405 })
   }
 
+  const url = new URL(request.url)
   const qs = url.searchParams.toString()
-  const upstreamUrl = `https://nominatim.openstreetmap.org/${path}${qs ? `?${qs}` : ''}`
+  const upstreamUrl = `https://nominatim.openstreetmap.org/reverse${qs ? `?${qs}` : ''}`
 
   try {
     const upstream = await fetch(upstreamUrl, {

@@ -12,7 +12,7 @@ import {
 } from '@/components/coordinator/coordinator-request-wizard'
 import { CoordinatorInfoRespondPanel } from '@/components/coordinator/coordinator-info-respond-panel'
 import { siteToNeedableType } from '@/lib/site-utils'
-import { COORDINATOR_REQUEST_STATUS, COORDINATOR_REQUEST_STATUS_LABELS } from '@/lib/roles'
+import { COORDINATOR_REQUEST_STATUS, COORDINATOR_REQUEST_STATUS_LABELS, FARO_ROLES } from '@/lib/roles'
 import { formatAuthError } from '@/lib/auth-errors'
 import { InvisibleTurnstile, type InvisibleTurnstileHandle } from '@/components/security/invisible-turnstile'
 
@@ -23,7 +23,7 @@ interface CoordinatorRequestScreenProps {
 
 export function CoordinatorRequestScreen({ onNeedAuth, onClose }: CoordinatorRequestScreenProps) {
   const { sites } = useFaro()
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const { data: myRequests = [], refetch } = useMyCoordinatorRequests()
   const { submit, respondInfo } = useCoordinatorRequestMutations()
   const [error, setError] = useState<string | null>(null)
@@ -33,8 +33,15 @@ export function CoordinatorRequestScreen({ onNeedAuth, onClose }: CoordinatorReq
 
   const pendingRequest = myRequests.find((r) => r.status === COORDINATOR_REQUEST_STATUS.PENDING)
   const latestRequest = myRequests[0]
-  const approvedRequest = myRequests.find((r) => r.status === COORDINATOR_REQUEST_STATUS.APPROVED)
-  const rejectedRequest = myRequests.find((r) => r.status === COORDINATOR_REQUEST_STATUS.REJECTED)
+  const approvedRequest = myRequests.find(
+    (r) =>
+      r.status === COORDINATOR_REQUEST_STATUS.APPROVED &&
+      r.auth_user_id === user?.id &&
+      role === FARO_ROLES.COORDINATOR,
+  )
+  const rejectedRequest = myRequests.find(
+    (r) => r.status === COORDINATOR_REQUEST_STATUS.REJECTED && r.auth_user_id === user?.id,
+  )
 
   async function handleSubmit(data: {
     fullName: string

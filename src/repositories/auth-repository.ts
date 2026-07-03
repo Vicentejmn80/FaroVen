@@ -21,6 +21,23 @@ function mapProfile(row: Record<string, unknown>): ProfileRow {
   }
 }
 
+/** Evita mostrar solicitudes aprobadas/rechazadas de otro usuario con el mismo email. */
+function filterOwnCoordinatorRequests(
+  rows: CoordinatorRequestRow[],
+  email: string,
+  userId: string | null,
+): CoordinatorRequestRow[] {
+  const normalizedEmail = email.trim().toLowerCase()
+  return rows.filter((row) => {
+    if (userId && row.auth_user_id === userId) return true
+    if (row.auth_user_id && row.auth_user_id !== userId) return false
+    if (!row.auth_user_id && row.status === 'pending' && row.email.trim().toLowerCase() === normalizedEmail) {
+      return true
+    }
+    return false
+  })
+}
+
 function mapRequest(row: Record<string, unknown>): CoordinatorRequestRow {
   return {
     id: String(row.id),
@@ -115,13 +132,14 @@ export const coordinatorRequestRepository = {
   async listMine(email: string, userId: string | null): Promise<CoordinatorRequestRow[]> {
     let query = supabase.from('coordinator_requests').select('*').order('created_at', { ascending: false })
     if (userId) {
-      query = query.or(`auth_user_id.eq.${userId},email.eq.${email}`)
+      query = query.or(`auth_user_id.eq.${userId},and(email.eq.${email},auth_user_id.is.null)`)
     } else {
-      query = query.eq('email', email)
+      query = query.eq('email', email).is('auth_user_id', null)
     }
     const { data, error } = await query
     if (error) throw error
-    return (data ?? []).map(mapRequest)
+    const rows = (data ?? []).map(mapRequest)
+    return filterOwnCoordinatorRequests(rows, email, userId)
   },
 
   async listPending(): Promise<CoordinatorRequestRow[]> {
