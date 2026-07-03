@@ -111,6 +111,11 @@ export interface Center {
   reportIds: string[]
   photos: { id: string; caption: string; tintClass: string }[]
   organizationId?: string
+  municipality?: string
+  state?: string
+  phone?: string
+  schedule?: string
+  observations?: string
 }
 
 export interface GuideProtocol {

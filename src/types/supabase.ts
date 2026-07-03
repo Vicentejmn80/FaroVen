@@ -2,11 +2,15 @@ export interface HospitalRow {
   id: string
   name: string
   address: string | null
+  municipality: string | null
+  state: string | null
   latitude: number | null
   longitude: number | null
   contact_name: string | null
+  phone: string | null
   capacity: number | null
   current_occ: number | null
+  notes: string | null
   status: string | null
   updated_at: string | null
 }
@@ -15,11 +19,15 @@ export interface ShelterRow {
   id: string
   name: string
   address: string | null
+  municipality: string | null
+  state: string | null
   latitude: number | null
   longitude: number | null
   contact_name: string | null
+  contact_phone: string | null
   capacity: number | null
   current_occ: number | null
+  notes: string | null
   status: string | null
   updated_at: string | null
 }
@@ -28,9 +36,14 @@ export interface SupplyCenterRow {
   id: string
   name: string
   address: string | null
+  municipality: string | null
+  state: string | null
   latitude: number | null
   longitude: number | null
   contact_name: string | null
+  contact_phone: string | null
+  schedule: string | null
+  notes: string | null
   status: string | null
   updated_at: string | null
 }

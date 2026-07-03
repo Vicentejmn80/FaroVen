@@ -25,7 +25,7 @@ import {
   type TabId,
 } from '@/components/faro/app-navigation'
 import { ActionsScreen, type ActionId } from '@/screens/actions-screen'
-import { RegisterSiteFlow } from '@/screens/register-site-flow'
+import { CreateCenterWizard } from '@/components/admin/create-center-wizard'
 import { RegisterNeedFlow } from '@/screens/register-need-flow'
 import { UpdateSaturationFlow } from '@/screens/update-saturation-flow'
 import { CoordinatorSetupScreen } from '@/screens/coordinator-setup-screen'
@@ -79,7 +79,7 @@ function ScreenLoading() {
 
 export function AppShell() {
   const { role, canAccessCoordinatorPanel, canAccessAdminPanel } = usePermissions()
-  const { pendingAuthIntent, clearPendingAuthIntent, refreshProfile } = useAuth()
+  const { session, pendingAuthIntent, clearPendingAuthIntent, refreshProfile } = useAuth()
   const { cachedAt } = useFaro()
   const [tab, setTab] = useState<TabId>('map')
   const [flow, setFlow] = useState<FlowId | null>(null)
@@ -128,6 +128,14 @@ export function AppShell() {
     }
   }, [pendingAuthIntent, clearPendingAuthIntent, showToast])
 
+  // Cerrar el flujo de auth automáticamente cuando llega la sesión
+  // (captura el caso de confirmación de correo en otra pestaña/navegador).
+  useEffect(() => {
+    if (session && flow === 'auth') {
+      startTransition(() => setFlow(null))
+    }
+  }, [session, flow])
+
   useEffect(() => {
     const allowed = tabs.map((t) => t.id)
     if (!allowed.includes(tab)) setTab('map')
@@ -171,12 +179,16 @@ export function AppShell() {
   }, [])
 
   const openMenu = () => {
-    if (!isCoordinatorOps) {
-      closeFlow()
-      setTab('reports')
+    if (isCoordinatorOps) {
+      openFlow('menu')
       return
     }
-    openFlow('menu')
+    if (canAccessAdminPanel) {
+      openFlow('register-site')
+      return
+    }
+    closeFlow()
+    setTab('reports')
   }
 
   const handleAction = (action: ActionId) => {
@@ -254,7 +266,13 @@ export function AppShell() {
           onChange={setTab}
           onCreate={openMenu}
           tabs={tabs}
-          createLabel={isCoordinatorOps ? 'Acciones de coordinación' : 'Enviar reporte'}
+          createLabel={
+            isCoordinatorOps
+              ? 'Acciones de coordinación'
+              : canAccessAdminPanel
+                ? 'Registrar nuevo centro'
+                : 'Enviar reporte'
+          }
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -343,7 +361,13 @@ export function AppShell() {
             onChange={setTab}
             onCreate={openMenu}
             tabs={tabs}
-            createLabel={isCoordinatorOps ? 'Acciones de coordinación' : 'Enviar reporte'}
+            createLabel={
+              isCoordinatorOps
+                ? 'Acciones de coordinación'
+                : canAccessAdminPanel
+                  ? 'Registrar nuevo centro'
+                  : 'Enviar reporte'
+            }
           />
         </div>
 
@@ -371,7 +395,7 @@ export function AppShell() {
             </div>
           )}
           {flow === 'register-site' && canAccessAdminPanel && (
-            <RegisterSiteFlow key="register-site" onClose={closeFlow} />
+            <CreateCenterWizard key="register-site" onClose={closeFlow} />
           )}
           {flow === 'register-need' && isCoordinatorOps && (
             <RegisterNeedFlow

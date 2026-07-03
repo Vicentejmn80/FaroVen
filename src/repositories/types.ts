@@ -4,12 +4,16 @@ export interface RegisterSiteInput {
   type: RegisterSiteType
   name: string
   address?: string
+  municipality?: string
+  state?: string
   latitude?: number
   longitude?: number
   capacity?: number
   currentOcc?: number
   contactName?: string
   contactPhone?: string
+  schedule?: string
+  observations?: string
 }
 
 export interface RegisterNeedInput {

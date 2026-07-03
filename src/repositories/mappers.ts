@@ -55,11 +55,16 @@ function baseCenter(input: {
   name: string
   type: CenterType
   address?: string | null
+  municipality?: string | null
+  state?: string | null
   lat?: number | null
   lng?: number | null
   contactName?: string | null
+  phone?: string | null
   capacity?: number | null
   currentOcc?: number | null
+  schedule?: string | null
+  notes?: string | null
   status?: string | null
   updatedAt?: string | null
 }): Center {
@@ -74,7 +79,7 @@ function baseCenter(input: {
     status,
     priority: toPriorityLevel(status, occupancyPct),
     location: {
-      zone: 'Caracas',
+      zone: input.municipality ?? input.state ?? 'Caracas',
       address: input.address ?? 'Sin dirección',
       coordinates: {
         lat: parseCoord(input.lat),
@@ -89,6 +94,11 @@ function baseCenter(input: {
     eventIds: [],
     reportIds: [],
     photos: [],
+    municipality: input.municipality ?? undefined,
+    state: input.state ?? undefined,
+    phone: input.phone ?? undefined,
+    schedule: input.schedule ?? undefined,
+    observations: input.notes ?? undefined,
   }
 }
 
@@ -98,11 +108,15 @@ export function hospitalRowToCenter(row: HospitalRow): Center {
     name: row.name,
     type: 'hospital',
     address: row.address,
+    municipality: row.municipality,
+    state: row.state,
     lat: row.latitude,
     lng: row.longitude,
     contactName: row.contact_name,
+    phone: row.phone,
     capacity: row.capacity,
     currentOcc: row.current_occ,
+    notes: row.notes,
     status: row.status,
     updatedAt: row.updated_at,
   })
@@ -114,11 +128,15 @@ export function shelterRowToCenter(row: ShelterRow): Center {
     name: row.name,
     type: 'shelter',
     address: row.address,
+    municipality: row.municipality,
+    state: row.state,
     lat: row.latitude,
     lng: row.longitude,
     contactName: row.contact_name,
+    phone: row.contact_phone,
     capacity: row.capacity,
     currentOcc: row.current_occ,
+    notes: row.notes,
     status: row.status,
     updatedAt: row.updated_at,
   })
@@ -130,11 +148,16 @@ export function supplyCenterRowToCenter(row: SupplyCenterRow): Center {
     name: row.name,
     type: 'supply_center',
     address: row.address,
+    municipality: row.municipality,
+    state: row.state,
     lat: row.latitude,
     lng: row.longitude,
     contactName: row.contact_name,
+    phone: row.contact_phone,
     capacity: 100,
     currentOcc: 45,
+    schedule: row.schedule,
+    notes: row.notes,
     status: row.status,
     updatedAt: row.updated_at,
   })

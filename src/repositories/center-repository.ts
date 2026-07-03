@@ -32,9 +32,12 @@ export class CenterRepository {
     const base = {
       name: input.name.trim(),
       address: input.address?.trim() || null,
+      municipality: input.municipality?.trim() || null,
+      state: input.state?.trim() || null,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
       contact_name: input.contactName?.trim() || null,
+      notes: input.observations?.trim() || null,
       status: 'active',
     }
 
@@ -73,7 +76,7 @@ export class CenterRepository {
       .insert({
         ...base,
         contact_phone: input.contactPhone?.trim() || null,
-        schedule: 'Por confirmar',
+        schedule: input.schedule?.trim() || 'Por confirmar',
         accepts: [],
         not_accepts: [],
       })

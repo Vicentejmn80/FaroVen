@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { PlusCircle } from 'lucide-react'
 import { FaroIcon } from '@/components/brand/faro-icon'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -55,7 +56,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
         <div className="lg:grid lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(380px,42%)] lg:gap-8">
           {/* Columna izquierda — contexto y reportes */}
           <div className="lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:pr-1">
-            <PageHeader />
+            <PageHeader onRegisterSite={onRegisterSite} />
             <QuickAnswerBar
               query={query}
               onQuery={setQuery}
@@ -183,18 +184,32 @@ function QuickAnswerBar({
   )
 }
 
-function PageHeader() {
+function PageHeader({ onRegisterSite }: { onRegisterSite?: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
-      className="px-1"
+      className="flex items-start justify-between px-1"
     >
-      <p className="text-sm text-ink-muted lg:text-xs">{greeting()}.</p>
-      <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink lg:text-[28px]">
-        Así está la situación ahora
-      </h1>
+      <div>
+        <p className="text-sm text-ink-muted lg:text-xs">{greeting()}.</p>
+        <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink lg:text-[28px]">
+          Así está la situación ahora
+        </h1>
+      </div>
+      {onRegisterSite && (
+        <EmergencyButton
+          variant="primary"
+          size="sm"
+          onClick={onRegisterSite}
+          className="mt-1 shrink-0"
+          aria-label="Registrar nuevo centro"
+        >
+          <PlusCircle className="h-4 w-4" />
+          <span className="hidden sm:inline">Registrar</span>
+        </EmergencyButton>
+      )}
     </motion.div>
   )
 }

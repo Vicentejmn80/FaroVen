@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useAuth } from '@/store/auth-context'
 import { formatAuthError } from '@/lib/auth-errors'
+import { countSignupDebug } from '@/lib/signup-debug'
 import { cn } from '@/lib/utils'
 import { InvisibleTurnstile, type InvisibleTurnstileHandle } from '@/components/security/invisible-turnstile'
 
@@ -31,6 +32,7 @@ interface AuthScreenProps {
 
 export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) {
   const {
+    session,
     signInWithPassword,
     signUp,
     resendSignupConfirmation,
@@ -44,10 +46,12 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const turnstileRef = useRef<InvisibleTurnstileHandle>(null)
+  /** Mutex síncrono: useState(isSubmitting) no bloquea un segundo clic antes del re-render. */
+  const submitLockRef = useRef(false)
 
   async function requestCaptchaToken() {
     if (!import.meta.env.VITE_TURNSTILE_SITE_KEY) return undefined
@@ -55,6 +59,14 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     if (!token) throw new Error('No pudimos verificar la seguridad del formulario. Intenta nuevamente.')
     return token
   }
+
+  // Cerrar la pantalla de espera automáticamente cuando Supabase confirma la sesión.
+  // Cubre el caso de confirmación desde otro navegador/pestaña (cross-tab via localStorage).
+  useEffect(() => {
+    if (mode === 'check-email' && session) {
+      onClose?.()
+    }
+  }, [mode, session, onClose])
 
   useEffect(() => {
     if (pendingAuthIntent === 'password_recovery') {
@@ -71,8 +83,21 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     return 'Acceso operativo'
   }, [mode])
 
-  async function handleSubmit() {
-    setBusy(true)
+  async function handleSubmit(e?: FormEvent) {
+    e?.preventDefault()
+    countSignupDebug('auth-screen.handleSubmit invoked', { mode })
+
+    if (submitLockRef.current) {
+      countSignupDebug('auth-screen.handleSubmit BLOCKED (submitLockRef)')
+      return
+    }
+    if (isSubmitting) {
+      countSignupDebug('auth-screen.handleSubmit BLOCKED (isSubmitting state lag)')
+      return
+    }
+
+    submitLockRef.current = true
+    setIsSubmitting(true)
     setError(null)
     setMessage(null)
     try {
@@ -81,6 +106,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
         await signInWithPassword(email.trim(), password, captchaToken)
         onClose?.()
       } else if (mode === 'signup') {
+        countSignupDebug('auth-screen.handleSubmit calling signUp()')
         const captchaToken = await requestCaptchaToken()
         const result = await signUp(email.trim(), password, fullName.trim(), captchaToken)
         if (result.needsEmailConfirmation) {
@@ -102,12 +128,16 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     } catch (err) {
       setError(formatAuthError(err instanceof Error ? err.message : 'Error de autenticación'))
     } finally {
-      setBusy(false)
+      submitLockRef.current = false
+      setIsSubmitting(false)
     }
   }
 
   async function handleResend() {
-    setBusy(true)
+    if (submitLockRef.current || isSubmitting) return
+
+    submitLockRef.current = true
+    setIsSubmitting(true)
     setError(null)
     try {
       const captchaToken = await requestCaptchaToken()
@@ -116,9 +146,26 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     } catch (err) {
       setError(formatAuthError(err instanceof Error ? err.message : 'No se pudo reenviar'))
     } finally {
-      setBusy(false)
+      submitLockRef.current = false
+      setIsSubmitting(false)
     }
   }
+
+  const submitLabel = useMemo(() => {
+    if (isSubmitting) return 'Procesando...'
+    if (mode === 'login') return 'Entrar'
+    if (mode === 'signup') return 'Registrarse'
+    if (mode === 'recover') return 'Enviar enlace de recuperación'
+    if (mode === 'reset-password') return 'Guardar contraseña'
+    return 'Continuar'
+  }, [isSubmitting, mode])
+
+  const isSubmitDisabled =
+    isSubmitting ||
+    !email.trim() ||
+    (mode !== 'recover' && mode !== 'check-email' && mode !== 'password-updated' && !password.trim()) ||
+    (mode === 'signup' && !fullName.trim()) ||
+    (mode === 'reset-password' && (!password.trim() || !confirmPassword.trim()))
 
   return (
     <ScreenScaffold title={title} subtitle="Gestión segura de centros FARO" onBack={onClose}>
@@ -146,7 +193,9 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                 <button
                   key={tab}
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => {
+                    if (isSubmitting) return
                     setMode(tab)
                     setError(null)
                     setMessage(null)
@@ -175,7 +224,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                 email={email}
                 error={error}
                 message={message}
-                busy={busy}
+                isSubmitting={isSubmitting}
                 onResend={() => void handleResend()}
                 onBack={() => setMode('login')}
               />
@@ -183,6 +232,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
               <PasswordUpdatedPanel onLogin={() => setMode('login')} />
             ) : mode === 'reset-password' ? (
               <GlassCard className="space-y-4">
+                <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)} noValidate>
                 <p className="text-sm text-ink-muted">
                   Elige una contraseña segura. Después de guardar deberás iniciar sesión nuevamente.
                 </p>
@@ -193,6 +243,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                   onChange={setPassword}
                   type="password"
                   placeholder="Mínimo 6 caracteres"
+                  disabled={isSubmitting}
                 />
                 <AuthField
                   label="Confirmar contraseña"
@@ -201,20 +252,23 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                   onChange={setConfirmPassword}
                   type="password"
                   placeholder="Repite la contraseña"
+                  disabled={isSubmitting}
                 />
                 {error && <ErrorBanner message={error} />}
                 <EmergencyButton
+                  type="submit"
                   variant="primary"
                   size="lg"
                   className="w-full"
-                  disabled={busy || !password.trim() || !confirmPassword.trim()}
-                  onClick={() => void handleSubmit()}
+                  disabled={isSubmitDisabled}
                 >
-                  Guardar contraseña
+                  {submitLabel}
                 </EmergencyButton>
+                </form>
               </GlassCard>
             ) : (
               <GlassCard className="space-y-4">
+                <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)} noValidate>
                 {mode === 'signup' && (
                   <AuthField
                     label="Nombre completo"
@@ -222,6 +276,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                     value={fullName}
                     onChange={setFullName}
                     placeholder="Tu nombre"
+                    disabled={isSubmitting}
                   />
                 )}
                 <AuthField
@@ -231,6 +286,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                   onChange={setEmail}
                   type="email"
                   placeholder="tu@correo.com"
+                  disabled={isSubmitting}
                 />
                 {mode !== 'recover' && (
                   <AuthField
@@ -240,6 +296,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                     onChange={setPassword}
                     type="password"
                     placeholder="Mínimo 6 caracteres"
+                    disabled={isSubmitting}
                   />
                 )}
 
@@ -247,23 +304,15 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                 {message && <SuccessBanner message={message} />}
 
                 <EmergencyButton
+                  type="submit"
                   variant="primary"
                   size="lg"
                   className="w-full"
-                  disabled={
-                    busy ||
-                    !email.trim() ||
-                    (mode !== 'recover' && !password.trim()) ||
-                    (mode === 'signup' && !fullName.trim())
-                  }
-                  onClick={() => void handleSubmit()}
+                  disabled={isSubmitDisabled}
                 >
-                  {mode === 'login'
-                    ? 'Entrar'
-                    : mode === 'signup'
-                      ? 'Crear cuenta'
-                      : 'Enviar enlace de recuperación'}
+                  {submitLabel}
                 </EmergencyButton>
+                </form>
               </GlassCard>
             )}
           </motion.div>
@@ -303,14 +352,14 @@ function EmailLinkPanel({
   email,
   error,
   message,
-  busy,
+  isSubmitting,
   onResend,
   onBack,
 }: {
   email: string
   error: string | null
   message: string | null
-  busy: boolean
+  isSubmitting: boolean
   onResend: () => void
   onBack: () => void
 }) {
@@ -330,8 +379,8 @@ function EmailLinkPanel({
       {error && <ErrorBanner message={error} />}
       {message && <SuccessBanner message={message} />}
       <div className="flex flex-col gap-2 text-sm">
-        <button type="button" className="text-info" disabled={busy} onClick={onResend}>
-          Reenviar enlace
+        <button type="button" className="text-info" disabled={isSubmitting} onClick={onResend}>
+          {isSubmitting ? 'Procesando...' : 'Reenviar enlace'}
         </button>
         <button type="button" className="text-ink-muted" onClick={onBack}>
           Volver al inicio de sesión
@@ -381,6 +430,7 @@ function AuthField({
   onChange,
   type = 'text',
   placeholder,
+  disabled = false,
 }: {
   label: string
   icon: typeof Mail
@@ -388,6 +438,7 @@ function AuthField({
   onChange: (v: string) => void
   type?: string
   placeholder?: string
+  disabled?: boolean
 }) {
   return (
     <label className="block space-y-1.5">
@@ -400,8 +451,9 @@ function AuthField({
           type={type}
           value={value}
           placeholder={placeholder}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+          className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint disabled:opacity-60"
         />
       </span>
     </label>

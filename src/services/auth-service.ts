@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js'
 import type { SignUpResult } from '@/lib/auth-callback'
 import { FARO_ROLES, type FaroRole } from '@/lib/roles'
 import { formatAuthError } from '@/lib/auth-errors'
+import { countSignupDebug } from '@/lib/signup-debug'
 import { supabase } from '@/lib/supabase'
 import {
   authAuditRepository,
@@ -41,6 +42,8 @@ export const authService = {
   },
 
   async signUp(email: string, password: string, fullName: string, captchaToken?: string): Promise<SignUpResult> {
+    countSignupDebug('authService.signUp → supabase.auth.signUp', { email })
+
     const redirectTo = `${window.location.origin}${window.location.pathname}`
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -48,7 +51,7 @@ export const authService = {
       options: {
         data: { full_name: fullName },
         emailRedirectTo: redirectTo,
-        captchaToken,
+        ...(captchaToken ? { captchaToken } : {}),
       },
     })
     if (error) throw new Error(formatAuthError(error.message))
