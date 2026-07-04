@@ -671,6 +671,12 @@ async function subscribeAndGetId(
   }
 
   let playerId = subscriptionId(instance)
+  pushLog('subscribe_estado_inicial', {
+    optedIn: instance.User.PushSubscription.optedIn,
+    id: playerId ?? null,
+    permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+    osPermission: instance.Notifications.permission,
+  })
   if (instance.User.PushSubscription.optedIn && playerId) {
     logDev('info', 'subscription_exists', 'L461-L464', 'subscription ya estaba activa')
     return playerId
@@ -685,6 +691,16 @@ async function subscribeAndGetId(
       throw new PushActivationError('permission_denied', 'No activaste el permiso de notificaciones.')
     }
     pushLog('subscribe_permiso_ya_concedido_en_navegador')
+    if (!instance.Notifications.permission) {
+      pushLog('subscribe_sin_permiso_onesignal', {
+        osPermission: instance.Notifications.permission,
+      })
+      const granted = await instance.Notifications.requestPermission()
+      pushLog('subscribe_permiso_sync_onesignal', { granted })
+      if (!granted) {
+        throw new PushActivationError('permission_denied', 'No activaste el permiso de notificaciones.')
+      }
+    }
   } else if (!instance.Notifications.permission) {
     const granted = await instance.Notifications.requestPermission()
     if (!granted) {
@@ -703,8 +719,10 @@ async function subscribeAndGetId(
     return playerId
   }
 
+  pushLog('subscribe_optin_inicio')
   try {
     await withRetry('onesignal_optin', 'L492-L497', () => instance.User.PushSubscription.optIn())
+    pushLog('subscribe_optin_ok')
   } catch (err) {
     throw new PushActivationError(
       'subscription_failed',
@@ -713,17 +731,37 @@ async function subscribeAndGetId(
     )
   }
 
+  let changeDetected = false
+  const onChange = (change: PushSubscriptionChange) => {
+    changeDetected = true
+    pushLog('subscribe_change_event', {
+      id: change.current?.id ?? null,
+      optedIn: change.current?.optedIn ?? null,
+    })
+  }
+  instance.User.PushSubscription.addEventListener('change', onChange)
+
   const deadline = Date.now() + SUBSCRIBE_TIMEOUT_MS
-  while (Date.now() < deadline) {
-    playerId = subscriptionId(instance)
-    if (playerId && instance.User.PushSubscription.optedIn) {
-      logDev('info', 'subscription_created', 'L507-L511', 'subscription creada correctamente')
-      return playerId
+  try {
+    while (Date.now() < deadline) {
+      playerId = subscriptionId(instance)
+      if (playerId && instance.User.PushSubscription.optedIn) {
+        logDev('info', 'subscription_created', 'L507-L511', 'subscription creada correctamente')
+        return playerId
+      }
+      if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+        throw new PushActivationError('permission_denied', permissionDeniedMessage())
+      }
+      if (changeDetected) {
+        pushLog('subscribe_change_detectado_sin_id', {
+          id: playerId ?? null,
+          optedIn: instance.User.PushSubscription.optedIn ?? null,
+        })
+      }
+      await sleep(400)
     }
-    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
-      throw new PushActivationError('permission_denied', permissionDeniedMessage())
-    }
-    await sleep(400)
+  } finally {
+    instance.User.PushSubscription.removeEventListener('change', onChange)
   }
 
   throw new PushActivationError(
