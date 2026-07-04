@@ -38,15 +38,19 @@ let clickHandler: ((actionUrl: string | null, data: Record<string, unknown>) => 
 
 function loadOneSignalScript(): Promise<void> {
   if (typeof document === 'undefined') return Promise.resolve()
-  if (document.querySelector('script[data-faro-onesignal]')) return Promise.resolve()
+  if (document.querySelector('script[src*="OneSignalSDK.page.js"]')) return Promise.resolve()
 
   return new Promise((resolve, reject) => {
     const script = document.createElement('script')
     script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'
     script.defer = true
-    script.dataset.faroOnesignal = '1'
     script.onload = () => resolve()
-    script.onerror = () => reject(new Error('No se pudo cargar el SDK de OneSignal.'))
+    script.onerror = () =>
+      reject(
+        new Error(
+          'No se pudo cargar el SDK de OneSignal. Revisa bloqueadores de anuncios o la política CSP del sitio.',
+        ),
+      )
     document.head.appendChild(script)
   })
 }
