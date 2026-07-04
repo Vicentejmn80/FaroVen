@@ -125,6 +125,10 @@ export function ProfileScreen({
             <LogOut className="h-[18px] w-[18px]" /> Cerrar sesión
           </EmergencyButton>
         )}
+
+        <p className="pt-2 text-center text-[10px] text-ink-faint">
+          Versión {__FARO_BUILD_COMMIT__} · {new Date(__FARO_BUILD_DATE__).toLocaleDateString('es-VE')}
+        </p>
       </div>
     </ScreenScaffold>
   )

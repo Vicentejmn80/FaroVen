@@ -26,7 +26,7 @@ export default defineConfig({
     react(),
     VitePWA({
       injectRegister: 'auto',
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       devOptions: {
         enabled: false,
       },
@@ -50,8 +50,8 @@ export default defineConfig({
       includeAssets: ['icons/icon-192.svg', 'icons/icon-512.svg', 'icons/icon-maskable.svg'],
       workbox: {
         cleanupOutdatedCaches: true,
-        skipWaiting: false,
-        clientsClaim: false,
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,webp}'],
         runtimeCaching: [
           {
