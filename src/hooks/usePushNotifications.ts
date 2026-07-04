@@ -5,7 +5,7 @@ import { useAuth } from '@/store/auth-context'
 import { pushService } from '@/push-service/push-service'
 import { useNotificationPreferenceMutations } from '@/hooks/useNotificationPreferences'
 import { useToast } from '@/store/toast-context'
-import { PushActivationError } from '@/push-provider/onesignal-push-provider'
+import { PushActivationError, pushLog } from '@/push-provider/onesignal-push-provider'
 
 const DISMISS_KEY = 'faro:push-modal-dismissed'
 
@@ -59,6 +59,7 @@ export function usePushNotifications() {
       return false
     }
     setActivating(true)
+    pushLog('clic_activar_alertas', { userId: user.id.slice(0, 8) + '…' })
     try {
       const result = await pushService.enablePush(user.id)
       if (!result) {

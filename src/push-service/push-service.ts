@@ -40,7 +40,11 @@ export const pushService = {
   },
 
   async enablePush(userId: string) {
-    await this.initialize()
+    // No await initialize() aquí: el permiso debe pedirse antes de cualquier init.
+    getPushProvider().onNotificationClick((actionUrl) => {
+      const target = parseNotificationActionUrl(actionUrl)
+      if (target) dispatchNotificationNavigation(target)
+    })
     return getPushProvider().requestPermissionAndSubscribe(userId)
   },
 }

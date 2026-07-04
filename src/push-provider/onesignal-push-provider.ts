@@ -4,6 +4,7 @@ import type { PushProvider, PushRegistrationResult } from '@/push-provider/types
 const FILE = 'src/push-provider/onesignal-push-provider.ts'
 const APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID?.trim()
 const IS_DEV = import.meta.env.DEV
+const PUSH_DEBUG = import.meta.env.VITE_PUSH_DEBUG === 'true'
 
 function envNumber(key: string, fallback: number, min: number, max: number): number {
   const raw = (import.meta.env as Record<string, string | undefined>)[key]
@@ -98,6 +99,13 @@ let clickListenerAttached = false
 const ONESIGNAL_SERVICE_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
 const ONESIGNAL_SERVICE_WORKER_SCOPE = '/push/onesignal/'
 
+/** Logs de piloto en Vercel: activar con VITE_PUSH_DEBUG=true */
+export function pushLog(step: string, detail?: Record<string, unknown>) {
+  if (!IS_DEV && !PUSH_DEBUG) return
+  if (detail) console.info(`[DEBUG PUSH] Paso: ${step}`, detail)
+  else console.info(`[DEBUG PUSH] Paso: ${step}`)
+}
+
 function logDev(
   level: 'info' | 'warn' | 'error',
   step: string,
@@ -105,13 +113,18 @@ function logDev(
   message: string,
   cause?: unknown,
 ) {
-  if (!IS_DEV) return
+  if (!IS_DEV && !PUSH_DEBUG) return
   const payload = {
     file: FILE,
     line,
     step,
     message,
     cause: cause instanceof Error ? cause.message : cause,
+  }
+  if (PUSH_DEBUG && !IS_DEV) {
+    const logFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info
+    logFn(`[DEBUG PUSH] Paso: ${step}`, payload)
+    return
   }
   const prefix = '[FARO Push]'
   if (level === 'error') console.error(prefix, payload)
@@ -433,8 +446,37 @@ function iosPushHint(): string | null {
   return 'En iPhone, instala FARO en la pantalla de inicio (Compartir → Añadir a inicio) para activar push.'
 }
 
+/**
+ * Primer await del flujo de activación: API nativa del navegador.
+ * Equivalente a OneSignal.Notifications.requestPermission() pero sin depender de init().
+ */
+async function requestBrowserPermissionFirst(): Promise<'granted' | 'denied' | 'default'> {
+  if (typeof Notification === 'undefined') {
+    throw new PushActivationError('unknown', 'Este navegador no soporta notificaciones.')
+  }
+
+  pushLog('request_permission_estado_inicial', { permission: Notification.permission })
+
+  if (Notification.permission === 'denied') {
+    throw new PushActivationError('permission_denied', permissionDeniedMessage())
+  }
+
+  if (Notification.permission === 'granted') {
+    pushLog('request_permission_ya_concedido')
+    return 'granted'
+  }
+
+  pushLog('request_permission_ejecutando')
+  const result = await Notification.requestPermission()
+  pushLog('request_permission_respuesta_navegador', { result, permission: Notification.permission })
+  return result
+}
+
 /** Pide permiso, suscribe y espera el player ID con polling de respaldo. */
-async function subscribeAndGetId(instance: OneSignalInstance): Promise<string> {
+async function subscribeAndGetId(
+  instance: OneSignalInstance,
+  options?: { skipPermissionRequest?: boolean },
+): Promise<string> {
   const iosHint = iosPushHint()
   if (iosHint) {
     throw new PushActivationError('ios_install_required', iosHint)
@@ -450,7 +492,12 @@ async function subscribeAndGetId(instance: OneSignalInstance): Promise<string> {
     throw new PushActivationError('permission_denied', permissionDeniedMessage())
   }
 
-  if (!instance.Notifications.permission) {
+  if (options?.skipPermissionRequest) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+      throw new PushActivationError('permission_denied', 'No activaste el permiso de notificaciones.')
+    }
+    pushLog('subscribe_permiso_ya_concedido_en_navegador')
+  } else if (!instance.Notifications.permission) {
     const granted = await instance.Notifications.requestPermission()
     if (!granted) {
       throw new PushActivationError(
@@ -541,19 +588,58 @@ export const oneSignalPushProvider: PushProvider = {
   async requestPermissionAndSubscribe(userId: string): Promise<PushRegistrationResult | null> {
     if (!this.isAvailable()) return null
     try {
-      const instance = await ensureInitialized()
+      pushLog('clic_recibido')
 
-      // Prueba forense: disparar el prompt lo más cerca posible del gesto del usuario.
-      if (!instance.Notifications.permission) {
-        await instance.Notifications.requestPermission()
+      // Solo comprobaciones síncronas antes del primer await (ventana de gesto del usuario).
+      const iosHint = iosPushHint()
+      if (iosHint) {
+        pushLog('ios_pwa_requerida')
+        throw new PushActivationError('ios_install_required', iosHint)
       }
 
-      const playerId = await subscribeAndGetId(instance)
+      if (!APP_ID) {
+        throw new PushActivationError('unknown', 'Falta configurar OneSignal en el entorno.')
+      }
+
+      // 1. CLIC → requestPermission (sin ensureInitialized ni safeLogin antes)
+      const permissionResult = await requestBrowserPermissionFirst()
+      if (permissionResult !== 'granted') {
+        throw new PushActivationError(
+          'permission_denied',
+          permissionResult === 'denied'
+            ? permissionDeniedMessage()
+            : 'No activaste el permiso de notificaciones.',
+        )
+      }
+
+      // 2. ensureInitialized (solo si el permiso fue concedido)
+      pushLog('ensure_initialized_inicio')
+      const instance = await ensureInitialized()
+      pushLog('ensure_initialized_completado')
+
+      // 3. Suscripción / player ID (permiso del navegador ya concedido)
+      pushLog('subscribe_inicio')
+      const playerId = await subscribeAndGetId(instance, { skipPermissionRequest: true })
+      pushLog('subscribe_completado', { playerId: playerId.slice(0, 8) + '…' })
+
+      // 4. login → persistencia
+      pushLog('safe_login_inicio')
       await safeLogin(instance, userId)
+      pushLog('safe_login_completado')
+
+      pushLog('persist_inicio')
       await persistSubscription(userId, playerId)
+      pushLog('persist_completado')
+
+      pushLog('activacion_completa')
       return { provider: 'onesignal', playerId, deviceType: detectDeviceType() }
     } catch (err) {
       const normalized = toPushActivationError(err)
+      pushLog('activacion_fallida', {
+        code: normalized.code,
+        message: normalized.userMessage,
+        detail: normalized.causeDetails,
+      })
       logDev('error', 'enable_push_failed', 'L586-L595', normalized.userMessage, normalized.causeDetails)
       throw normalized
     }

@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   readonly VITE_PUSH_RETRY_BASE_MS?: string
   readonly VITE_PUSH_CIRCUIT_FAILURE_THRESHOLD?: string
   readonly VITE_PUSH_CIRCUIT_COOLDOWN_MS?: string
+  readonly VITE_PUSH_DEBUG?: string
 }
 
 interface ImportMeta {
