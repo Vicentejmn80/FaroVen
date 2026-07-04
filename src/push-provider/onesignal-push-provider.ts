@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { appendPushDebugLog } from '@/lib/push-debug-buffer'
 import type { PushProvider, PushRegistrationResult } from '@/push-provider/types'
 
 const FILE = 'src/push-provider/onesignal-push-provider.ts'
@@ -102,6 +103,10 @@ const ONESIGNAL_SERVICE_WORKER_SCOPE = '/push/onesignal/'
 /** Logs de piloto en Vercel: activar con VITE_PUSH_DEBUG=true */
 export function pushLog(step: string, detail?: Record<string, unknown>) {
   if (!IS_DEV && !PUSH_DEBUG) return
+  const line = detail
+    ? `[DEBUG PUSH] Paso: ${step} ${JSON.stringify(detail)}`
+    : `[DEBUG PUSH] Paso: ${step}`
+  appendPushDebugLog(line)
   if (detail) console.info(`[DEBUG PUSH] Paso: ${step}`, detail)
   else console.info(`[DEBUG PUSH] Paso: ${step}`)
 }
@@ -124,6 +129,9 @@ function logDev(
   if (PUSH_DEBUG && !IS_DEV) {
     const logFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info
     logFn(`[DEBUG PUSH] Paso: ${step}`, payload)
+    appendPushDebugLog(
+      `[DEBUG PUSH] Paso: ${step} ${JSON.stringify({ message, cause: payload.cause })}`,
+    )
     return
   }
   const prefix = '[FARO Push]'

@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/app/AppShell'
+import { PushDebugPanel } from '@/components/dev/PushDebugPanel'
 import { PwaDiagnosticsPanel } from '@/components/dev/PwaDiagnosticsPanel'
 import { LandingPage } from '@/components/onboarding/LandingPage'
 import { WelcomeSheet } from '@/components/onboarding/WelcomeSheet'
@@ -16,6 +17,7 @@ export default function App() {
     <>
       <AppShell />
       <PwaUpdateBanner />
+      <PushDebugPanel />
       <PwaDiagnosticsPanel />
       <WelcomeSheet open={showWelcome} onComplete={completeWelcome} />
     </>
