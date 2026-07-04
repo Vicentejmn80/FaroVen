@@ -96,6 +96,8 @@ const initCircuit = {
 
 let clickHandler: ((actionUrl: string | null, data: Record<string, unknown>) => void) | null = null
 let clickListenerAttached = false
+/** Solo true tras OneSignal.init() exitoso — no confundir con window.OneSignal del script. */
+let oneSignalReadyInstance: OneSignalInstance | null = null
 
 /** Ruta relativa a la raíz del sitio (sin / inicial). Archivo: public/push/onesignal/OneSignalSDKWorker.js */
 const ONESIGNAL_SERVICE_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
@@ -330,7 +332,22 @@ function getGlobalOneSignal(): OneSignalInstance | null {
 
 function resetOneSignalInit(): void {
   window.__faroOneSignalInit = undefined
+  oneSignalReadyInstance = null
   pushLog('sdk_init_reset')
+}
+
+function markOneSignalReady(instance: OneSignalInstance): void {
+  oneSignalReadyInstance = instance
+}
+
+function assertOneSignalUsable(instance: OneSignalInstance): void {
+  if (!instance.Notifications || !instance.User?.PushSubscription) {
+    throw new PushActivationError(
+      'sdk_init_timeout',
+      'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
+      'OneSignal incompleto tras init (Notifications o PushSubscription ausentes)',
+    )
+  }
 }
 
 function waitForOneSignalInstance(): Promise<OneSignalInstance> {
@@ -390,11 +407,24 @@ function isAlreadyInitializedError(err: unknown): boolean {
 }
 
 async function initOneSignal(instance: OneSignalInstance): Promise<void> {
+  pushLog('sdk_init_llamando')
   try {
-    await instance.init(buildOneSignalInitOptions())
+    await withTimeout(
+      instance.init(buildOneSignalInitOptions()),
+      INIT_TIMEOUT_MS,
+      () =>
+        new PushActivationError(
+          'sdk_init_timeout',
+          'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
+          `Timeout en OneSignal.init() (${INIT_TIMEOUT_MS}ms)`,
+        ),
+    )
   } catch (err) {
     if (!isAlreadyInitializedError(err)) throw err
+    pushLog('sdk_init_ya_inicializado')
   }
+  assertOneSignalUsable(instance)
+  pushLog('sdk_init_ok')
 }
 
 function attachClickListener(instance: OneSignalInstance): void {
@@ -418,11 +448,10 @@ async function ensureInitialized(options?: { reset?: boolean }): Promise<OneSign
 
   if (options?.reset) resetOneSignalInit()
 
-  const ready = getGlobalOneSignal()
-  if (ready && !options?.reset) {
-    pushLog('ensure_initialized_cache_global')
-    attachClickListener(ready)
-    return ready
+  if (oneSignalReadyInstance && !options?.reset) {
+    pushLog('ensure_initialized_cache_ok')
+    attachClickListener(oneSignalReadyInstance)
+    return oneSignalReadyInstance
   }
 
   if (window.__faroOneSignalInit) return window.__faroOneSignalInit
@@ -455,6 +484,7 @@ async function ensureInitialized(options?: { reset?: boolean }): Promise<OneSign
 
     await initOneSignal(instance)
     attachClickListener(instance)
+    markOneSignalReady(instance)
     recordCircuitSuccess()
     logDev('info', 'sdk_initialized', 'L365-L368', 'SDK inicializado')
     pushLog('sdk_initialized')
@@ -462,6 +492,7 @@ async function ensureInitialized(options?: { reset?: boolean }): Promise<OneSign
   })().catch((err) => {
     if (!isAlreadyInitializedError(err)) {
       window.__faroOneSignalInit = undefined
+      oneSignalReadyInstance = null
       recordCircuitFailure()
     }
     logDev('error', 'sdk_init_failed', 'L370-L377', 'falló init de OneSignal', err)

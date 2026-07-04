@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { NOTIFICATION_QUERY_KEYS } from '@/domain/notification-models'
 import { useAuth } from '@/store/auth-context'
@@ -17,29 +17,6 @@ export function usePushNotifications() {
   const [modalOpen, setModalOpen] = useState(false)
   const [activating, setActivating] = useState(false)
   const available = pushService.isAvailable()
-
-  useEffect(() => {
-    if (!user?.id) return
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-
-    // Sincronización diferida: no competir con la activación manual ni bloquear al abrir la app.
-    const timer = window.setTimeout(() => {
-      void pushService
-        .syncExistingSubscription(user.id)
-        .then(async (result) => {
-          if (result) {
-            await queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.preferences })
-          }
-        })
-        .catch((err) => {
-          pushLog('sync_background_fallida', {
-            cause: err instanceof Error ? err.message : String(err),
-          })
-        })
-    }, 8_000)
-
-    return () => window.clearTimeout(timer)
-  }, [user?.id, queryClient])
 
   const openPermissionModal = useCallback(() => {
     if (!available || !user?.id) {
