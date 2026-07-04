@@ -1,0 +1,7 @@
+# FARO — Supabase local/deploy config
+# Project: gfngmbbotqzzchjzgajo
+
+project_id = "gfngmbbotqzzchjzgajo"
+
+[functions.send-notification-push]
+verify_jwt = false

@@ -10,12 +10,19 @@ import { ToastProvider } from './store/toast-context'
 import 'leaflet/dist/leaflet.css'
 import './index.css'
 
-registerSW({
-  immediate: true,
-  onRegisteredSW(swUrl: string) {
-    console.info(`[FARO] Service Worker activo: ${swUrl}`)
-  },
-})
+import { pushService } from '@/push-service/push-service'
+
+/** SW de Vite PWA solo en producción; en dev evita conflicto con OneSignal. */
+if (import.meta.env.PROD) {
+  registerSW({
+    immediate: true,
+    onRegisteredSW(swUrl: string) {
+      console.info(`[FARO] Service Worker activo: ${swUrl}`)
+    },
+  })
+}
+
+void pushService.initialize()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

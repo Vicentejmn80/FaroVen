@@ -18,6 +18,7 @@ Ejecutar **en este orden** (copiar cada archivo de `supabase/migrations/`):
 | 8 | `20260702290000_guide_feedback_notifications.sql` | Contacto Centro de Recursos |
 | 9 | `20260703180000_user_signup_notifications_and_promotions.sql` | Registro + `assign_coordinator_role` |
 | 10 | `20260703190000_profile_realtime_sync.sql` | Rol coordinador sin recargar página |
+| 11 | `20260703200000_notification_system.sql` | **Sistema unificado de notificaciones + push** |
 
 Verificar funciones:
 
@@ -34,6 +35,7 @@ Debe devolver **3 filas**.
 - [ ] Tienes al menos **1 super_admin** activo (tu cuenta)
 - [ ] Registraste al menos **1 centro** (hospital, refugio o acopio)
 - [ ] Variables en Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- [ ] (Push) `VITE_ONESIGNAL_APP_ID` + Edge Function `send-notification-push` desplegada
 - [ ] (Recomendado) `VITE_TURNSTILE_SITE_KEY` + Turnstile activo en Supabase Auth
 
 ## Fase C — Smoke test por rol

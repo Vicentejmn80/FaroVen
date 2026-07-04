@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { authService } from '@/services/auth-service'
 import type { ApproveCoordinatorRequestInput, SubmitCoordinatorRequestInput } from '@/repositories/auth-types'
 import { useAuth } from '@/store/auth-context'
-import { NOTIFICATION_QUERY_KEYS } from '@/hooks/useAdminNotifications'
-import { USER_NOTIFICATION_QUERY_KEYS } from '@/hooks/useUserNotifications'
+import { NOTIFICATION_QUERY_KEYS } from '@/domain/notification-models'
 
 export const AUTH_QUERY_KEYS = {
   profile: ['auth', 'profile'] as const,
@@ -93,8 +92,7 @@ export function useCoordinatorRequestMutations() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.pendingRequests })
       void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.myRequests })
-      void queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.admin })
-      void queryClient.invalidateQueries({ queryKey: USER_NOTIFICATION_QUERY_KEYS.mine })
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.list })
     },
   })
 

@@ -1,4 +1,5 @@
 import {
+  Bell,
   ChevronRight,
   LogOut,
   ShieldCheck,
@@ -14,16 +15,29 @@ import { FARO_ROLE_LABELS } from '@/lib/roles'
 interface ProfileScreenProps {
   onRequestCoordinatorAccess?: () => void
   onRequestAuth?: () => void
+  onOpenNotificationPreferences?: () => void
 }
 
 /** Vista Perfil — sesión, rol y acciones operativas. */
-export function ProfileScreen({ onRequestCoordinatorAccess, onRequestAuth }: ProfileScreenProps) {
+export function ProfileScreen({
+  onRequestCoordinatorAccess,
+  onRequestAuth,
+  onOpenNotificationPreferences,
+}: ProfileScreenProps) {
   const { user, profile, role, signOut } = useAuth()
   const { assignment } = useCoordinatorAssignment()
 
   const lastLogin = profile?.last_login_at
     ? new Date(profile.last_login_at).toLocaleString('es-VE')
     : '—'
+
+  const handleOpenNotificationPreferences = () => {
+    if (onOpenNotificationPreferences) {
+      onOpenNotificationPreferences()
+      return
+    }
+    window.dispatchEvent(new CustomEvent('faro:open-notification-preferences'))
+  }
 
   return (
     <ScreenScaffold title="Perfil" subtitle={user ? 'Tu cuenta' : 'Acceso ciudadano'}>
@@ -81,6 +95,25 @@ export function ProfileScreen({ onRequestCoordinatorAccess, onRequestAuth }: Pro
               <span className="flex-1">
                 <span className="block text-[15px] text-ink">Solicitar acceso como Coordinador</span>
                 <span className="block text-xs text-ink-subtle">Revisión por administrador regional</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-ink-faint" />
+            </button>
+          </GlassCard>
+        )}
+
+        {user && (
+          <GlassCard className="space-y-2">
+            <button
+              type="button"
+              onClick={handleOpenNotificationPreferences}
+              className="flex w-full items-center gap-3 text-left"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06]">
+                <Bell className="h-[18px] w-[18px] text-ink-muted" />
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] text-ink">Preferencias de notificaciones</span>
+                <span className="block text-xs text-ink-subtle">Alertas, categorías y silencio temporal</span>
               </span>
               <ChevronRight className="h-4 w-4 text-ink-faint" />
             </button>

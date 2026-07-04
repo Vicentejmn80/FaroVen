@@ -11,6 +11,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
+      devOptions: {
+        enabled: false,
+      },
       manifest: {
         name: 'FARO',
         short_name: 'FARO',

@@ -2,22 +2,17 @@ import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useRe
 import { AnimatePresence, motion } from 'framer-motion'
 import { EmergencyHeader } from '@/components/faro/emergency-header'
 import { ConnectionBanner } from '@/components/faro/connection-banner'
-import { CoordinatorNotificationsSheet } from '@/components/coordinator/coordinator-notifications-sheet'
-import { NotificationCenter } from '@/components/notifications/NotificationCenter'
-import { UserNotificationSheet } from '@/components/notifications/UserNotificationSheet'
-import { RequireRole } from '@/components/auth/require-role'
-import { useCoordinatorNotifications } from '@/hooks/useCoordinatorNotifications'
+import { NotificationHub } from '@/components/notifications/NotificationHub'
+import { PushPermissionModal } from '@/components/notifications/PushPermissionModal'
+import { useNotifications, useNotificationMutations } from '@/hooks/useNotifications'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 import {
-  useAdminNotificationMutations,
-  useAdminNotifications,
-} from '@/hooks/useAdminNotifications'
-import {
-  useUserNotificationMutations,
-  useUserNotifications,
-} from '@/hooks/useUserNotifications'
+  parseNavQueryParam,
+  parseNotificationActionUrl,
+  type NotificationNavigationTarget,
+} from '@/lib/notification-routing'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import type { CoordinatorModuleId } from '@/services/coordinator-service'
-import type { Report } from '@/domain/models'
 import {
   BottomNavigation,
   DesktopNavigation,
@@ -36,7 +31,9 @@ import { AdjustNeedStockFlow } from '@/screens/adjust-need-stock-flow'
 import type { Site } from '@/lib/types'
 import { usePermissions, useAuth } from '@/store/auth-context'
 import { FARO_ROLES, canAccessSystemPanel } from '@/lib/roles'
+import { RequireRole } from '@/components/auth/require-role'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { NotificationRow } from '@/domain/notification-models'
 
 type FlowId = ActionId | 'menu' | 'auth' | 'coordinator-request'
 
@@ -63,9 +60,16 @@ const SystemAdminScreen = lazy(() =>
   import('@/screens/system-admin-screen').then((m) => ({ default: m.SystemAdminScreen })),
 )
 const AuthScreen = lazy(() => import('@/screens/auth-screen').then((m) => ({ default: m.AuthScreen })))
+const NotificationPreferencesScreen = lazy(() =>
+  import('@/screens/notification-preferences-screen').then((m) => ({
+    default: m.NotificationPreferencesScreen,
+  })),
+)
 const CoordinatorRequestScreen = lazy(() =>
   import('@/screens/coordinator-request-screen').then((m) => ({ default: m.CoordinatorRequestScreen })),
 )
+
+type ProfileSubview = 'main' | 'notification-preferences'
 
 function ScreenLoading() {
   return (
@@ -85,17 +89,14 @@ export function AppShell() {
   const [flow, setFlow] = useState<FlowId | null>(null)
   const [needPresetSiteId, setNeedPresetSiteId] = useState<string | undefined>()
   const [detailSite, setDetailSite] = useState<Site | null>(null)
-  const [notifOpen, setNotifOpen] = useState(false)
-  const [adminNotifOpen, setAdminNotifOpen] = useState(false)
-  const [userNotifOpen, setUserNotifOpen] = useState(false)
+  const [hubOpen, setHubOpen] = useState(false)
+  const [profileSubview, setProfileSubview] = useState<ProfileSubview>('main')
   const [focusRequestId, setFocusRequestId] = useState<string | null>(null)
   const [coordinatorModule, setCoordinatorModule] = useState<CoordinatorModuleId>('dashboard')
   const [focusReportId, setFocusReportId] = useState<string | null>(null)
-  const coordinatorNotif = useCoordinatorNotifications()
-  const adminNotif = useAdminNotifications()
-  const userNotif = useUserNotifications()
-  const { markRead: markAdminRead } = useAdminNotificationMutations()
-  const { markRead: markUserRead } = useUserNotificationMutations()
+  const notifications = useNotifications()
+  const { markRead, markAllRead, remove } = useNotificationMutations()
+  const pushNotif = usePushNotifications()
   const network = useNetworkStatus()
   const previousNetworkState = useRef(network.state)
   const { showToast } = useToast()
@@ -104,20 +105,9 @@ export function AppShell() {
   const isCoordinatorOps = canAccessCoordinatorPanel
 
   const headerNotificationCount = useMemo(() => {
-    if (isCoordinatorOps && coordinatorNotif.enabled) return coordinatorNotif.pendingCount
-    if (canAccessAdminPanel && adminNotif.enabled) return adminNotif.unreadCount
-    if (userNotif.enabled) return userNotif.unreadCount
+    if (session && notifications.enabled) return notifications.unreadCount
     return 0
-  }, [
-    isCoordinatorOps,
-    coordinatorNotif.enabled,
-    coordinatorNotif.pendingCount,
-    canAccessAdminPanel,
-    adminNotif.enabled,
-    adminNotif.unreadCount,
-    userNotif.enabled,
-    userNotif.unreadCount,
-  ])
+  }, [session, notifications.enabled, notifications.unreadCount])
 
   useEffect(() => {
     if (pendingAuthIntent === 'password_recovery') {
@@ -143,20 +133,41 @@ export function AppShell() {
 
   // Fallback: si hay notificación de aprobación pero el JWT aún no refleja el rol.
   useEffect(() => {
-    if (role !== FARO_ROLES.PUBLIC || !userNotif.data?.length) return
-    const approved = userNotif.data.some((n) => n.type === 'coordinator_request_approved')
+    if (role !== FARO_ROLES.PUBLIC || !notifications.data?.length) return
+    const approved = notifications.data.some((n) => n.type === 'coordinator_request_approved')
     if (approved) void refreshProfile()
-  }, [userNotif.data, role, refreshProfile])
+  }, [notifications.data, role, refreshProfile])
+
+  const applyNotificationNavigation = useCallback((target: NotificationNavigationTarget) => {
+    if (target.tab) setTab(target.tab)
+    if (target.focusRequestId) setFocusRequestId(target.focusRequestId)
+    if (target.focusReportId) {
+      setFocusReportId(target.focusReportId)
+      setCoordinatorModule('reports')
+    }
+    if (target.coordinatorModule) setCoordinatorModule(target.coordinatorModule)
+    if (target.flow === 'coordinator-request') startTransition(() => setFlow('coordinator-request'))
+    setHubOpen(false)
+  }, [])
+
+  useEffect(() => {
+    const target = parseNavQueryParam(window.location.search)
+    if (target) {
+      applyNotificationNavigation(target)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('nav')
+      window.history.replaceState({}, '', url.pathname + url.search)
+    }
+  }, [applyNotificationNavigation])
 
   useEffect(() => {
     const listener = (event: Event) => {
-      const detail = (event as CustomEvent<{ tab?: TabId; requestId?: string }>).detail
-      if (detail?.tab) setTab(detail.tab)
-      if (detail?.requestId) setFocusRequestId(detail.requestId)
+      const detail = (event as CustomEvent<NotificationNavigationTarget>).detail
+      if (detail) applyNotificationNavigation(detail)
     }
-    window.addEventListener('faro:navigate-tab', listener)
-    return () => window.removeEventListener('faro:navigate-tab', listener)
-  }, [])
+    window.addEventListener('faro:notification-navigate', listener)
+    return () => window.removeEventListener('faro:notification-navigate', listener)
+  }, [applyNotificationNavigation])
 
   const openDetail = (site: Site) => {
     setDetailSite(site)
@@ -209,53 +220,55 @@ export function AppShell() {
     openFlow('register-need')
   }
 
-  const openCoordinatorReports = (report?: Report) => {
-    setTab('ops')
-    setCoordinatorModule('reports')
-    setFocusReportId(report?.id ?? null)
-    setNotifOpen(false)
-  }
+  useEffect(() => {
+    if (tab !== 'profile') setProfileSubview('main')
+  }, [tab])
 
-  const openAdminRequest = (requestId: string) => {
-    setTab('admin')
-    setFocusRequestId(requestId)
-    setAdminNotifOpen(false)
-  }
+  useEffect(() => {
+    const openPrefs = () => {
+      setTab('profile')
+      setProfileSubview('notification-preferences')
+    }
+    window.addEventListener('faro:open-notification-preferences', openPrefs)
+    return () => window.removeEventListener('faro:open-notification-preferences', openPrefs)
+  }, [])
 
   const openSystemUsers = () => {
     setTab('system')
-    setAdminNotifOpen(false)
+    setHubOpen(false)
+  }
+
+  const handleNotificationAction = (notification: NotificationRow) => {
+    const target = parseNotificationActionUrl(notification.action_url)
+    if (target) {
+      applyNotificationNavigation(target)
+      return
+    }
+    if (notification.type === 'user_signup') {
+      openSystemUsers()
+      return
+    }
+    if (notification.type === 'coordinator_request_approved') {
+      void refreshProfile()
+      setTab('ops')
+      setHubOpen(false)
+      return
+    }
+    if (
+      notification.type === 'coordinator_info_request' ||
+      notification.type === 'coordinator_request_rejected'
+    ) {
+      startTransition(() => setFlow('coordinator-request'))
+      setHubOpen(false)
+    }
   }
 
   const handleNotifications = () => {
-    if (isCoordinatorOps && coordinatorNotif.enabled) {
-      setNotifOpen(true)
-      return
-    }
-    if (canAccessAdminPanel && adminNotif.enabled) {
-      setAdminNotifOpen(true)
-      return
-    }
-    if (userNotif.enabled && userNotif.unreadCount > 0) {
-      setUserNotifOpen(true)
-      return
-    }
-    if (userNotif.enabled) {
-      setUserNotifOpen(true)
+    if (session && notifications.enabled) {
+      setHubOpen(true)
       return
     }
     setTab('activity')
-  }
-
-  const openUserCoordinatorRequest = () => {
-    setUserNotifOpen(false)
-    openFlow('coordinator-request')
-  }
-
-  const openCoordinatorOpsFromNotification = () => {
-    setUserNotifOpen(false)
-    void refreshProfile()
-    setTab('ops')
   }
 
   const openAuth = () => openFlow('auth')
@@ -349,12 +362,16 @@ export function AppShell() {
                     ))}
                   {tab === 'reports' && <ReportsScreen />}
                   {tab === 'activity' && <ActivityScreen />}
-                  {tab === 'profile' && (
-                    <ProfileScreen
-                      onRequestAuth={openAuth}
-                      onRequestCoordinatorAccess={openCoordinatorRequest}
-                    />
-                  )}
+                  {tab === 'profile' &&
+                    (profileSubview === 'notification-preferences' ? (
+                      <NotificationPreferencesScreen onBack={() => setProfileSubview('main')} />
+                    ) : (
+                      <ProfileScreen
+                        onRequestAuth={openAuth}
+                        onRequestCoordinatorAccess={openCoordinatorRequest}
+                        onOpenNotificationPreferences={() => setProfileSubview('notification-preferences')}
+                      />
+                    ))}
                   {tab === 'admin' && (
                     <AdminScreen
                       onRequestAuth={openAuth}
@@ -444,32 +461,24 @@ export function AppShell() {
           )}
         </AnimatePresence>
 
-        <CoordinatorNotificationsSheet
-          open={notifOpen && coordinatorNotif.enabled}
-          reports={coordinatorNotif.pendingReports}
-          onClose={() => setNotifOpen(false)}
-          onOpenReport={(report) => openCoordinatorReports(report)}
-          onOpenInbox={() => openCoordinatorReports()}
+        <NotificationHub
+          open={hubOpen && notifications.enabled}
+          notifications={notifications.data ?? []}
+          loading={notifications.isLoading}
+          pushAvailable={pushNotif.available}
+          onClose={() => setHubOpen(false)}
+          onMarkRead={(id) => void markRead.mutate(id)}
+          onMarkAllRead={() => void markAllRead.mutate()}
+          onDelete={(id) => void remove.mutate(id)}
+          onAction={handleNotificationAction}
+          onEnablePush={pushNotif.openPermissionModal}
         />
 
-        <NotificationCenter
-          open={adminNotifOpen && adminNotif.enabled}
-          notifications={adminNotif.data ?? []}
-          loading={adminNotif.isLoading}
-          onClose={() => setAdminNotifOpen(false)}
-          onOpenRequest={openAdminRequest}
-          onOpenSystem={openSystemUsers}
-          onMarkRead={(id) => void markAdminRead.mutate(id)}
-        />
-
-        <UserNotificationSheet
-          open={userNotifOpen && userNotif.enabled}
-          notifications={userNotif.data ?? []}
-          loading={userNotif.isLoading}
-          onClose={() => setUserNotifOpen(false)}
-          onOpenRequest={openUserCoordinatorRequest}
-          onGoToCoordinatorOps={openCoordinatorOpsFromNotification}
-          onMarkRead={(id) => void markUserRead.mutate(id)}
+        <PushPermissionModal
+          open={pushNotif.modalOpen}
+          loading={pushNotif.accepting}
+          onAccept={() => void pushNotif.acceptPush()}
+          onDismiss={pushNotif.dismissModal}
         />
       </div>
     </div>
