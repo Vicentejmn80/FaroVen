@@ -102,6 +102,8 @@ let oneSignalReadyInstance: OneSignalInstance | null = null
 /** Ruta relativa a la raíz del sitio (sin / inicial). Archivo: public/push/onesignal/OneSignalSDKWorker.js */
 const ONESIGNAL_SERVICE_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
 const ONESIGNAL_SERVICE_WORKER_SCOPE = '/push/onesignal/'
+const ONESIGNAL_SDK_VERSION = '160606-faro-20260704'
+const ONESIGNAL_PAGE_SDK_URL = `https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js?v=${ONESIGNAL_SDK_VERSION}`
 
 /** Logs de piloto en Vercel: activar con VITE_PUSH_DEBUG=true */
 export function pushLog(step: string, detail?: Record<string, unknown>) {
@@ -269,7 +271,7 @@ function loadOneSignalScript(): Promise<void> {
 
   return new Promise((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'
+    script.src = ONESIGNAL_PAGE_SDK_URL
     script.defer = true
     script.onload = () => resolve()
     script.onerror = () =>
@@ -358,6 +360,53 @@ function resetOneSignalInit(): void {
   pushLog('sdk_init_reset')
 }
 
+function deleteDatabase(name: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!('indexedDB' in window)) {
+      resolve()
+      return
+    }
+    const timer = window.setTimeout(resolve, 1500)
+    const request = indexedDB.deleteDatabase(name)
+    request.onsuccess = () => {
+      window.clearTimeout(timer)
+      resolve()
+    }
+    request.onerror = () => {
+      window.clearTimeout(timer)
+      resolve()
+    }
+    request.onblocked = () => {
+      window.clearTimeout(timer)
+      resolve()
+    }
+  })
+}
+
+async function clearOneSignalClientState(): Promise<void> {
+  if (!isIosDevice()) return
+  pushLog('ios_limpiando_estado_onesignal')
+
+  for (const key of Object.keys(localStorage)) {
+    if (/onesignal|one_signal|os_/i.test(key)) localStorage.removeItem(key)
+  }
+
+  const dbNames = new Set(['ONE_SIGNAL_SDK_DB', 'OneSignalSDK', 'OneSignal'])
+  if ('databases' in indexedDB) {
+    try {
+      const databases = await indexedDB.databases()
+      databases.forEach((db) => {
+        if (db.name && /one.?signal|ONE_SIGNAL|OneSignal/i.test(db.name)) dbNames.add(db.name)
+      })
+    } catch (err) {
+      pushLog('ios_listar_indexeddb_fallo', { cause: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  await Promise.all([...dbNames].map((name) => deleteDatabase(name)))
+  pushLog('ios_estado_onesignal_limpiado', { dbs: [...dbNames] })
+}
+
 function markOneSignalReady(instance: OneSignalInstance): void {
   oneSignalReadyInstance = instance
 }
@@ -415,7 +464,16 @@ function bootstrapOneSignalViaDeferred(): Promise<OneSignalInstance> {
         await registerOneSignalServiceWorker()
         pushLog('sdk_init_llamando')
         try {
-          await OneSignal.init(buildOneSignalInitOptions())
+          await withTimeout(
+            OneSignal.init(buildOneSignalInitOptions()),
+            initTimeoutMs,
+            () =>
+              new PushActivationError(
+                'sdk_init_timeout',
+                'No pudimos activar notificaciones ahora. Cierra FARO por completo, ábrela de nuevo e inténtalo otra vez.',
+                `Timeout en OneSignal.init() (${initTimeoutMs}ms)`,
+              ),
+          )
         } catch (err) {
           if (!isAlreadyInitializedError(err)) throw err
           pushLog('sdk_init_ya_inicializado')
@@ -482,6 +540,8 @@ async function ensureInitialized(options?: { reset?: boolean }): Promise<OneSign
         ),
       )
     }
+
+    if (options?.reset) await clearOneSignalClientState()
 
     await waitForServiceWorker()
     await unregisterLegacyOneSignalWorkers()
@@ -742,7 +802,19 @@ export const oneSignalPushProvider: PushProvider = {
 
       // 2. ensureInitialized — init limpia (sin promesa colgada de background)
       pushLog('ensure_initialized_inicio')
-      const instance = await ensureInitialized({ reset: true })
+      let instance: OneSignalInstance
+      try {
+        instance = await ensureInitialized({ reset: true })
+      } catch (err) {
+        const normalized = toPushActivationError(err)
+        if (isIosDevice() && normalized.code === 'sdk_init_timeout') {
+          pushLog('ensure_initialized_retry_ios', { detail: normalized.causeDetails })
+          await clearOneSignalClientState()
+          instance = await ensureInitialized({ reset: true })
+        } else {
+          throw err
+        }
+      }
       pushLog('ensure_initialized_completado')
 
       // 3. Suscripción / player ID (permiso del navegador ya concedido)
