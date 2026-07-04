@@ -20,24 +20,25 @@ export function usePushNotifications() {
 
   useEffect(() => {
     if (!user?.id) return
-    void pushService
-      .login(user.id)
-      .then(async (result) => {
-        if (result) {
-          await queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.preferences })
-        }
-      })
-      .catch((err) => {
-        if (import.meta.env.DEV) {
-          console.warn('[FARO Push]', {
-            file: 'src/hooks/usePushNotifications.ts',
-            line: 'L21-L33',
-            step: 'login_background_sync_failed',
-            message: 'Falló sincronización de subscripción existente',
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+
+    // Sincronización diferida: no competir con la activación manual ni bloquear al abrir la app.
+    const timer = window.setTimeout(() => {
+      void pushService
+        .syncExistingSubscription(user.id)
+        .then(async (result) => {
+          if (result) {
+            await queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.preferences })
+          }
+        })
+        .catch((err) => {
+          pushLog('sync_background_fallida', {
             cause: err instanceof Error ? err.message : String(err),
           })
-        }
-      })
+        })
+    }, 8_000)
+
+    return () => window.clearTimeout(timer)
   }, [user?.id, queryClient])
 
   const openPermissionModal = useCallback(() => {

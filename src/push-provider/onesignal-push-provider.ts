@@ -83,6 +83,7 @@ export class PushActivationError extends Error {
 
 declare global {
   interface Window {
+    OneSignal?: OneSignalInstance
     OneSignalDeferred?: Array<(OneSignal: OneSignalInstance) => void | Promise<void>>
     __faroOneSignalInit?: Promise<OneSignalInstance>
   }
@@ -232,9 +233,15 @@ function toPushActivationError(err: unknown): PushActivationError {
     )
   }
   if (message.toLowerCase().includes('timeout')) {
+    const isInitTimeout =
+      message.includes('OneSignalDeferred') ||
+      message.includes('SDK') ||
+      message.includes('SW ready')
     return new PushActivationError(
-      'subscription_timeout',
-      'No pudimos activar las notificaciones en este momento. Puedes seguir usando FARO normalmente e intentarlo más tarde.',
+      isInitTimeout ? 'sdk_init_timeout' : 'subscription_timeout',
+      isInitTimeout
+        ? 'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.'
+        : 'No pudimos activar las notificaciones en este momento. Puedes seguir usando FARO normalmente e intentarlo más tarde.',
       message,
     )
   }
@@ -277,14 +284,23 @@ function loadOneSignalScript(): Promise<void> {
   })
 }
 
-/** Espera al SW de la PWA antes de inicializar OneSignal en producción. */
+/** Espera al SW de la PWA con tope; no bloquear init de OneSignal indefinidamente en iOS. */
 async function waitForServiceWorker(): Promise<void> {
   if (!('serviceWorker' in navigator)) return
   try {
-    await navigator.serviceWorker.ready
+    await withTimeout(navigator.serviceWorker.ready, 5_000, () =>
+      new PushActivationError(
+        'sdk_init_timeout',
+        'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
+        'Timeout esperando service worker (5000ms)',
+      ),
+    )
+    pushLog('sw_ready_ok')
   } catch (err) {
-    logDev('warn', 'sw_ready_wait_failed', 'L274-L281', 'navigator.serviceWorker.ready falló', err)
-    /* continuar — OneSignal intentará registrar el worker */
+    pushLog('sw_ready_timeout_continuando', {
+      cause: err instanceof Error ? err.message : String(err),
+    })
+    logDev('warn', 'sw_ready_wait_failed', 'L281-L293', 'navigator.serviceWorker.ready falló o expiró', err)
   }
 }
 
@@ -306,16 +322,65 @@ async function unregisterLegacyOneSignalWorkers(): Promise<void> {
   )
 }
 
+function getGlobalOneSignal(): OneSignalInstance | null {
+  const candidate = window.OneSignal
+  if (candidate && typeof candidate.init === 'function') return candidate
+  return null
+}
+
+function resetOneSignalInit(): void {
+  window.__faroOneSignalInit = undefined
+  pushLog('sdk_init_reset')
+}
+
 function waitForOneSignalInstance(): Promise<OneSignalInstance> {
+  const existing = getGlobalOneSignal()
+  if (existing) {
+    pushLog('onesignal_instance_ya_disponible')
+    return Promise.resolve(existing)
+  }
+
   return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (instance: OneSignalInstance) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearInterval(poll)
+      resolve(instance)
+    }
+    const fail = (err: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearInterval(poll)
+      reject(err)
+    }
+
+    const timer = setTimeout(() => {
+      fail(
+        new PushActivationError(
+          'sdk_init_timeout',
+          'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
+          `Timeout esperando OneSignalDeferred (${INIT_TIMEOUT_MS}ms)`,
+        ),
+      )
+    }, INIT_TIMEOUT_MS)
+
     window.OneSignalDeferred = window.OneSignalDeferred || []
     window.OneSignalDeferred.push(async (instance) => {
       try {
-        resolve(instance)
+        finish(instance)
       } catch (err) {
-        reject(err)
+        fail(err instanceof Error ? err : new Error(String(err)))
       }
     })
+
+    // Respaldo: el SDK puede haber cargado antes de encolar nuestro callback.
+    const poll = setInterval(() => {
+      const instance = getGlobalOneSignal()
+      if (instance) finish(instance)
+    }, 150)
   })
 }
 
@@ -342,7 +407,7 @@ function attachClickListener(instance: OneSignalInstance): void {
   })
 }
 
-async function ensureInitialized(): Promise<OneSignalInstance> {
+async function ensureInitialized(options?: { reset?: boolean }): Promise<OneSignalInstance> {
   if (!APP_ID) throw new PushActivationError('unknown', 'Falta configurar OneSignal en el entorno.')
   if (isCircuitOpen()) {
     throw new PushActivationError(
@@ -350,33 +415,49 @@ async function ensureInitialized(): Promise<OneSignalInstance> {
       'Las notificaciones están temporalmente inestables. Puedes seguir usando FARO e intentarlo en un minuto.',
     )
   }
+
+  if (options?.reset) resetOneSignalInit()
+
+  const ready = getGlobalOneSignal()
+  if (ready && !options?.reset) {
+    pushLog('ensure_initialized_cache_global')
+    attachClickListener(ready)
+    return ready
+  }
+
   if (window.__faroOneSignalInit) return window.__faroOneSignalInit
 
   window.__faroOneSignalInit = (async () => {
     logDev('info', 'sdk_init_start', 'L342-L351', 'iniciando SDK de OneSignal')
-    await withRetry('sdk_script_load', 'L343', () =>
-      withTimeout(loadOneSignalScript(), INIT_TIMEOUT_MS, () =>
-        new PushActivationError(
-          'sdk_init_timeout',
-          'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
-          `Timeout cargando SDK (${INIT_TIMEOUT_MS}ms)`,
+    pushLog('sdk_init_start')
+
+    const scriptAlreadyLoaded = Boolean(document.querySelector('script[src*="OneSignalSDK.page.js"]'))
+    pushLog('sdk_script_estado', { scriptAlreadyLoaded })
+
+    if (!scriptAlreadyLoaded) {
+      await withRetry('sdk_script_load', 'L343', () =>
+        withTimeout(loadOneSignalScript(), INIT_TIMEOUT_MS, () =>
+          new PushActivationError(
+            'sdk_init_timeout',
+            'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
+            `Timeout cargando SDK (${INIT_TIMEOUT_MS}ms)`,
+          ),
         ),
-      ),
-    )
+      )
+    }
+
     await waitForServiceWorker()
     await unregisterLegacyOneSignalWorkers()
 
-    const instance = await withTimeout(waitForOneSignalInstance(), INIT_TIMEOUT_MS, () =>
-      new PushActivationError(
-        'sdk_init_timeout',
-        'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
-        `Timeout esperando OneSignalDeferred (${INIT_TIMEOUT_MS}ms)`,
-      ),
-    )
+    pushLog('sdk_esperando_instancia')
+    const instance = await waitForOneSignalInstance()
+    pushLog('sdk_instancia_recibida')
+
     await initOneSignal(instance)
     attachClickListener(instance)
     recordCircuitSuccess()
     logDev('info', 'sdk_initialized', 'L365-L368', 'SDK inicializado')
+    pushLog('sdk_initialized')
     return instance
   })().catch((err) => {
     if (!isAlreadyInitializedError(err)) {
@@ -384,7 +465,7 @@ async function ensureInitialized(): Promise<OneSignalInstance> {
       recordCircuitFailure()
     }
     logDev('error', 'sdk_init_failed', 'L370-L377', 'falló init de OneSignal', err)
-    throw toPushActivationError(err)
+    throw err instanceof PushActivationError ? err : toPushActivationError(err)
   })
 
   return window.__faroOneSignalInit
@@ -620,9 +701,9 @@ export const oneSignalPushProvider: PushProvider = {
         )
       }
 
-      // 2. ensureInitialized (solo si el permiso fue concedido)
+      // 2. ensureInitialized — init limpia (sin promesa colgada de background)
       pushLog('ensure_initialized_inicio')
-      const instance = await ensureInitialized()
+      const instance = await ensureInitialized({ reset: true })
       pushLog('ensure_initialized_completado')
 
       // 3. Suscripción / player ID (permiso del navegador ya concedido)

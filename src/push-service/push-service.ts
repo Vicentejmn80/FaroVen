@@ -35,16 +35,25 @@ export const pushService = {
     return provider.syncExistingSubscription(userId)
   },
 
+  /** Sincroniza token existente sin forzar init al abrir la app. */
+  async syncExistingSubscription(userId: string): Promise<PushRegistrationResult | null> {
+    this.attachNotificationClickHandler()
+    return getPushProvider().syncExistingSubscription(userId)
+  },
+
+  attachNotificationClickHandler() {
+    getPushProvider().onNotificationClick((actionUrl) => {
+      const target = parseNotificationActionUrl(actionUrl)
+      if (target) dispatchNotificationNavigation(target)
+    })
+  },
+
   async logout() {
     await getPushProvider().logout()
   },
 
   async enablePush(userId: string) {
-    // No await initialize() aquí: el permiso debe pedirse antes de cualquier init.
-    getPushProvider().onNotificationClick((actionUrl) => {
-      const target = parseNotificationActionUrl(actionUrl)
-      if (target) dispatchNotificationNavigation(target)
-    })
+    this.attachNotificationClickHandler()
     return getPushProvider().requestPermissionAndSubscribe(userId)
   },
 }

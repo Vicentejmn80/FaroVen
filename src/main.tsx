@@ -10,8 +10,6 @@ import { ToastProvider } from './store/toast-context'
 import 'leaflet/dist/leaflet.css'
 import './index.css'
 
-import { pushService } from '@/push-service/push-service'
-
 /** SW de Vite PWA solo en producción; en dev evita conflicto con OneSignal. */
 if (import.meta.env.PROD) {
   let swRegistration: ServiceWorkerRegistration | undefined
@@ -44,8 +42,6 @@ if (import.meta.env.PROD) {
     }
   })
 }
-
-void pushService.initialize()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
