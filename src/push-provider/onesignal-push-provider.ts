@@ -38,9 +38,20 @@ declare global {
 let initPromise: Promise<OneSignalInstance> | null = null
 let clickHandler: ((actionUrl: string | null, data: Record<string, unknown>) => void) | null = null
 
-/** OneSignal en subdirectorio para no chocar con el SW de la PWA (scope /). */
-const ONESIGNAL_SW_PATH = 'push/onesignal/OneSignalSDKWorker.js'
-const ONESIGNAL_SW_SCOPE = '/push/onesignal/'
+/** Ruta relativa a la raíz del sitio (sin / inicial). Archivo: public/push/onesignal/OneSignalSDKWorker.js */
+const ONESIGNAL_SERVICE_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
+const ONESIGNAL_SERVICE_WORKER_SCOPE = '/push/onesignal/'
+
+function buildOneSignalInitOptions() {
+  return {
+    appId: APP_ID,
+    // Custom Code: la ruta se define aquí; no hace falta configurarla en el dashboard de OneSignal.
+    serviceWorkerPath: ONESIGNAL_SERVICE_WORKER_PATH,
+    serviceWorkerUpdaterPath: ONESIGNAL_SERVICE_WORKER_PATH,
+    serviceWorkerParam: { scope: ONESIGNAL_SERVICE_WORKER_SCOPE },
+    allowLocalhostAsSecureOrigin: import.meta.env.DEV,
+  }
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -113,13 +124,7 @@ async function ensureInitialized(): Promise<OneSignalInstance> {
       })
     })
 
-    await OneSignal.init({
-      appId: APP_ID,
-      serviceWorkerPath: ONESIGNAL_SW_PATH,
-      serviceWorkerUpdaterPath: ONESIGNAL_SW_PATH,
-      serviceWorkerParam: { scope: ONESIGNAL_SW_SCOPE },
-      allowLocalhostAsSecureOrigin: import.meta.env.DEV,
-    })
+    await OneSignal.init(buildOneSignalInitOptions())
 
     OneSignal.Notifications.addEventListener('click', (event) => {
       const data = (event.notification?.additionalData ?? {}) as Record<string, unknown>
