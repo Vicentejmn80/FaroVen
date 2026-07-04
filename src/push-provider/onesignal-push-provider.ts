@@ -257,9 +257,7 @@ function toPushActivationError(err: unknown): PushActivationError {
 function buildOneSignalInitOptions() {
   return {
     appId: APP_ID,
-    // Custom Code: la ruta se define aquí; no hace falta configurarla en el dashboard de OneSignal.
     serviceWorkerPath: ONESIGNAL_SERVICE_WORKER_PATH,
-    serviceWorkerUpdaterPath: ONESIGNAL_SERVICE_WORKER_PATH,
     serviceWorkerParam: { scope: ONESIGNAL_SERVICE_WORKER_SCOPE },
     allowLocalhostAsSecureOrigin: import.meta.env.DEV,
   }
@@ -324,10 +322,34 @@ async function unregisterLegacyOneSignalWorkers(): Promise<void> {
   )
 }
 
-function getGlobalOneSignal(): OneSignalInstance | null {
-  const candidate = window.OneSignal
-  if (candidate && typeof candidate.init === 'function') return candidate
-  return null
+async function logServiceWorkerState(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return
+  const registrations = await navigator.serviceWorker.getRegistrations()
+  pushLog('sw_registrations', {
+    count: registrations.length,
+    scripts: registrations.map(
+      (r) => r.active?.scriptURL ?? r.installing?.scriptURL ?? r.waiting?.scriptURL ?? '?',
+    ),
+  })
+}
+
+/** Registra el worker de OneSignal antes de init() — requerido en iOS PWA. */
+async function registerOneSignalServiceWorker(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return
+  const path = `/${ONESIGNAL_SERVICE_WORKER_PATH}`
+  try {
+    const registration = await navigator.serviceWorker.register(path, {
+      scope: ONESIGNAL_SERVICE_WORKER_SCOPE,
+    })
+    pushLog('onesignal_sw_registrado', {
+      scope: registration.scope,
+      script: registration.active?.scriptURL ?? registration.installing?.scriptURL ?? path,
+    })
+  } catch (err) {
+    pushLog('onesignal_sw_registro_fallido', {
+      cause: err instanceof Error ? err.message : String(err),
+    })
+  }
 }
 
 function resetOneSignalInit(): void {
@@ -350,27 +372,25 @@ function assertOneSignalUsable(instance: OneSignalInstance): void {
   }
 }
 
-function waitForOneSignalInstance(): Promise<OneSignalInstance> {
-  const existing = getGlobalOneSignal()
-  if (existing) {
-    pushLog('onesignal_instance_ya_disponible')
-    return Promise.resolve(existing)
-  }
-
+/**
+ * Patrón oficial OneSignal v16: init() dentro de OneSignalDeferred.
+ * Llamar init() sobre window.OneSignal fuera del deferred cuelga en iOS PWA.
+ */
+function bootstrapOneSignalViaDeferred(): Promise<OneSignalInstance> {
   return new Promise((resolve, reject) => {
     let settled = false
+    const initTimeoutMs = isIosDevice() ? Math.max(INIT_TIMEOUT_MS, 20_000) : INIT_TIMEOUT_MS
+
     const finish = (instance: OneSignalInstance) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
-      clearInterval(poll)
       resolve(instance)
     }
     const fail = (err: Error) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
-      clearInterval(poll)
       reject(err)
     }
 
@@ -378,53 +398,41 @@ function waitForOneSignalInstance(): Promise<OneSignalInstance> {
       fail(
         new PushActivationError(
           'sdk_init_timeout',
-          'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
-          `Timeout esperando OneSignalDeferred (${INIT_TIMEOUT_MS}ms)`,
+          'No pudimos activar notificaciones ahora. Cierra FARO por completo, ábrela de nuevo e inténtalo otra vez.',
+          `Timeout en bootstrap OneSignalDeferred (${initTimeoutMs}ms)`,
         ),
       )
-    }, INIT_TIMEOUT_MS)
+    }, initTimeoutMs)
 
     window.OneSignalDeferred = window.OneSignalDeferred || []
-    window.OneSignalDeferred.push(async (instance) => {
+    window.OneSignalDeferred.push(async (OneSignal) => {
       try {
-        finish(instance)
+        pushLog('deferred_callback_ejecutado')
+        if (oneSignalReadyInstance) {
+          finish(oneSignalReadyInstance)
+          return
+        }
+        await registerOneSignalServiceWorker()
+        pushLog('sdk_init_llamando')
+        try {
+          await OneSignal.init(buildOneSignalInitOptions())
+        } catch (err) {
+          if (!isAlreadyInitializedError(err)) throw err
+          pushLog('sdk_init_ya_inicializado')
+        }
+        assertOneSignalUsable(OneSignal)
+        pushLog('sdk_init_ok')
+        finish(OneSignal)
       } catch (err) {
         fail(err instanceof Error ? err : new Error(String(err)))
       }
     })
-
-    // Respaldo: el SDK puede haber cargado antes de encolar nuestro callback.
-    const poll = setInterval(() => {
-      const instance = getGlobalOneSignal()
-      if (instance) finish(instance)
-    }, 150)
   })
 }
 
 function isAlreadyInitializedError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return /already initialized/i.test(message)
-}
-
-async function initOneSignal(instance: OneSignalInstance): Promise<void> {
-  pushLog('sdk_init_llamando')
-  try {
-    await withTimeout(
-      instance.init(buildOneSignalInitOptions()),
-      INIT_TIMEOUT_MS,
-      () =>
-        new PushActivationError(
-          'sdk_init_timeout',
-          'No pudimos activar notificaciones ahora. Inténtalo de nuevo más tarde.',
-          `Timeout en OneSignal.init() (${INIT_TIMEOUT_MS}ms)`,
-        ),
-    )
-  } catch (err) {
-    if (!isAlreadyInitializedError(err)) throw err
-    pushLog('sdk_init_ya_inicializado')
-  }
-  assertOneSignalUsable(instance)
-  pushLog('sdk_init_ok')
 }
 
 function attachClickListener(instance: OneSignalInstance): void {
@@ -477,12 +485,12 @@ async function ensureInitialized(options?: { reset?: boolean }): Promise<OneSign
 
     await waitForServiceWorker()
     await unregisterLegacyOneSignalWorkers()
+    await logServiceWorkerState()
 
-    pushLog('sdk_esperando_instancia')
-    const instance = await waitForOneSignalInstance()
+    pushLog('sdk_bootstrap_deferred')
+    const instance = await bootstrapOneSignalViaDeferred()
     pushLog('sdk_instancia_recibida')
 
-    await initOneSignal(instance)
     attachClickListener(instance)
     markOneSignalReady(instance)
     recordCircuitSuccess()

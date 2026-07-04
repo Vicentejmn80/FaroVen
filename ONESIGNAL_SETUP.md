@@ -58,8 +58,9 @@ Redeploy después de añadirla.
 
 **Settings → Platforms → Web**
 
-- Site URL: tu dominio Vercel
-- Service Worker: `/OneSignalSDKWorker.js`
+- Site URL: `https://faro-ven.vercel.app` (debe coincidir exactamente)
+- Integration: **Custom Code** (no Typical Site)
+- Service Worker: **no forzar ruta en dashboard** — FARO usa `push/onesignal/OneSignalSDKWorker.js` vía código
 
 ## Seguridad
 
