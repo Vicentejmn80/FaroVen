@@ -6,6 +6,16 @@
   "installCommand": "npm install --include=dev",
   "headers": [
     {
+      "source": "/push/onesignal/OneSignalSDKWorker.js",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' https://cdn.onesignal.com; connect-src 'self' https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com"
+        },
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }
+      ]
+    },
+    {
       "source": "/OneSignalSDKWorker.js",
       "headers": [
         {

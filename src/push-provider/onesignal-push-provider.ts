@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import type { PushProvider, PushRegistrationResult } from '@/push-provider/types'
 
 const APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID?.trim()
+const SUBSCRIBE_TIMEOUT_MS = 30_000
 
 type PushSubscriptionChange = {
   current?: { id?: string; optedIn?: boolean; token?: string }
@@ -13,6 +14,7 @@ type OneSignalInstance = {
   logout: () => Promise<void>
   Notifications: {
     permission: boolean
+    requestPermission: () => Promise<boolean>
     addEventListener: (event: string, handler: (event: { notification?: { additionalData?: Record<string, unknown> } }) => void) => void
   }
   User: {
@@ -33,8 +35,16 @@ declare global {
   }
 }
 
-let initPromise: Promise<void> | null = null
+let initPromise: Promise<OneSignalInstance> | null = null
 let clickHandler: ((actionUrl: string | null, data: Record<string, unknown>) => void) | null = null
+
+/** OneSignal en subdirectorio para no chocar con el SW de la PWA (scope /). */
+const ONESIGNAL_SW_PATH = 'push/onesignal/OneSignalSDKWorker.js'
+const ONESIGNAL_SW_SCOPE = '/push/onesignal/'
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 function loadOneSignalScript(): Promise<void> {
   if (typeof document === 'undefined') return Promise.resolve()
@@ -55,40 +65,73 @@ function loadOneSignalScript(): Promise<void> {
   })
 }
 
-/** Encola operaciones tras init único (patrón oficial OneSignalDeferred). */
-function runWithOneSignal<T>(fn: (OneSignal: OneSignalInstance) => Promise<T>): Promise<T> {
-  window.OneSignalDeferred = window.OneSignalDeferred || []
-  return new Promise((resolve, reject) => {
-    window.OneSignalDeferred!.push(async (OneSignal) => {
-      try {
-        resolve(await fn(OneSignal))
-      } catch (err) {
-        reject(err)
-      }
-    })
-  })
+/** Espera al SW de la PWA antes de inicializar OneSignal en producción. */
+async function waitForServiceWorker(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return
+  try {
+    await navigator.serviceWorker.ready
+  } catch {
+    /* continuar — OneSignal intentará registrar el worker */
+  }
 }
 
-async function ensureInitialized(): Promise<void> {
+/** Elimina el worker viejo en la raíz (/OneSignalSDKWorker.js). No toca sw.js de la PWA. */
+async function unregisterLegacyOneSignalWorkers(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return
+  const registrations = await navigator.serviceWorker.getRegistrations()
+  await Promise.all(
+    registrations.map(async (registration) => {
+      const scriptUrl =
+        registration.active?.scriptURL ??
+        registration.waiting?.scriptURL ??
+        registration.installing?.scriptURL ??
+        ''
+      if (scriptUrl.includes('/OneSignalSDKWorker.js') && !scriptUrl.includes('/push/onesignal/')) {
+        await registration.unregister()
+      }
+    }),
+  )
+}
+
+async function ensureInitialized(): Promise<OneSignalInstance> {
   if (!APP_ID) throw new Error('Falta VITE_ONESIGNAL_APP_ID en el entorno.')
   if (initPromise) return initPromise
 
   initPromise = (async () => {
     await loadOneSignalScript()
-    await runWithOneSignal(async (OneSignal) => {
-      await OneSignal.init({
-        appId: APP_ID,
-        serviceWorkerPath: '/OneSignalSDKWorker.js',
-        serviceWorkerUpdaterPath: '/OneSignalSDKWorker.js',
-        allowLocalhostAsSecureOrigin: import.meta.env.DEV,
-      })
-      OneSignal.Notifications.addEventListener('click', (event) => {
-        const data = (event.notification?.additionalData ?? {}) as Record<string, unknown>
-        const actionUrl = typeof data.action_url === 'string' ? data.action_url : null
-        clickHandler?.(actionUrl, data)
+    await waitForServiceWorker()
+    await unregisterLegacyOneSignalWorkers()
+
+    const OneSignal = await new Promise<OneSignalInstance>((resolve, reject) => {
+      window.OneSignalDeferred = window.OneSignalDeferred || []
+      window.OneSignalDeferred!.push(async (instance) => {
+        try {
+          resolve(instance)
+        } catch (err) {
+          reject(err)
+        }
       })
     })
-  })()
+
+    await OneSignal.init({
+      appId: APP_ID,
+      serviceWorkerPath: ONESIGNAL_SW_PATH,
+      serviceWorkerUpdaterPath: ONESIGNAL_SW_PATH,
+      serviceWorkerParam: { scope: ONESIGNAL_SW_SCOPE },
+      allowLocalhostAsSecureOrigin: import.meta.env.DEV,
+    })
+
+    OneSignal.Notifications.addEventListener('click', (event) => {
+      const data = (event.notification?.additionalData ?? {}) as Record<string, unknown>
+      const actionUrl = typeof data.action_url === 'string' ? data.action_url : null
+      clickHandler?.(actionUrl, data)
+    })
+
+    return OneSignal
+  })().catch((err) => {
+    initPromise = null
+    throw err
+  })
 
   return initPromise
 }
@@ -127,45 +170,53 @@ function subscriptionId(OneSignal: OneSignalInstance): string | null {
   return OneSignal.User.PushSubscription.id ?? OneSignal.User.PushSubscription.token ?? null
 }
 
-/** optIn() pide permiso y suscribe; esperamos el evento change con el ID. */
+function permissionDeniedMessage(): string {
+  return 'Bloqueaste las notificaciones. Actívalas en ajustes del navegador o del sistema.'
+}
+
+/** Pide permiso, suscribe y espera el player ID con polling de respaldo. */
 async function subscribeAndGetId(OneSignal: OneSignalInstance): Promise<string> {
-  const existing = subscriptionId(OneSignal)
-  if (OneSignal.User.PushSubscription.optedIn && existing) return existing
+  let id = subscriptionId(OneSignal)
+  if (OneSignal.User.PushSubscription.optedIn && id) return id
 
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      OneSignal.User.PushSubscription.removeEventListener('change', onChange)
-      const late = subscriptionId(OneSignal)
-      if (late && OneSignal.User.PushSubscription.optedIn) {
-        resolve(late)
-        return
-      }
-      reject(
-        new Error(
-          'OneSignal no completó la suscripción. En localhost puede fallar; prueba en la URL de Vercel (HTTPS).',
-        ),
+  if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+    throw new Error(permissionDeniedMessage())
+  }
+
+  if (!OneSignal.Notifications.permission) {
+    const granted = await OneSignal.Notifications.requestPermission()
+    if (!granted) {
+      throw new Error(
+        typeof Notification !== 'undefined' && Notification.permission === 'denied'
+          ? permissionDeniedMessage()
+          : 'Permiso de notificaciones denegado.',
       )
-    }, 20_000)
-
-    const onChange = (change: PushSubscriptionChange) => {
-      const id = change.current?.id ?? subscriptionId(OneSignal)
-      const optedIn = change.current?.optedIn ?? OneSignal.User.PushSubscription.optedIn
-      if (id && optedIn) {
-        clearTimeout(timeout)
-        OneSignal.User.PushSubscription.removeEventListener('change', onChange)
-        resolve(id)
-      }
     }
+  }
 
-    OneSignal.User.PushSubscription.addEventListener('change', onChange)
+  id = subscriptionId(OneSignal)
+  if (OneSignal.User.PushSubscription.optedIn && id) return id
 
-    void OneSignal.User.PushSubscription.optIn().catch((err: unknown) => {
-      clearTimeout(timeout)
-      OneSignal.User.PushSubscription.removeEventListener('change', onChange)
-      const message = err instanceof Error ? err.message : 'OneSignal optIn falló'
-      reject(new Error(message))
-    })
-  })
+  try {
+    await OneSignal.User.PushSubscription.optIn()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'OneSignal optIn falló'
+    throw new Error(message)
+  }
+
+  const deadline = Date.now() + SUBSCRIBE_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    id = subscriptionId(OneSignal)
+    if (id && OneSignal.User.PushSubscription.optedIn) return id
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      throw new Error(permissionDeniedMessage())
+    }
+    await sleep(500)
+  }
+
+  throw new Error(
+    'No se pudo completar la suscripción push. Pulsa "Actualizar ahora" si ves el banner de nueva versión y vuelve a intentar.',
+  )
 }
 
 export const oneSignalPushProvider: PushProvider = {
@@ -182,42 +233,34 @@ export const oneSignalPushProvider: PushProvider = {
 
   async login(userId: string) {
     if (!this.isAvailable()) return
-    await ensureInitialized()
-    await runWithOneSignal(async (OneSignal) => {
-      await safeLogin(OneSignal, userId)
-    })
+    const OneSignal = await ensureInitialized()
+    await safeLogin(OneSignal, userId)
   },
 
   async syncExistingSubscription(userId: string): Promise<PushRegistrationResult | null> {
     if (!this.isAvailable()) return null
-    await ensureInitialized()
-    return runWithOneSignal(async (OneSignal) => {
-      await safeLogin(OneSignal, userId)
-      if (!OneSignal.Notifications.permission) return null
-      const playerId = subscriptionId(OneSignal)
-      if (!playerId || !OneSignal.User.PushSubscription.optedIn) return null
-      await persistSubscription(userId, playerId)
-      return { provider: 'onesignal', playerId, deviceType: detectDeviceType() }
-    })
+    const OneSignal = await ensureInitialized()
+    await safeLogin(OneSignal, userId)
+    if (!OneSignal.Notifications.permission) return null
+    const playerId = subscriptionId(OneSignal)
+    if (!playerId || !OneSignal.User.PushSubscription.optedIn) return null
+    await persistSubscription(userId, playerId)
+    return { provider: 'onesignal', playerId, deviceType: detectDeviceType() }
   },
 
   async logout() {
     if (!this.isAvailable()) return
-    await ensureInitialized()
-    await runWithOneSignal(async (OneSignal) => {
-      await OneSignal.logout()
-    })
+    const OneSignal = await ensureInitialized()
+    await OneSignal.logout()
   },
 
   async requestPermissionAndSubscribe(userId: string): Promise<PushRegistrationResult | null> {
     if (!this.isAvailable()) return null
-    await ensureInitialized()
-    return runWithOneSignal(async (OneSignal) => {
-      await safeLogin(OneSignal, userId)
-      const playerId = await subscribeAndGetId(OneSignal)
-      await persistSubscription(userId, playerId)
-      return { provider: 'onesignal', playerId, deviceType: detectDeviceType() }
-    })
+    const OneSignal = await ensureInitialized()
+    await safeLogin(OneSignal, userId)
+    const playerId = await subscribeAndGetId(OneSignal)
+    await persistSubscription(userId, playerId)
+    return { provider: 'onesignal', playerId, deviceType: detectDeviceType() }
   },
 
   onNotificationClick(handler) {
