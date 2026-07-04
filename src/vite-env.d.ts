@@ -7,6 +7,12 @@ interface ImportMetaEnv {
   readonly VITE_TURNSTILE_SITE_KEY?: string
   readonly VITE_SIGNUP_DEBUG?: string
   readonly VITE_ONESIGNAL_APP_ID?: string
+  readonly VITE_PUSH_SUBSCRIBE_TIMEOUT_MS?: string
+  readonly VITE_PUSH_INIT_TIMEOUT_MS?: string
+  readonly VITE_PUSH_RETRY_ATTEMPTS?: string
+  readonly VITE_PUSH_RETRY_BASE_MS?: string
+  readonly VITE_PUSH_CIRCUIT_FAILURE_THRESHOLD?: string
+  readonly VITE_PUSH_CIRCUIT_COOLDOWN_MS?: string
 }
 
 interface ImportMeta {

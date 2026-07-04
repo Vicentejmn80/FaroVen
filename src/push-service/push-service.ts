@@ -19,6 +19,11 @@ export const pushService = {
             if (target) dispatchNotificationNavigation(target)
           })
         })
+        .catch((err) => {
+          // Permite reintentar initialize() si falló una vez por red/cache.
+          initPromise = null
+          throw err
+        })
     }
     await initPromise
   },
