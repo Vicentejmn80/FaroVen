@@ -11,6 +11,7 @@ import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useAuth } from '@/store/auth-context'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { FARO_ROLE_LABELS } from '@/lib/roles'
+import { formatBuildVersion } from '@/lib/build-info'
 
 interface ProfileScreenProps {
   onRequestCoordinatorAccess?: () => void
@@ -38,6 +39,8 @@ export function ProfileScreen({
     }
     window.dispatchEvent(new CustomEvent('faro:open-notification-preferences'))
   }
+
+  const buildVersion = formatBuildVersion()
 
   return (
     <ScreenScaffold title="Perfil" subtitle={user ? 'Tu cuenta' : 'Acceso ciudadano'}>
@@ -126,9 +129,9 @@ export function ProfileScreen({
           </EmergencyButton>
         )}
 
-        <p className="pt-2 text-center text-[10px] text-ink-faint">
-          Versión {__FARO_BUILD_COMMIT__} · {new Date(__FARO_BUILD_DATE__).toLocaleDateString('es-VE')}
-        </p>
+        {buildVersion && (
+          <p className="pt-2 text-center text-[10px] text-ink-faint">{buildVersion}</p>
+        )}
       </div>
     </ScreenScaffold>
   )

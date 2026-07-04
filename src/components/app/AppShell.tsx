@@ -4,8 +4,11 @@ import { EmergencyHeader } from '@/components/faro/emergency-header'
 import { ConnectionBanner } from '@/components/faro/connection-banner'
 import { NotificationHub } from '@/components/notifications/NotificationHub'
 import { PushPermissionModal } from '@/components/notifications/PushPermissionModal'
+import { ScreenErrorBoundary } from '@/components/app/ScreenErrorBoundary'
 import { useNotifications, useNotificationMutations } from '@/hooks/useNotifications'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
+import { ProfileScreen } from '@/screens/profile-screen'
+import { NotificationPreferencesScreen } from '@/screens/notification-preferences-screen'
 import {
   parseNavQueryParam,
   parseNotificationActionUrl,
@@ -46,9 +49,6 @@ const ActivityScreen = lazy(() =>
 const ReportsScreen = lazy(() =>
   import('@/screens/reports-screen').then((m) => ({ default: m.ReportsScreen })),
 )
-const ProfileScreen = lazy(() =>
-  import('@/screens/profile-screen').then((m) => ({ default: m.ProfileScreen })),
-)
 const CenterDetailScreen = lazy(() =>
   import('@/screens/center-detail-screen').then((m) => ({ default: m.CenterDetailScreen })),
 )
@@ -60,11 +60,6 @@ const SystemAdminScreen = lazy(() =>
   import('@/screens/system-admin-screen').then((m) => ({ default: m.SystemAdminScreen })),
 )
 const AuthScreen = lazy(() => import('@/screens/auth-screen').then((m) => ({ default: m.AuthScreen })))
-const NotificationPreferencesScreen = lazy(() =>
-  import('@/screens/notification-preferences-screen').then((m) => ({
-    default: m.NotificationPreferencesScreen,
-  })),
-)
 const CoordinatorRequestScreen = lazy(() =>
   import('@/screens/coordinator-request-screen').then((m) => ({ default: m.CoordinatorRequestScreen })),
 )
@@ -313,9 +308,10 @@ export function AppShell() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
-                className="h-full"
+                className="h-full min-h-0"
               >
-                <Suspense fallback={<ScreenLoading />}>
+                <ScreenErrorBoundary screenName="la pantalla">
+                  <Suspense fallback={<ScreenLoading />}>
                   {tab === 'ops' && (
                     <RequireRole
                       allowed={[FARO_ROLES.COORDINATOR]}
@@ -380,7 +376,8 @@ export function AppShell() {
                     />
                   )}
                   {tab === 'system' && <SystemAdminScreen onRequestAuth={openAuth} />}
-                </Suspense>
+                  </Suspense>
+                </ScreenErrorBoundary>
               </motion.div>
             </AnimatePresence>
           </main>
