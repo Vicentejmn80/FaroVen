@@ -695,11 +695,9 @@ async function subscribeAndGetId(
       pushLog('subscribe_sin_permiso_onesignal', {
         osPermission: instance.Notifications.permission,
       })
-      const granted = await instance.Notifications.requestPermission()
-      pushLog('subscribe_permiso_sync_onesignal', { granted })
-      if (!granted) {
-        throw new PushActivationError('permission_denied', 'No activaste el permiso de notificaciones.')
-      }
+      // iOS: si Safari ya concedió permiso, requestPermission() de OneSignal puede colgar.
+      // Ir directo a optIn() — el navegador ya autorizó push.
+      pushLog('subscribe_saltar_request_permission_navegador_ya_granted')
     }
   } else if (!instance.Notifications.permission) {
     const granted = await instance.Notifications.requestPermission()

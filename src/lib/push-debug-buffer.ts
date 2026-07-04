@@ -21,3 +21,18 @@ export function clearPushDebugLogs() {
 export function isPushDebugEnabled(): boolean {
   return import.meta.env.DEV || import.meta.env.VITE_PUSH_DEBUG === 'true'
 }
+
+/** Panel visible solo en dev, o en prod con ?pushdebug=1 (no para todos los usuarios). */
+export function isPushDebugPanelEnabled(): boolean {
+  if (import.meta.env.DEV) return true
+  if (import.meta.env.VITE_PUSH_DEBUG !== 'true') return false
+  try {
+    if (new URLSearchParams(window.location.search).get('pushdebug') === '1') {
+      sessionStorage.setItem('faro:push-debug', '1')
+      return true
+    }
+    return sessionStorage.getItem('faro:push-debug') === '1'
+  } catch {
+    return false
+  }
+}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   clearPushDebugLogs,
   getPushDebugLogs,
-  isPushDebugEnabled,
+  isPushDebugPanelEnabled,
 } from '@/lib/push-debug-buffer'
 
 /** Panel flotante para ver logs push en el teléfono (sin Mac / Web Inspector). */
@@ -32,7 +32,7 @@ export function PushDebugPanel() {
     }
   }
 
-  if (!isPushDebugEnabled()) return null
+  if (!isPushDebugPanelEnabled()) return null
 
   return (
     <div className="fixed bottom-20 left-3 z-[96] max-w-[94vw] sm:bottom-4">

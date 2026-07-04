@@ -12,7 +12,7 @@ export function formatBuildVersion(): string {
         dateLabel = parsed.toLocaleDateString('es-ES')
       }
     }
-    return `Versión ${commit} · ${dateLabel}`
+    return `Versión · commit ${commit} · ${dateLabel}`
   } catch {
     return ''
   }
