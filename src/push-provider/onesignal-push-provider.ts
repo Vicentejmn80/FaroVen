@@ -542,8 +542,14 @@ export const oneSignalPushProvider: PushProvider = {
     if (!this.isAvailable()) return null
     try {
       const instance = await ensureInitialized()
-      await safeLogin(instance, userId)
+
+      // Prueba forense: disparar el prompt lo más cerca posible del gesto del usuario.
+      if (!instance.Notifications.permission) {
+        await instance.Notifications.requestPermission()
+      }
+
       const playerId = await subscribeAndGetId(instance)
+      await safeLogin(instance, userId)
       await persistSubscription(userId, playerId)
       return { provider: 'onesignal', playerId, deviceType: detectDeviceType() }
     } catch (err) {
