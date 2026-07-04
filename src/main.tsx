@@ -14,12 +14,25 @@ import { pushService } from '@/push-service/push-service'
 
 /** SW de Vite PWA solo en producción; en dev evita conflicto con OneSignal. */
 if (import.meta.env.PROD) {
-  registerSW({
+  const updateSW = registerSW({
     immediate: true,
-    onRegisteredSW(swUrl: string) {
+    onRegisteredSW(swUrl: string, registration) {
       console.info(`[FARO] Service Worker activo: ${swUrl}`)
+      if (registration) {
+        // Verifica updates en segundo plano sin interrumpir sesión.
+        setInterval(() => {
+          void registration.update()
+        }, 60_000)
+      }
+    },
+    onNeedRefresh() {
+      window.dispatchEvent(new CustomEvent('faro:pwa-update-available'))
+    },
+    onOfflineReady() {
+      console.info('[FARO] Contenido listo para uso offline')
     },
   })
+  window.__faroUpdateSW = updateSW
 }
 
 void pushService.initialize()

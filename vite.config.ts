@@ -2,14 +2,30 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execSync } from 'node:child_process'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const buildDate = new Date().toISOString()
+const buildCommit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? getLocalCommit()
+
+function getLocalCommit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 export default defineConfig({
+  define: {
+    __FARO_BUILD_DATE__: JSON.stringify(buildDate),
+    __FARO_BUILD_COMMIT__: JSON.stringify(buildCommit),
+  },
   plugins: [
     react(),
     VitePWA({
+      injectRegister: 'auto',
       registerType: 'prompt',
       devOptions: {
         enabled: false,
@@ -33,6 +49,9 @@ export default defineConfig({
       },
       includeAssets: ['icons/icon-192.svg', 'icons/icon-512.svg', 'icons/icon-maskable.svg'],
       workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: false,
+        clientsClaim: false,
         globPatterns: ['**/*.{js,css,html,svg,png,webp}'],
         runtimeCaching: [
           {
