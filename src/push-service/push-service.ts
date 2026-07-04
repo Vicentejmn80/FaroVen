@@ -19,7 +19,6 @@ export const pushService = {
             if (target) dispatchNotificationNavigation(target)
           })
         })
-        .catch(() => {})
     }
     await initPromise
   },

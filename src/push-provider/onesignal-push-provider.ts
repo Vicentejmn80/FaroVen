@@ -32,11 +32,12 @@ type OneSignalInstance = {
 declare global {
   interface Window {
     OneSignalDeferred?: Array<(OneSignal: OneSignalInstance) => void | Promise<void>>
+    __faroOneSignalInit?: Promise<OneSignalInstance>
   }
 }
 
-let initPromise: Promise<OneSignalInstance> | null = null
 let clickHandler: ((actionUrl: string | null, data: Record<string, unknown>) => void) | null = null
+let clickListenerAttached = false
 
 /** Ruta relativa a la raíz del sitio (sin / inicial). Archivo: public/push/onesignal/OneSignalSDKWorker.js */
 const ONESIGNAL_SERVICE_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
@@ -104,41 +105,65 @@ async function unregisterLegacyOneSignalWorkers(): Promise<void> {
   )
 }
 
+function waitForOneSignalInstance(): Promise<OneSignalInstance> {
+  return new Promise((resolve, reject) => {
+    window.OneSignalDeferred = window.OneSignalDeferred || []
+    window.OneSignalDeferred!.push(async (instance) => {
+      try {
+        resolve(instance)
+      } catch (err) {
+        reject(err)
+      }
+    })
+  })
+}
+
+function isAlreadyInitializedError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /already initialized/i.test(message)
+}
+
+async function initOneSignal(OneSignal: OneSignalInstance): Promise<void> {
+  try {
+    await OneSignal.init(buildOneSignalInitOptions())
+  } catch (err) {
+    // Tras recarga parcial de la PWA el SDK global puede seguir activo.
+    if (!isAlreadyInitializedError(err)) throw err
+  }
+}
+
+function attachClickListener(OneSignal: OneSignalInstance): void {
+  if (clickListenerAttached) return
+  clickListenerAttached = true
+  OneSignal.Notifications.addEventListener('click', (event) => {
+    const data = (event.notification?.additionalData ?? {}) as Record<string, unknown>
+    const actionUrl = typeof data.action_url === 'string' ? data.action_url : null
+    clickHandler?.(actionUrl, data)
+  })
+}
+
 async function ensureInitialized(): Promise<OneSignalInstance> {
   if (!APP_ID) throw new Error('Falta VITE_ONESIGNAL_APP_ID en el entorno.')
-  if (initPromise) return initPromise
+  if (window.__faroOneSignalInit) return window.__faroOneSignalInit
 
-  initPromise = (async () => {
+  window.__faroOneSignalInit = (async () => {
     await loadOneSignalScript()
     await waitForServiceWorker()
     await unregisterLegacyOneSignalWorkers()
 
-    const OneSignal = await new Promise<OneSignalInstance>((resolve, reject) => {
-      window.OneSignalDeferred = window.OneSignalDeferred || []
-      window.OneSignalDeferred!.push(async (instance) => {
-        try {
-          resolve(instance)
-        } catch (err) {
-          reject(err)
-        }
-      })
-    })
-
-    await OneSignal.init(buildOneSignalInitOptions())
-
-    OneSignal.Notifications.addEventListener('click', (event) => {
-      const data = (event.notification?.additionalData ?? {}) as Record<string, unknown>
-      const actionUrl = typeof data.action_url === 'string' ? data.action_url : null
-      clickHandler?.(actionUrl, data)
-    })
-
+    const OneSignal = await waitForOneSignalInstance()
+    await initOneSignal(OneSignal)
+    attachClickListener(OneSignal)
     return OneSignal
   })().catch((err) => {
-    initPromise = null
+    // Solo limpiar si el error es irrecuperable; "already initialized" no debería llegar aquí.
+    if (!isAlreadyInitializedError(err)) {
+      window.__faroOneSignalInit = undefined
+    }
     throw err
   })
 
-  return initPromise
+  return window.__faroOneSignalInit
 }
 
 function detectDeviceType(): string {
@@ -175,12 +200,32 @@ function subscriptionId(OneSignal: OneSignalInstance): string | null {
   return OneSignal.User.PushSubscription.id ?? OneSignal.User.PushSubscription.token ?? null
 }
 
+function isIosDevice(): boolean {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+}
+
+function isStandalonePwa(): boolean {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+}
+
 function permissionDeniedMessage(): string {
   return 'Bloqueaste las notificaciones. Actívalas en ajustes del navegador o del sistema.'
 }
 
+function iosPushHint(): string | null {
+  if (!isIosDevice()) return null
+  if (isStandalonePwa()) return null
+  return 'En iPhone, instala FARO en la pantalla de inicio (Compartir → Añadir a inicio) para activar push.'
+}
+
 /** Pide permiso, suscribe y espera el player ID con polling de respaldo. */
 async function subscribeAndGetId(OneSignal: OneSignalInstance): Promise<string> {
+  const iosHint = iosPushHint()
+  if (iosHint) throw new Error(iosHint)
+
   let id = subscriptionId(OneSignal)
   if (OneSignal.User.PushSubscription.optedIn && id) return id
 
