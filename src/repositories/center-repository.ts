@@ -29,61 +29,34 @@ export class CenterRepository {
   }
 
   async create(input: RegisterSiteInput): Promise<Center> {
-    const base = {
-      name: input.name.trim(),
-      address: input.address?.trim() || null,
-      municipality: input.municipality?.trim() || null,
-      state: input.state?.trim() || null,
-      latitude: input.latitude ?? null,
-      longitude: input.longitude ?? null,
-      contact_name: input.contactName?.trim() || null,
-      notes: input.observations?.trim() || null,
-      status: 'active',
-    }
-
-    if (input.type === 'hospital') {
-      const { data, error } = await supabase
-        .from('hospitals')
-        .insert({
-          ...base,
-          capacity: input.capacity ?? 100,
-          current_occ: input.currentOcc ?? 0,
-          phone: input.contactPhone?.trim() || null,
-        })
-        .select('*')
-        .single()
-      if (error) throw error
-      return hospitalRowToCenter(data as HospitalRow)
-    }
-
-    if (input.type === 'shelter') {
-      const { data, error } = await supabase
-        .from('shelters')
-        .insert({
-          ...base,
-          capacity: input.capacity ?? 100,
-          current_occ: input.currentOcc ?? 0,
-          contact_phone: input.contactPhone?.trim() || null,
-        })
-        .select('*')
-        .single()
-      if (error) throw error
-      return shelterRowToCenter(data as ShelterRow)
-    }
-
-    const { data, error } = await supabase
-      .from('supply_centers')
-      .insert({
-        ...base,
-        contact_phone: input.contactPhone?.trim() || null,
-        schedule: input.schedule?.trim() || 'Por confirmar',
-        accepts: [],
-        not_accepts: [],
-      })
-      .select('*')
-      .single()
+    const { data, error } = await supabase.rpc('admin_register_center', {
+      p_type: input.type,
+      p_name: input.name.trim(),
+      p_address: input.address?.trim() || null,
+      p_municipality: input.municipality?.trim() || null,
+      p_state: input.state?.trim() || null,
+      p_latitude: input.latitude ?? null,
+      p_longitude: input.longitude ?? null,
+      p_contact_name: input.contactName?.trim() || null,
+      p_phone: input.contactPhone?.trim() || null,
+      p_capacity: input.capacity ?? 100,
+      p_current_occ: input.currentOcc ?? 0,
+      p_schedule: input.schedule?.trim() || null,
+      p_notes: input.observations?.trim() || null,
+    })
     if (error) throw error
-    return supplyCenterRowToCenter(data as SupplyCenterRow)
+    if (!data || typeof data !== 'object') {
+      throw new Error('No se recibió respuesta al registrar el centro.')
+    }
+
+    const row = data as unknown
+    if (input.type === 'hospital') {
+      return hospitalRowToCenter(row as HospitalRow)
+    }
+    if (input.type === 'shelter') {
+      return shelterRowToCenter(row as ShelterRow)
+    }
+    return supplyCenterRowToCenter(row as SupplyCenterRow)
   }
 
   async updateSaturation(input: UpdateSaturationInput): Promise<void> {

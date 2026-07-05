@@ -25,6 +25,22 @@ export function humanizeSupabaseError(error: unknown): string {
     return 'No tienes permisos para esta acción.'
   }
 
+  if (message.includes('not_authorized')) {
+    return 'No tienes permisos para registrar centros.'
+  }
+
+  if (message.includes('invalid_latitude') || message.includes('invalid_longitude')) {
+    return 'La ubicación del centro no es válida. Revisa el punto en el mapa.'
+  }
+
+  if (message.includes('center_name') || message.includes('center_address')) {
+    return 'Revisa el nombre y la dirección del centro.'
+  }
+
+  if (message.includes('rate_limit') || message.includes('too many')) {
+    return 'Has registrado demasiados centros en poco tiempo. Espera un momento e inténtalo de nuevo.'
+  }
+
   if (
     code === 'PGRST116' ||
     message.includes('Cannot coerce the result to a single JSON object') ||
