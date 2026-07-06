@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Activity, Database, Radio, RefreshCw } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
-import { APP_BUILD, APP_VERSION } from '@/lib/app-meta'
+import { getAppReleaseCode } from '@/lib/app-meta'
 import { supabase } from '@/lib/supabase'
 import { useFaro } from '@/store/faro-context'
 import { timeAgo } from '@/lib/utils'
@@ -86,8 +86,8 @@ export function SystemHealthPanel() {
     },
     {
       id: 'version',
-      label: 'Versión / Build',
-      value: `v${APP_VERSION} · ${APP_BUILD}`,
+      label: 'Release',
+      value: getAppReleaseCode(),
       status: 'ok',
       icon: Activity,
     },

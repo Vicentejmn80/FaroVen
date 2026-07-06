@@ -130,7 +130,7 @@ export function ProfileScreen({
         )}
 
         {buildVersion && (
-          <p className="pt-2 text-center text-[10px] text-ink-faint">{buildVersion}</p>
+          <p className="pt-2 text-center text-xs text-ink-subtle">{buildVersion}</p>
         )}
       </div>
     </ScreenScaffold>
