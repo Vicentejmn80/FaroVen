@@ -5,4 +5,5 @@ export const FARO_QUERY_KEYS = {
   reports: 'reports',
   events: 'events',
   summary: 'summary',
+  siteSaturation: 'site-saturation',
 } as const

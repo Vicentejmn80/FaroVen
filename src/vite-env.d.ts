@@ -22,6 +22,7 @@ interface ImportMeta {
 
 declare const __FARO_BUILD_DATE__: string
 declare const __FARO_BUILD_COMMIT__: string
+declare const __FARO_RELEASE_CODE__: string
 
 interface Window {
   __faroUpdateSW?: (reloadPage?: boolean) => Promise<void>

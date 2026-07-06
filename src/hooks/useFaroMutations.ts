@@ -25,6 +25,7 @@ function invalidateOperationalData(queryClient: ReturnType<typeof useQueryClient
   void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.needs] })
   void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.events] })
   void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.summary] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.siteSaturation] })
 }
 
 export function useRegisterSite() {

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { PlusCircle } from 'lucide-react'
+import { List, Map as MapIcon, PlusCircle } from 'lucide-react'
 import { FaroIcon } from '@/components/brand/faro-icon'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -9,7 +9,9 @@ import { MapCanvas } from '@/components/faro/map-canvas'
 import { SidePanel } from '@/components/faro/side-panel'
 import { SituationSummary } from '@/components/faro/situation-summary'
 import { TimelineItem } from '@/components/faro/timeline-item'
+import { SITE_TYPE_LABELS, siteToNeedableType } from '@/lib/site-utils'
 import { cn, greeting } from '@/lib/utils'
+import type { Need } from '@/domain/models'
 import type { Site } from '@/lib/types'
 import { useFaro } from '@/store/faro-context'
 
@@ -24,15 +26,24 @@ interface SituationScreenProps {
  * - Desktop: panel operativo en 2 columnas (contexto + mapa a altura completa).
  */
 export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScreenProps) {
-  const { sites, latestActivity, isLoading, loadError } = useFaro()
+  const { sites, latestActivity, isLoading, loadError, state } = useFaro()
+  const needs = state.needs
   const [selected, setSelected] = useState<Site | null>(null)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'hospital' | 'shelter' | 'supply_center'>('all')
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map')
+  const [priorityFilter, setPriorityFilter] = useState<
+    'all' | 'critical' | 'high' | 'medium' | 'low' | 'covered'
+  >('all')
+  const [expandedSites, setExpandedSites] = useState<Record<string, boolean>>({})
   const filteredSites = sites.filter((site) => {
     const byType = typeFilter === 'all' ? true : site.type === typeFilter
-    const byName = query.trim()
-      ? site.name.toLowerCase().includes(query.trim().toLowerCase()) ||
-        site.zone.toLowerCase().includes(query.trim().toLowerCase())
+    const search = query.trim().toLowerCase()
+    const needsForSite = needs.filter((need) => need.centerId === site.id)
+    const byName = search
+      ? site.name.toLowerCase().includes(search) ||
+        site.zone.toLowerCase().includes(search) ||
+        needsForSite.some((need) => need.type.toLowerCase().includes(search))
       : true
     return byType && byName
   })
@@ -48,6 +59,38 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
       setSelected(null)
     }
   }, [filteredSites, selected])
+
+  const needsBySite = useMemo(() => {
+    const map = new Map<string, Need[]>()
+    for (const site of sites) {
+      map.set(site.id, [])
+    }
+    for (const need of needs) {
+      const list = map.get(need.centerId) ?? []
+      list.push(need)
+      map.set(need.centerId, list)
+    }
+    return map
+  }, [needs, sites])
+
+  const listSites = useMemo(() => {
+    return filteredSites.map((site) => ({
+      site,
+      needs: needsBySite.get(site.id) ?? [],
+    }))
+  }, [filteredSites, needsBySite])
+
+  const totals = useMemo(() => {
+    const entries = listSites.flatMap((entry) => entry.needs)
+    const covered = entries.filter((need) => isCovered(need)).length
+    const critical = entries.filter((need) => !isCovered(need) && need.priority === 'critical').length
+    const high = entries.filter((need) => !isCovered(need) && need.priority === 'high').length
+    const active = entries.filter((need) => !isCovered(need)).length
+    const recentCovered = entries.filter(
+      (need) => isCovered(need) && Date.now() - need.updatedAt.getTime() < 1000 * 60 * 60 * 48,
+    ).length
+    return { active, critical, high, covered, recentCovered }
+  }, [listSites])
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -93,18 +136,42 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
               </div>
             </section>
 
-            {/* Mapa en flujo de scroll — solo mobile/tablet */}
-            <section className="mt-5 lg:hidden">
-              <SectionTitle>Mapa de operaciones</SectionTitle>
-              <div className="mt-2.5">
-                <OperationsMap
-                  selected={selected}
-                  onSelect={setSelected}
-                  sites={filteredSites}
-                  className="h-[300px] sm:h-[340px]"
-                />
-              </div>
+            <section className="mt-5 lg:mt-4">
+              <SectionTitle>Vista operativa</SectionTitle>
+              <ViewToggle view={viewMode} onChange={setViewMode} />
             </section>
+
+            {viewMode === 'map' && (
+              <section className="mt-4 lg:hidden">
+                <SectionTitle>Mapa de operaciones</SectionTitle>
+                <div className="mt-2.5">
+                  <OperationsMap
+                    selected={selected}
+                    onSelect={setSelected}
+                    sites={filteredSites}
+                    className="h-[300px] sm:h-[340px]"
+                  />
+                </div>
+              </section>
+            )}
+
+            {viewMode === 'list' && (
+              <NeedsByCenterSection
+                className="mt-4"
+                query={query}
+                priorityFilter={priorityFilter}
+                onPriorityFilter={setPriorityFilter}
+                items={listSites}
+                totals={totals}
+                expandedSites={expandedSites}
+                onToggleExpand={(id) =>
+                  setExpandedSites((prev) => ({
+                    ...prev,
+                    [id]: !prev[id],
+                  }))
+                }
+              />
+            )}
 
             <ReportsSection activity={filteredActivity} className="mt-5 lg:mt-4 lg:min-h-0 lg:flex-1" />
           </div>
@@ -128,6 +195,286 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   )
 }
 
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: 'map' | 'list'
+  onChange: (next: 'map' | 'list') => void
+}) {
+  const options = [
+    { id: 'map' as const, label: 'Mapa', icon: MapIcon },
+    { id: 'list' as const, label: 'Listado', icon: List },
+  ]
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onChange(option.id)}
+          className={
+            view === option.id
+              ? 'flex items-center gap-2 rounded-full border border-info/60 bg-info-soft px-3 py-1 text-xs text-ink'
+              : 'flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-ink-muted'
+          }
+        >
+          <option.icon className="h-3.5 w-3.5" />
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function NeedsByCenterSection({
+  className,
+  query,
+  priorityFilter,
+  onPriorityFilter,
+  items,
+  totals,
+  expandedSites,
+  onToggleExpand,
+}: {
+  className?: string
+  query: string
+  priorityFilter: 'all' | 'critical' | 'high' | 'medium' | 'low' | 'covered'
+  onPriorityFilter: (value: 'all' | 'critical' | 'high' | 'medium' | 'low' | 'covered') => void
+  items: Array<{ site: Site; needs: Need[] }>
+  totals: { active: number; critical: number; high: number; covered: number; recentCovered: number }
+  expandedSites: Record<string, boolean>
+  onToggleExpand: (id: string) => void
+}) {
+  const filters = [
+    { id: 'all' as const, label: 'Todas' },
+    { id: 'critical' as const, label: 'Críticas' },
+    { id: 'high' as const, label: 'Altas' },
+    { id: 'medium' as const, label: 'Medias' },
+    { id: 'low' as const, label: 'Bajas' },
+    { id: 'covered' as const, label: 'Cubiertas' },
+  ]
+
+  const filteredItems = items.filter(({ needs }) => {
+    if (priorityFilter === 'all') return true
+    if (priorityFilter === 'covered') return needs.some((need) => isCovered(need))
+    return needs.some((need) => !isCovered(need) && need.priority === priorityFilter)
+  })
+
+  return (
+    <section className={cn('space-y-3', className)}>
+      <GlassCard inset={false} className="p-3">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-ink-subtle">Necesidades por centro</p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-ink-muted sm:grid-cols-4">
+          <MetricPill label="Activas" value={totals.active} />
+          <MetricPill label="Críticas" value={totals.critical} tone="critical" />
+          <MetricPill label="Altas" value={totals.high} tone="warning" />
+          <MetricPill label="Cubiertas recientes" value={totals.recentCovered} />
+        </div>
+      </GlassCard>
+
+      <div className="flex flex-wrap gap-2">
+        {filters.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            onClick={() => onPriorityFilter(filter.id)}
+            className={
+              priorityFilter === filter.id
+                ? 'rounded-full border border-info/60 bg-info-soft px-3 py-1 text-xs text-ink'
+                : 'rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-ink-muted'
+            }
+          >
+            {filter.label}
+          </button>
+        ))}
+        {query.trim() && (
+          <span className="text-xs text-ink-subtle">Filtrando por “{query.trim()}”.</span>
+        )}
+      </div>
+
+      {filteredItems.length === 0 ? (
+        <GlassCard inset={false} className="p-4">
+          <p className="text-sm text-ink-muted">No hay necesidades que coincidan con el filtro.</p>
+        </GlassCard>
+      ) : (
+        <div className="space-y-3">
+          {filteredItems.map(({ site, needs }) => (
+            <CenterNeedCard
+              key={site.id}
+              site={site}
+              needs={needs}
+              expanded={Boolean(expandedSites[site.id])}
+              onToggleExpand={() => onToggleExpand(site.id)}
+              priorityFilter={priorityFilter}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function MetricPill({ label, value, tone }: { label: string; value: number; tone?: 'critical' | 'warning' }) {
+  const toneClass = tone === 'critical' ? 'text-critical' : tone === 'warning' ? 'text-warning' : 'text-ink'
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
+      <p className={cn('mt-1 text-sm font-semibold', toneClass)}>{value}</p>
+    </div>
+  )
+}
+
+function CenterNeedCard({
+  site,
+  needs,
+  expanded,
+  onToggleExpand,
+  priorityFilter,
+}: {
+  site: Site
+  needs: Need[]
+  expanded: boolean
+  onToggleExpand: () => void
+  priorityFilter: 'all' | 'critical' | 'high' | 'medium' | 'low' | 'covered'
+}) {
+  const siteNeeds = needs.filter((need) => {
+    if (priorityFilter === 'all') return true
+    if (priorityFilter === 'covered') return isCovered(need)
+    return !isCovered(need) && need.priority === priorityFilter
+  })
+
+  const counts = countNeeds(needs)
+  const preview = buildNeedPreview(needs)
+  const typeLabel = SITE_TYPE_LABELS[siteToNeedableType(site)]
+
+  return (
+    <GlassCard inset={false} className="space-y-3 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-ink">{site.name}</p>
+          <p className="text-xs text-ink-subtle">
+            {typeLabel} · {site.zone}
+          </p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-ink-muted">
+          {needs.length} necesidades
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs text-ink-muted sm:grid-cols-4">
+        <PriorityChip label="Críticas" value={counts.critical} tone="critical" />
+        <PriorityChip label="Altas" value={counts.high} tone="warning" />
+        <PriorityChip label="Medias" value={counts.medium} />
+        <PriorityChip label="Cubiertas" value={counts.covered} />
+      </div>
+
+      <div className="space-y-1 text-xs text-ink-subtle">
+        {preview.length ? (
+          preview.map((need) => (
+            <div key={need.id} className="flex items-center justify-between">
+              <span className="text-ink">{need.type}</span>
+              <span className={priorityTone(need)}>{priorityLabel(need)}</span>
+            </div>
+          ))
+        ) : (
+          <p>Sin necesidades activas.</p>
+        )}
+      </div>
+
+      <button type="button" className="text-xs font-semibold text-info" onClick={onToggleExpand}>
+        {expanded ? 'Ocultar necesidades' : 'Ver todas las necesidades →'}
+      </button>
+
+      {expanded && (
+        <div className="space-y-2 border-t border-white/10 pt-3 text-xs text-ink-subtle">
+          {siteNeeds.length ? (
+            siteNeeds.map((need) => (
+              <div key={need.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-ink">{need.type}</p>
+                  <span className={priorityTone(need)}>{priorityLabel(need)}</span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <DetailChip label="Cobertura" value={`${coveragePct(need)}%`} />
+                  <DetailChip label="Requerido" value={need.required} />
+                  <DetailChip label="Recibido" value={need.available} />
+                  <DetailChip label="Estado" value={isCovered(need) ? 'Cubierta' : 'Activa'} />
+                </div>
+              </div>
+            ))
+          ) : (
+            <p>No hay necesidades con este filtro.</p>
+          )}
+        </div>
+      )}
+    </GlassCard>
+  )
+}
+
+function PriorityChip({ label, value, tone }: { label: string; value: number; tone?: 'critical' | 'warning' }) {
+  const toneClass = tone === 'critical' ? 'text-critical' : tone === 'warning' ? 'text-warning' : 'text-ink'
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
+      <p className={cn('mt-1 text-sm font-semibold', toneClass)}>{value}</p>
+    </div>
+  )
+}
+
+function DetailChip({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-1">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
+      <p className="text-xs text-ink">{value}</p>
+    </div>
+  )
+}
+
+function isCovered(need: { required: number; available: number; status: string }) {
+  return need.status === 'covered' || (need.required > 0 && need.available >= need.required)
+}
+
+function coveragePct(need: { required: number; available: number }) {
+  if (!need.required) return 0
+  return Math.min(100, Math.round((need.available / Math.max(need.required, 1)) * 100))
+}
+
+function priorityLabel(need: { priority: string }) {
+  if (need.priority === 'critical') return 'Crítica'
+  if (need.priority === 'high') return 'Alta'
+  if (need.priority === 'medium') return 'Media'
+  return 'Baja'
+}
+
+function priorityTone(need: { priority: string }) {
+  if (need.priority === 'critical') return 'text-critical'
+  if (need.priority === 'high') return 'text-warning'
+  if (need.priority === 'medium') return 'text-warning'
+  return 'text-operational'
+}
+
+function countNeeds(needs: Need[]) {
+  return {
+    critical: needs.filter((n) => !isCovered(n) && n.priority === 'critical').length,
+    high: needs.filter((n) => !isCovered(n) && n.priority === 'high').length,
+    medium: needs.filter((n) => !isCovered(n) && n.priority === 'medium').length,
+    covered: needs.filter((n) => isCovered(n)).length,
+  }
+}
+
+function buildNeedPreview(needs: Need[]) {
+  const active = needs.filter((need) => !isCovered(need))
+  const ordered = [...active].sort((a, b) => priorityRank(a) - priorityRank(b))
+  return ordered.slice(0, 3)
+}
+
+function priorityRank(need: { priority: string }) {
+  if (need.priority === 'critical') return 0
+  if (need.priority === 'high') return 1
+  if (need.priority === 'medium') return 2
+  return 3
+}
 function QuickAnswerBar({
   query,
   onQuery,

@@ -39,7 +39,7 @@ interface ActionDef {
 const COORDINATOR_ACTIONS: ActionDef[] = [
   { id: 'navigate', icon: Building2, label: 'Mi Centro', hint: 'Panel operativo del sitio', accent: 'operational', tab: 'ops' },
   { id: 'register-need', icon: PackagePlus, label: 'Registrar necesidad', hint: 'Insumos que faltan', accent: 'warning' },
-  { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Ocupación del centro', accent: 'critical' },
+  { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Necesidades prioritarias', accent: 'critical' },
   { id: 'register-arrival', icon: Truck, label: 'Registrar llegada', hint: 'Donaciones recibidas', accent: 'operational' },
   { id: 'register-dispatch', icon: TruckIcon, label: 'Registrar salida', hint: 'Recursos distribuidos', accent: 'info' },
 ]
@@ -50,6 +50,7 @@ const CITIZEN_ACTIONS: ActionDef[] = [
 
 const ADMIN_ACTIONS: ActionDef[] = [
   { id: 'register-site', icon: PlusCircle, label: 'Registrar centro', hint: 'Hospital, refugio o acopio', accent: 'operational' },
+  { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Necesidades prioritarias', accent: 'critical' },
   { id: 'navigate', icon: Shield, label: 'Administración', hint: 'Solicitudes y usuarios', accent: 'info', tab: 'admin' },
   { id: 'navigate', icon: Settings2, label: 'Sistema', hint: 'Configuración global', accent: 'info', tab: 'system' },
 ]

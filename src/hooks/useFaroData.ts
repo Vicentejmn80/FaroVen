@@ -54,13 +54,14 @@ export function useFaroData() {
 
   useRealtimeSync({
     channelName: 'faro-live-core',
-    tables: ['hospitals', 'shelters', 'supply_centers', 'needs', 'reports', 'events'],
+    tables: ['hospitals', 'shelters', 'supply_centers', 'needs', 'reports', 'events', 'site_saturation'],
     invalidateKeys: [
       FARO_QUERY_KEYS.centers,
       FARO_QUERY_KEYS.needs,
       FARO_QUERY_KEYS.reports,
       FARO_QUERY_KEYS.events,
       FARO_QUERY_KEYS.summary,
+      FARO_QUERY_KEYS.siteSaturation,
     ],
   })
 

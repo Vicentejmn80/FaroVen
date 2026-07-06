@@ -45,8 +45,9 @@ export interface RegisterNeedInput {
 export interface UpdateSaturationInput {
   siteId: string
   siteType: RegisterSiteType
-  currentOcc: number
-  capacity?: number
+  needKey: string
+  needLabel: string
+  level: 'low' | 'medium' | 'high' | 'critical'
 }
 
 export interface AdjustNeedStockInput {

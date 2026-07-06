@@ -1,10 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { FlowSheet, FormField, fieldClassName } from '@/components/faro/flow-sheet'
 import { useUpdateSaturation } from '@/hooks/useFaroMutations'
+import { useSiteSaturation } from '@/hooks/useSiteSaturation'
+import { SATURATION_LEVEL_LABELS, SATURATION_NEED_PRESETS, SATURATION_LEVEL_TONE } from '@/lib/saturation-needs'
 import { siteToNeedableType } from '@/lib/site-utils'
+import { usePermissions } from '@/store/auth-context'
+import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { useFaro } from '@/store/faro-context'
 
 interface UpdateSaturationFlowProps {
@@ -14,48 +18,79 @@ interface UpdateSaturationFlowProps {
 
 export function UpdateSaturationFlow({ onClose, presetSiteId }: UpdateSaturationFlowProps) {
   const { sites } = useFaro()
+  const { isCoordinator, isRegionalAdmin, isSuperAdmin } = usePermissions()
+  const { assignment } = useCoordinatorAssignment()
+  const canPickAnySite = isRegionalAdmin || isSuperAdmin
   const eligibleSites = useMemo(
-    () => sites.filter((s) => s.type === 'hospital' || s.type === 'shelter'),
-    [sites],
+    () => {
+      const filtered = sites
+      if (canPickAnySite) return filtered
+      if (isCoordinator) {
+        if (!assignment?.siteId) return []
+        return filtered.filter((s) => s.id === assignment.siteId)
+      }
+      return filtered
+    },
+    [sites, canPickAnySite, isCoordinator, assignment?.siteId],
   )
   const updateSaturation = useUpdateSaturation()
   const [siteId, setSiteId] = useState(presetSiteId ?? eligibleSites[0]?.id ?? '')
-  const [currentOcc, setCurrentOcc] = useState('')
-  const [capacity, setCapacity] = useState('')
+  const [needKey, setNeedKey] = useState<string>(SATURATION_NEED_PRESETS[0].key)
+  const [customNeedLabel, setCustomNeedLabel] = useState('')
+  const [level, setLevel] = useState<'low' | 'medium' | 'high' | 'critical'>('medium')
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const selectedSite = useMemo(() => eligibleSites.find((s) => s.id === siteId), [eligibleSites, siteId])
+  const siteType = selectedSite ? siteToNeedableType(selectedSite) : undefined
+  const saturationQuery = useSiteSaturation(siteType, selectedSite?.id)
+  const existingNeed = saturationQuery.data?.find((entry) => entry.needKey === needKey)
+  const selectedNeed = SATURATION_NEED_PRESETS.find((need) => need.key === needKey)
+  const needsList = saturationQuery.data ?? []
+
+  useEffect(() => {
+    if (existingNeed?.level) {
+      setLevel(existingNeed.level)
+    }
+  }, [existingNeed?.level])
+
+  useEffect(() => {
+    if (siteId && eligibleSites.some((site) => site.id === siteId)) return
+    setSiteId(eligibleSites[0]?.id ?? '')
+  }, [eligibleSites, siteId])
 
   const handleSubmit = async () => {
     setError(null)
     if (!selectedSite) {
-      setError('No hay hospitales ni refugios registrados.')
+      setError('No hay sitios registrados.')
       return
     }
-    const occ = Number(currentOcc)
-    if (Number.isNaN(occ) || occ < 0) {
-      setError('Indica una ocupación válida.')
+    if (!selectedNeed) {
+      setError('Selecciona una necesidad.')
       return
     }
+    const label =
+      needKey === 'otros' ? customNeedLabel.trim() || 'Otros' : selectedNeed.label
     try {
       await updateSaturation.mutateAsync({
         siteId: selectedSite.id,
         siteType: siteToNeedableType(selectedSite),
-        currentOcc: occ,
-        capacity: capacity ? Number(capacity) : undefined,
+        needKey,
+        needLabel: label,
+        level,
       })
       setDone(true)
-    } catch {
-      setError('No se pudo actualizar la saturación. Inténtalo nuevamente.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo actualizar la saturación.'
+      setError(message.includes('permission') ? 'No tienes permisos para modificar este sitio.' : message)
     }
   }
 
   if (!eligibleSites.length) {
     return (
-      <FlowSheet title="Actualizar saturación" subtitle="Capacidad" onClose={onClose}>
+      <FlowSheet title="Actualizar saturación" subtitle="Necesidades" onClose={onClose}>
         <GlassCard className="space-y-3">
-          <p className="text-sm text-ink-muted">Registra un hospital o refugio para actualizar su ocupación.</p>
+          <p className="text-sm text-ink-muted">Registra un sitio para actualizar su saturación.</p>
           <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onClose}>
             Entendido
           </EmergencyButton>
@@ -66,7 +101,7 @@ export function UpdateSaturationFlow({ onClose, presetSiteId }: UpdateSaturation
 
   if (done) {
     return (
-      <FlowSheet title="Saturación actualizada" subtitle="Capacidad" onClose={onClose}>
+      <FlowSheet title="Saturación actualizada" subtitle="Necesidades" onClose={onClose}>
         <GlassCard className="space-y-3">
           <div className="flex items-center gap-2 text-operational">
             <CheckCircle2 className="h-5 w-5" />
@@ -81,7 +116,7 @@ export function UpdateSaturationFlow({ onClose, presetSiteId }: UpdateSaturation
   }
 
   return (
-    <FlowSheet title="Actualizar saturación" subtitle="Capacidad" onClose={onClose}>
+    <FlowSheet title="Actualizar saturación" subtitle="Necesidades" onClose={onClose}>
       <GlassCard className="space-y-4">
         <FormField label="Sitio">
           {presetSiteId ? (
@@ -99,14 +134,50 @@ export function UpdateSaturationFlow({ onClose, presetSiteId }: UpdateSaturation
           )}
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Personas ahora">
-            <input className={fieldClassName} type="number" min={0} value={currentOcc} onChange={(e) => setCurrentOcc(e.target.value)} placeholder="Ej. 240" />
+        <FormField label="Necesidad">
+          <select className={fieldClassName} value={needKey} onChange={(e) => setNeedKey(e.target.value)}>
+            {SATURATION_NEED_PRESETS.map((need) => (
+              <option key={need.key} value={need.key} className="bg-base-900">
+                {need.label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+
+        {needKey === 'otros' && (
+          <FormField label="Especifica la necesidad">
+            <input
+              className={fieldClassName}
+              value={customNeedLabel}
+              onChange={(e) => setCustomNeedLabel(e.target.value)}
+              placeholder="Ej. Agua para diálisis"
+            />
           </FormField>
-          <FormField label="Capacidad total" hint="Opcional">
-            <input className={fieldClassName} type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="Ej. 300" />
-          </FormField>
-        </div>
+        )}
+
+        <FormField label="Nivel de saturación">
+          <select className={fieldClassName} value={level} onChange={(e) => setLevel(e.target.value as typeof level)}>
+            {Object.entries(SATURATION_LEVEL_LABELS).map(([value, label]) => (
+              <option key={value} value={value} className="bg-base-900">
+                {label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+
+        {needsList.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-xs text-ink-subtle">
+            <p className="mb-2 text-sm text-ink">Saturación registrada</p>
+            <div className="space-y-1">
+              {needsList.map((entry) => (
+                <div key={entry.needKey} className="flex items-center justify-between">
+                  <span>{entry.needLabel}</span>
+                  <span className={SATURATION_LEVEL_TONE[entry.level]}>{SATURATION_LEVEL_LABELS[entry.level]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {error && <p className="text-sm text-critical">{error}</p>}
 

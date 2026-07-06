@@ -5,6 +5,7 @@ const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') ?? ''
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const PUSH_WEBHOOK_SECRET = Deno.env.get('PUSH_WEBHOOK_SECRET') ?? ''
 const DEBUG_PUSH =
   (Deno.env.get('FARO_PUSH_DEBUG') ?? '').toLowerCase() === 'true' ||
   (Deno.env.get('DENO_ENV') ?? '').toLowerCase() === 'development'
@@ -41,10 +42,30 @@ Deno.serve(async (req) => {
 
   const requestId = crypto.randomUUID()
   try {
+    const providedSecret = req.headers.get('x-faro-webhook-secret') ?? ''
+    if (!PUSH_WEBHOOK_SECRET) {
+      log('error', {
+        requestId,
+        step: 'missing_webhook_secret',
+        line: 'L45-L52',
+        message: 'PUSH_WEBHOOK_SECRET no configurado',
+      })
+      return json({ ok: false, reason: 'server_not_configured' }, 500)
+    }
+    if (providedSecret !== PUSH_WEBHOOK_SECRET) {
+      log('warn', {
+        requestId,
+        step: 'unauthorized_webhook',
+        line: 'L53-L61',
+        message: 'Webhook sin secreto válido',
+      })
+      return json({ ok: false, reason: 'unauthorized' }, 401)
+    }
+
     log('info', {
       requestId,
       step: 'edge_function_executed',
-      line: 'L42-L45',
+      line: 'L63-L66',
       message: 'Edge Function ejecutada',
     })
 

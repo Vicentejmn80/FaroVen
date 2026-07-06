@@ -8,6 +8,21 @@ import { VitePWA } from 'vite-plugin-pwa'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const buildDate = new Date().toISOString()
 const buildCommit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? getLocalCommit()
+const releaseCode = formatReleaseCode()
+
+function formatReleaseCode(): string {
+  const now = new Date()
+  const y = String(now.getFullYear()).slice(2)
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  let seq = '001'
+  try {
+    seq = String(Number(execSync('git rev-list --count HEAD').toString().trim())).padStart(3, '0')
+  } catch {
+    // noop
+  }
+  return `FARO-${y}${m}${d}-${seq}`
+}
 
 function getLocalCommit(): string {
   try {
@@ -21,6 +36,7 @@ export default defineConfig({
   define: {
     __FARO_BUILD_DATE__: JSON.stringify(buildDate),
     __FARO_BUILD_COMMIT__: JSON.stringify(buildCommit),
+    __FARO_RELEASE_CODE__: JSON.stringify(releaseCode),
   },
   plugins: [
     react(),

@@ -31,12 +31,7 @@ export function CoordinatorDashboard({
           tone={metrics.pendingReportsCount > 0 ? 'critical' : 'operational'}
         />
         <MetricCard
-          label="Saturación personas"
-          value={`${metrics.peopleSaturationPct}%`}
-          tone={saturationTone(metrics.peopleSaturationPct)}
-        />
-        <MetricCard
-          label="Saturación productos"
+          label="Saturación por necesidades"
           value={`${metrics.productSaturationPct}%`}
           tone={saturationTone(metrics.productSaturationPct, true)}
         />

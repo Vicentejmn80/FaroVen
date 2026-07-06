@@ -60,22 +60,19 @@ export class CenterRepository {
   }
 
   async updateSaturation(input: UpdateSaturationInput): Promise<void> {
-    const payload: Record<string, number> = { current_occ: input.currentOcc }
-    if (input.capacity !== undefined) payload.capacity = input.capacity
-
-    if (input.siteType === 'hospital') {
-      const { error } = await supabase.from('hospitals').update(payload).eq('id', input.siteId)
-      if (error) throw error
-      return
-    }
-
-    if (input.siteType === 'shelter') {
-      const { error } = await supabase.from('shelters').update(payload).eq('id', input.siteId)
-      if (error) throw error
-      return
-    }
-
-    throw new Error('Solo hospitales y refugios registran saturación.')
+    const { error } = await supabase
+      .from('site_saturation')
+      .upsert(
+        {
+          site_type: input.siteType,
+          site_id: input.siteId,
+          need_key: input.needKey,
+          need_label: input.needLabel,
+          level: input.level,
+        },
+        { onConflict: 'site_type,site_id,need_key' },
+      )
+    if (error) throw error
   }
 
   async update(input: UpdateCenterInput): Promise<Center> {

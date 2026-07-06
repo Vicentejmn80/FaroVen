@@ -25,6 +25,7 @@ import {
 import { ActionsScreen, type ActionId } from '@/screens/actions-screen'
 import { CreateCenterWizard } from '@/components/admin/create-center-wizard'
 import { RegisterNeedFlow } from '@/screens/register-need-flow'
+import { AppReleaseStamp } from '@/components/app/AppReleaseStamp'
 import { UpdateSaturationFlow } from '@/screens/update-saturation-flow'
 import { CoordinatorSetupScreen } from '@/screens/coordinator-setup-screen'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
@@ -394,6 +395,7 @@ export function AppShell() {
                   : 'Enviar reporte'
             }
           />
+          <AppReleaseStamp />
         </div>
 
         <AnimatePresence>
@@ -433,7 +435,7 @@ export function AppShell() {
               onClose={closeFlow}
             />
           )}
-          {flow === 'update-saturation' && isCoordinatorOps && (
+          {flow === 'update-saturation' && (isCoordinatorOps || canAccessAdminPanel) && (
             <UpdateSaturationFlow
               key={`update-saturation-${needPresetSiteId ?? 'any'}`}
               presetSiteId={needPresetSiteId}
