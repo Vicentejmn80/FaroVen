@@ -25,7 +25,7 @@ const STEPS = [
 ] as const
 
 function FaroLogo() {
-  return <FaroIcon size={52} title="FARO" />
+  return <FaroIcon size={72} title="FARO" />
 }
 
 export function LandingPage({ onEnter }: LandingPageProps) {

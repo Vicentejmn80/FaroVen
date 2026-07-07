@@ -3,6 +3,7 @@ import { BarChart3, CheckCircle2, PackagePlus, Truck, TruckIcon } from 'lucide-r
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { TimelineItem } from '@/components/faro/timeline-item'
 import { useFaro } from '@/store/faro-context'
 import type { Site } from '@/lib/types'
@@ -111,7 +112,7 @@ export function CoordinatorHubScreen({
               {site.needs.slice(0, 5).map((need) => (
                 <div key={need.id} className="rounded-xl bg-white/[0.04] px-3 py-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-ink">{need.item}</p>
+                    <NeedItemLabel name={need.item} className="text-sm text-ink" />
                     <span
                       className={cn(
                         'text-xs',

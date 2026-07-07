@@ -3,22 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- Theme -->
     <meta name="theme-color" content="#0B1120" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- PWA / Apple -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="FARO" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- SEO / Crawlers -->
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="description" content="FARO — Centro de operaciones humanitario. Información verificada en tiempo real." />
+
+    <!-- Manifest -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+
+    <!-- Splash / OG -->
+    <link rel="preload" href="/icons/icon-192.png" as="image" />
+
     <title>FARO</title>
+
+    <!-- OneSignal -->
     <script>window.OneSignalDeferred = window.OneSignalDeferred || [];</script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js?v=160606-faro-20260704" defer></script>
   </head>
   <body>
     <div id="root"></div>
+    <div id="faro-portals"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

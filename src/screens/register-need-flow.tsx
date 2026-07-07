@@ -3,7 +3,15 @@ import { CheckCircle2 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { FlowSheet, FormField, fieldClassName } from '@/components/faro/flow-sheet'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { useRegisterNeed } from '@/hooks/useFaroMutations'
+import {
+  NEED_CATEGORIES,
+  NEED_ITEM_PRESETS,
+  type NeedCategoryKey,
+  qtyPlaceholderForCategory,
+  resolveNeedItemName,
+} from '@/lib/need-catalog'
 import { PRIORITY_OPTIONS, siteToNeedableType } from '@/lib/site-utils'
 import { useFaro } from '@/store/faro-context'
 
@@ -19,14 +27,38 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
   useEffect(() => {
     if (presetSiteId) setSiteId(presetSiteId)
   }, [presetSiteId])
-  const [itemName, setItemName] = useState('')
+  const [categoryKey, setCategoryKey] = useState<NeedCategoryKey>(NEED_CATEGORIES[0].key)
+  const [presetItem, setPresetItem] = useState('')
+  const [customLabel, setCustomLabel] = useState('')
   const [priority, setPriority] = useState<'critical' | 'high' | 'medium' | 'low'>('high')
   const [qtyRequired, setQtyRequired] = useState('50')
   const [qtyReceived, setQtyReceived] = useState('0')
   const [done, setDone] = useState(false)
+  const [savedItemName, setSavedItemName] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const selectedSite = useMemo(() => sites.find((s) => s.id === siteId), [sites, siteId])
+  const categoryPresets = NEED_ITEM_PRESETS[categoryKey]
+  const usesPresetList = Boolean(categoryPresets?.length)
+  const usesCustomOnly = categoryKey === 'otros' || !usesPresetList
+
+  useEffect(() => {
+    const presets = NEED_ITEM_PRESETS[categoryKey]
+    if (presets?.length) {
+      setPresetItem(presets[0])
+      setCustomLabel('')
+    } else {
+      setPresetItem('')
+      setCustomLabel('')
+    }
+  }, [categoryKey])
+
+  const resolvedItemName = useMemo(
+    () => resolveNeedItemName(categoryKey, presetItem, customLabel),
+    [categoryKey, presetItem, customLabel],
+  )
+
+  const qtyPlaceholder = qtyPlaceholderForCategory(categoryKey, resolvedItemName)
 
   const handleSubmit = async () => {
     setError(null)
@@ -34,7 +66,8 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
       setError('Primero registra un sitio en el mapa.')
       return
     }
-    if (itemName.trim().length < 2) {
+    const itemName = resolvedItemName
+    if (itemName.length < 2) {
       setError('Describe el insumo o necesidad.')
       return
     }
@@ -42,11 +75,12 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
       await registerNeed.mutateAsync({
         needableType: siteToNeedableType(selectedSite),
         needableId: selectedSite.id,
-        itemName: itemName.trim(),
+        itemName,
         priority,
         qtyRequired: Number(qtyRequired) || 1,
         qtyReceived: Number(qtyReceived) || 0,
       })
+      setSavedItemName(itemName)
       setDone(true)
     } catch {
       setError('No se pudo registrar la necesidad. Inténtalo nuevamente.')
@@ -72,7 +106,7 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
         <GlassCard className="space-y-3">
           <div className="flex items-center gap-2 text-operational">
             <CheckCircle2 className="h-5 w-5" />
-            <p className="font-semibold">{itemName} agregado</p>
+            <NeedItemLabel name={savedItemName} className="font-semibold text-ink" />
           </div>
           <p className="text-sm text-ink-muted">Se reflejará en prioridades y en la ficha de {selectedSite?.name}.</p>
           <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onClose}>
@@ -102,9 +136,59 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
           )}
         </FormField>
 
-        <FormField label="Insumo o necesidad">
-          <input className={fieldClassName} value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder="Ej. colchonetas, teteros, suero" />
+        <FormField label="Categoría">
+          <select
+            className={fieldClassName}
+            value={categoryKey}
+            onChange={(e) => setCategoryKey(e.target.value as NeedCategoryKey)}
+          >
+            {NEED_CATEGORIES.map((category) => (
+              <option key={category.key} value={category.key} className="bg-base-900">
+                {category.label}
+              </option>
+            ))}
+          </select>
         </FormField>
+
+        {usesPresetList && (
+          <FormField label="Tipo de apoyo">
+            <select
+              className={fieldClassName}
+              value={presetItem}
+              onChange={(e) => setPresetItem(e.target.value)}
+            >
+              {categoryPresets!.map((item) => (
+                <option key={item} value={item} className="bg-base-900">
+                  {item}
+                </option>
+              ))}
+              <option value="__custom__" className="bg-base-900">
+                Otro (especificar)
+              </option>
+            </select>
+          </FormField>
+        )}
+
+        {(usesCustomOnly || presetItem === '__custom__') && (
+          <FormField label={categoryKey === 'otros' ? 'Insumo o necesidad' : 'Especifica la necesidad'}>
+            <input
+              className={fieldClassName}
+              value={customLabel}
+              onChange={(e) => setCustomLabel(e.target.value)}
+              placeholder={
+                categoryKey === 'apoyo-psicologico'
+                  ? 'Ej. sesiones psicológicas, voluntarios de apoyo emocional'
+                  : 'Ej. colchonetas, teteros, suero'
+              }
+            />
+          </FormField>
+        )}
+
+        {resolvedItemName.length >= 2 && (
+          <p className="text-xs text-ink-subtle">
+            Vista previa: <NeedItemLabel name={resolvedItemName} />
+          </p>
+        )}
 
         <FormField label="Prioridad">
           <div className="grid grid-cols-2 gap-2">
@@ -127,10 +211,23 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Cantidad requerida">
-            <input className={fieldClassName} type="number" min={1} value={qtyRequired} onChange={(e) => setQtyRequired(e.target.value)} />
+            <input
+              className={fieldClassName}
+              type="number"
+              min={1}
+              value={qtyRequired}
+              onChange={(e) => setQtyRequired(e.target.value)}
+              placeholder={qtyPlaceholder}
+            />
           </FormField>
           <FormField label="Ya disponible">
-            <input className={fieldClassName} type="number" min={0} value={qtyReceived} onChange={(e) => setQtyReceived(e.target.value)} />
+            <input
+              className={fieldClassName}
+              type="number"
+              min={0}
+              value={qtyReceived}
+              onChange={(e) => setQtyReceived(e.target.value)}
+            />
           </FormField>
         </div>
 

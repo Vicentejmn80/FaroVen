@@ -3,6 +3,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyBadge } from '@/components/faro/emergency-badge'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { VerificationBadge } from '@/components/trust/verification-badge'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { cn, timeAgo } from '@/lib/utils'
 import type { Need, Report, Site } from '@/lib/types'
 
@@ -50,7 +51,7 @@ export function CenterQuickSheet({
           {topNeeds.length ? (
             topNeeds.map((need) => (
               <li key={need} className="text-sm text-ink">
-                {need}
+                <NeedItemLabel name={need} />
               </li>
             ))
           ) : (
@@ -156,7 +157,7 @@ export function CriticalNeedsSection({ needs }: { needs: Need[] }) {
           needs.map((need) => (
             <div key={need.id} className="rounded-2xl bg-white/[0.04] px-3 py-2.5">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-ink">{need.type}</p>
+                <NeedItemLabel name={need.type} className="text-sm text-ink" />
                 <span className="text-xs text-ink-subtle">{priorityLabel(need.priority)}</span>
               </div>
               <p className="mt-1 text-xs text-ink-muted">

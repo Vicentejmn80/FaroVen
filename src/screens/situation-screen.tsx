@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { List, Map as MapIcon, PlusCircle } from 'lucide-react'
-import { FaroIcon } from '@/components/brand/faro-icon'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { SectionTitle } from '@/components/faro/section-title'
 import { MapCanvas } from '@/components/faro/map-canvas'
 import { SidePanel } from '@/components/faro/side-panel'
 import { SituationSummary } from '@/components/faro/situation-summary'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { TimelineItem } from '@/components/faro/timeline-item'
 import { SITE_TYPE_LABELS, siteToNeedableType } from '@/lib/site-utils'
 import { cn, greeting } from '@/lib/utils'
@@ -373,7 +373,7 @@ function CenterNeedCard({
         {preview.length ? (
           preview.map((need) => (
             <div key={need.id} className="flex items-center justify-between">
-              <span className="text-ink">{need.type}</span>
+              <NeedItemLabel name={need.type} className="text-ink" />
               <span className={priorityTone(need)}>{priorityLabel(need)}</span>
             </div>
           ))
@@ -392,7 +392,7 @@ function CenterNeedCard({
             siteNeeds.map((need) => (
               <div key={need.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-ink">{need.type}</p>
+                  <NeedItemLabel name={need.type} className="text-sm font-medium text-ink" />
                   <span className={priorityTone(need)}>{priorityLabel(need)}</span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -499,9 +499,8 @@ function QuickAnswerBar({
     <section className="mt-3 space-y-2.5">
       <GlassCard inset={false} className="p-3">
         <div className="relative">
-          <FaroIcon size={20} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
           <input
-            className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-ink outline-none focus:border-info/60"
+            className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-sm text-ink outline-none focus:border-info/60"
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             placeholder="¿Qué centro necesitas ubicar?"

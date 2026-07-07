@@ -32,6 +32,7 @@ function getLocalCommit(): string {
   }
 }
 
+
 export default defineConfig({
   define: {
     __FARO_BUILD_DATE__: JSON.stringify(buildDate),
@@ -41,15 +42,19 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      /**
+       * 'prompt': el nuevo SW espera en estado "waiting" hasta que el usuario confirma.
+       * Evita recargas inesperadas mientras el usuario interactúa con la app.
+       */
       injectRegister: 'auto',
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       devOptions: {
         enabled: false,
       },
       manifest: {
         name: 'FARO',
         short_name: 'FARO',
-        description: 'Centro de operaciones humanitario. Informacion verificada en tiempo real.',
+        description: 'Centro de operaciones humanitario. Información verificada en tiempo real.',
         start_url: '/',
         scope: '/',
         display: 'standalone',
@@ -58,18 +63,58 @@ export default defineConfig({
         theme_color: '#0B1120',
         lang: 'es',
         icons: [
-          { src: '/icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-          { src: '/icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
-          { src: '/icons/icon-maskable.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' },
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-maskable-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icons/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png',
+          },
         ],
       },
-      includeAssets: ['icons/icon-192.svg', 'icons/icon-512.svg', 'icons/icon-maskable.svg'],
+      includeAssets: [
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'icons/icon-maskable-192.png',
+        'icons/icon-maskable-512.png',
+        'icons/apple-touch-icon.png',
+        'icons/favicon-32.png',
+        'icons/favicon-48.png',
+      ],
       workbox: {
         cleanupOutdatedCaches: true,
-        skipWaiting: true,
+        // skipWaiting: false (por defecto con 'prompt') — el usuario decide cuándo activar
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,svg,png,webp}'],
+        globPatterns: ['**/*.{js,css,html,png,webp,svg}'],
+        // version.json NUNCA debe cachearse — siempre debe ir a la red
+        navigateFallbackDenylist: [/version\.json/],
         runtimeCaching: [
+          {
+            urlPattern: /\/version\.json$/,
+            handler: 'NetworkOnly',
+          },
           {
             urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
             handler: 'CacheFirst',

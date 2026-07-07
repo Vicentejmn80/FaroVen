@@ -6,6 +6,7 @@ import { useCoordinatorNeeds } from '@/hooks/useCoordinatorPanel'
 import { useCoordinatorMutations } from '@/hooks/useCoordinatorMutations'
 import { cn } from '@/lib/utils'
 import type { Need } from '@/domain/models'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { PRIORITY_OPTIONS } from '@/lib/site-utils'
 
 interface CoordinatorNeedsModuleProps {
@@ -38,7 +39,7 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
             <GlassCard key={need.id} className="space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium text-ink">{need.type}</p>
+                  <NeedItemLabel name={need.type} className="text-sm font-medium text-ink" />
                   <p className="text-xs text-ink-subtle">
                     {need.available}/{need.required} · Prioridad {priorityLabel(need.priority)}
                   </p>
