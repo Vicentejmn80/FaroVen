@@ -16,6 +16,7 @@ import {
   Users,
   UserCog,
   Warehouse,
+  Wrench,
 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -69,6 +70,7 @@ const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; desc
   { id: 'inventory', label: 'Inventario', icon: Package, description: 'Stock por centro' },
   { id: 'events', label: 'Eventos', icon: Calendar, description: 'Timeline operativo' },
   { id: 'audit', label: 'Auditoría', icon: Shield, description: 'Eventos auth y operativos' },
+  { id: 'maintenance', label: 'Mantenimiento', icon: Wrench, description: 'Limpieza y saneamiento del tablero' },
   { id: 'dev_reset', label: 'Limpieza dev', icon: Trash2, description: 'Reset operacional (solo dev)' },
 ]
 
@@ -97,6 +99,7 @@ export function SuperAdminConsole() {
   const [editPhone, setEditPhone] = useState('')
   const [requestAssignments, setRequestAssignments] = useState<Record<string, string>>({})
   const [devResetConfirm, setDevResetConfirm] = useState('')
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null)
 
   const coordinatorByUserId = useMemo(() => {
     const map = new Map<string, AdminCoordinatorRow>()
@@ -392,6 +395,25 @@ export function SuperAdminConsole() {
                 setDevResetConfirm('')
                 await refetchProfiles()
                 invalidateSitesCache(queryClient)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              }
+            }}
+          />
+        )}
+
+        {activeModule === 'maintenance' && (
+          <MaintenanceModule
+            busy={mutations.runMaintenanceAction.isPending}
+            message={maintenanceMessage}
+            onRun={async (action, label) => {
+              if (!window.confirm(`¿Confirmas ejecutar: ${label}?`)) return
+
+              setError(null)
+              setMaintenanceMessage(null)
+              try {
+                const result = await mutations.runMaintenanceAction.mutateAsync(action)
+                setMaintenanceMessage(`${label}: ${result.affected} registro(s) procesados.`)
               } catch (err) {
                 setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
               }
@@ -935,6 +957,96 @@ function DevResetModule({
         Ejecutar limpieza
       </EmergencyButton>
     </GlassCard>
+  )
+}
+
+function MaintenanceModule({
+  busy,
+  message,
+  onRun,
+}: {
+  busy: boolean
+  message: string | null
+  onRun: (
+    action:
+      | 'archive_covered_needs'
+      | 'clean_dismissed_reports'
+      | 'delete_test_data'
+      | 'reset_dashboard'
+      | 'clean_old_events'
+      | 'delete_closed_needs'
+      | 'clean_old_notifications',
+    label: string,
+  ) => Promise<void>
+}) {
+  const actions: Array<{
+    id:
+      | 'archive_covered_needs'
+      | 'clean_dismissed_reports'
+      | 'delete_test_data'
+      | 'reset_dashboard'
+      | 'clean_old_events'
+      | 'delete_closed_needs'
+      | 'clean_old_notifications'
+    label: string
+    description: string
+  }> = [
+    {
+      id: 'archive_covered_needs',
+      label: 'Archivar necesidades cubiertas',
+      description: 'Retira del panel necesidades con cobertura >= 100%.',
+    },
+    {
+      id: 'clean_dismissed_reports',
+      label: 'Limpiar reportes descartados',
+      description: 'Elimina reportes en estado dismissed.',
+    },
+    {
+      id: 'delete_test_data',
+      label: 'Eliminar datos de prueba',
+      description: 'Borra registros con texto test/prueba/demo.',
+    },
+    {
+      id: 'reset_dashboard',
+      label: 'Reiniciar dashboard',
+      description: 'Limpieza rapida de datos historicos no operativos.',
+    },
+    {
+      id: 'clean_old_events',
+      label: 'Limpiar eventos antiguos',
+      description: 'Borra eventos de mas de 14 dias.',
+    },
+    {
+      id: 'delete_closed_needs',
+      label: 'Eliminar necesidades cerradas',
+      description: 'Borra necesidades cubiertas o con objetivo en cero.',
+    },
+    {
+      id: 'clean_old_notifications',
+      label: 'Limpiar notificaciones antiguas',
+      description: 'Borra notificaciones leidas o antiguas.',
+    },
+  ]
+
+  return (
+    <section className="space-y-2">
+      {message && <p className="text-xs text-operational">{message}</p>}
+      {actions.map((action) => (
+        <GlassCard key={action.id} className="space-y-2">
+          <p className="text-sm font-medium text-ink">{action.label}</p>
+          <p className="text-xs text-ink-subtle">{action.description}</p>
+          <EmergencyButton
+            variant="glass"
+            size="sm"
+            className="w-full"
+            disabled={busy}
+            onClick={() => void onRun(action.id, action.label)}
+          >
+            Ejecutar con confirmacion
+          </EmergencyButton>
+        </GlassCard>
+      ))}
+    </section>
   )
 }
 

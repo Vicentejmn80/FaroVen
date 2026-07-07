@@ -220,6 +220,20 @@ export function useAdminMutations() {
     onSuccess: () => invalidateAllAdmin(queryClient),
   })
 
+  const runMaintenanceAction = useMutation({
+    mutationFn: (
+      action:
+        | 'archive_covered_needs'
+        | 'clean_dismissed_reports'
+        | 'delete_test_data'
+        | 'reset_dashboard'
+        | 'clean_old_events'
+        | 'delete_closed_needs'
+        | 'clean_old_notifications',
+    ) => adminService.runMaintenanceAction(action),
+    onSuccess: () => invalidateAllAdmin(queryClient),
+  })
+
   return {
     deleteSite,
     removeCoordinator,
@@ -238,5 +252,6 @@ export function useAdminMutations() {
     deleteEvent,
     deleteNotification,
     resetOperationalData,
+    runMaintenanceAction,
   }
 }

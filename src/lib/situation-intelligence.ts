@@ -1,34 +1,36 @@
-import type { NeedPriority, Site, SiteNeed } from './types'
+import type { Need, NeedPriority, Site } from './types'
 
 type SummarySeverity = 'critical' | 'warning' | 'operational'
 
 export interface PrioritySignal {
   id: string
-  title: string
-  why: string
-  action: string
+  resourceName: string
+  centerName: string
+  priority: NeedPriority
+  coveragePct: number
+  currentQty: number
+  targetQty: number
+  missingQty: number
   severity: SummarySeverity
+  createdAt: Date
 }
 
-export interface CoveredNeedSignal {
+export interface ResolvedNeedSignal {
   id: string
-  item: string
-  coverage: number
-  centers: string[]
-}
-
-export interface UrgentCenterSignal {
-  siteId: string
-  name: string
-  zone: string
-  reason: string
+  resourceName: string
+  centerName: string
+  coveragePct: number
+  currentQty: number
+  targetQty: number
+  resolvedAt: Date
 }
 
 export interface SituationSummaryData {
   headline: string
+  pendingCount: number
+  resolvedCount: number
   priorities: PrioritySignal[]
-  coveredNeeds: CoveredNeedSignal[]
-  urgentCenters: UrgentCenterSignal[]
+  resolvedHistory: ResolvedNeedSignal[]
 }
 
 export interface SiteActionPlan {
@@ -37,105 +39,79 @@ export interface SiteActionPlan {
   watch: string[]
 }
 
-const PRIORITY_WEIGHT: Record<NeedPriority, number> = {
-  critical: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
+function toCoverage(required: number, available: number): number {
+  if (required <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round((available / required) * 100)))
 }
 
-const PRIORITY_LABEL: Record<NeedPriority, string> = {
-  critical: 'critica',
-  high: 'alta',
-  medium: 'media',
-  low: 'baja',
+function priorityRank(priority: NeedPriority): number {
+  if (priority === 'critical') return 0
+  if (priority === 'high') return 1
+  if (priority === 'medium') return 2
+  return 3
 }
 
-function scoreNeed(need: SiteNeed) {
-  const urgency = Math.max(0, 100 - need.coverage)
-  return PRIORITY_WEIGHT[need.priority] * 100 + urgency
+function isResolvedNeed(need: Need): boolean {
+  if (need.required <= 0) return true
+  return need.status === 'covered' || need.status === 'resolved' || (need.required > 0 && need.available >= need.required)
 }
 
-export function buildSituationSummary(sites: Site[]): SituationSummaryData {
-  const flattened = sites.flatMap((site) =>
-    site.needs.map((need) => ({
-      site,
-      need,
-      score: scoreNeed(need),
-    })),
-  )
+export function buildSituationSummary(sites: Site[], needs: Need[] = []): SituationSummaryData {
+  const siteById = new Map(sites.map((site) => [site.id, site]))
+  const filteredNeeds = needs.filter((need) => siteById.has(need.centerId))
 
-  const priorities = flattened
-    .filter((entry) => entry.need.coverage < 75 || entry.need.priority === 'critical')
-    .sort((a, b) => b.score - a.score)
+  const unresolved = filteredNeeds.filter((need) => !isResolvedNeed(need))
+  const resolved = filteredNeeds.filter((need) => isResolvedNeed(need))
+
+  const priorities = [...unresolved]
+    .sort((a, b) => {
+      const coverageDiff = toCoverage(a.required, a.available) - toCoverage(b.required, b.available)
+      if (coverageDiff !== 0) return coverageDiff
+
+      const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority)
+      if (priorityDiff !== 0) return priorityDiff
+
+      return a.updatedAt.getTime() - b.updatedAt.getTime()
+    })
     .slice(0, 3)
-    .map((entry) => {
-      const severity: SummarySeverity =
-        entry.need.coverage < 40 || entry.need.priority === 'critical' ? 'critical' : 'warning'
+    .map((need) => {
+      const centerName = siteById.get(need.centerId)?.name ?? 'Centro sin nombre'
+      const coveragePct = toCoverage(need.required, need.available)
+      const missingQty = Math.max(0, need.required - need.available)
+      const severity: SummarySeverity = need.priority === 'critical' || coveragePct < 40 ? 'critical' : 'warning'
 
       return {
-        id: `${entry.site.id}-${entry.need.id}`,
-        title: `${entry.need.item} en ${entry.site.name}`,
-        why: `Cobertura ${entry.need.coverage}% con prioridad ${PRIORITY_LABEL[entry.need.priority]}.`,
-        action: `Mover apoyo a ${entry.site.zone} en las proximas 2 horas.`,
+        id: need.id,
+        resourceName: need.type,
+        centerName,
+        priority: need.priority,
+        coveragePct,
+        currentQty: need.available,
+        targetQty: need.required,
+        missingQty,
         severity,
+        createdAt: need.updatedAt,
       }
     })
 
-  const grouped = new Map<
-    string,
-    {
-      totalCoverage: number
-      samples: number
-      centers: string[]
-    }
-  >()
-
-  for (const site of sites) {
-    for (const need of site.needs) {
-      const current = grouped.get(need.item) ?? { totalCoverage: 0, samples: 0, centers: [] }
-      current.totalCoverage += need.coverage
-      current.samples += 1
-      if (need.coverage >= 80) current.centers.push(site.name)
-      grouped.set(need.item, current)
-    }
-  }
-
-  const coveredNeeds = [...grouped.entries()]
-    .map(([item, data]) => ({
-      id: item.toLowerCase().replace(/\s+/g, '-'),
-      item,
-      coverage: Math.round(data.totalCoverage / Math.max(data.samples, 1)),
-      centers: data.centers,
+  const resolvedHistory = [...resolved]
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 20)
+    .map((need) => ({
+      id: need.id,
+      resourceName: need.type,
+      centerName: siteById.get(need.centerId)?.name ?? 'Centro sin nombre',
+      coveragePct: toCoverage(need.required, need.available),
+      currentQty: need.available,
+      targetQty: need.required,
+      resolvedAt: need.updatedAt,
     }))
-    .filter((item) => item.coverage >= 80 || item.centers.length >= 1)
-    .sort((a, b) => b.coverage - a.coverage)
-    .slice(0, 3)
 
-  const urgentCenters = sites
-    .map((site) => {
-      const criticalNeed = site.needs.find((need) => need.priority === 'critical' && need.coverage < 45)
-      if (site.status === 'critical' || criticalNeed) {
-        return {
-          siteId: site.id,
-          name: site.name,
-          zone: site.zone,
-          reason: criticalNeed
-            ? `${criticalNeed.item} por debajo de 45%`
-            : `Estado reportado: ${site.statusLabel.toLowerCase()}`,
-        }
-      }
-      return null
-    })
-    .filter((value): value is UrgentCenterSignal => value !== null)
-    .slice(0, 4)
+  const pendingCount = unresolved.length
+  const resolvedCount = resolved.length
+  const headline = pendingCount > 0 ? `${pendingCount} frentes requieren decision inmediata` : 'Situacion estable'
 
-  const headline =
-    priorities.length > 0
-      ? `${priorities.length} frentes requieren decision inmediata`
-      : 'Situacion estable, enfocar seguimiento preventivo'
-
-  return { headline, priorities, coveredNeeds, urgentCenters }
+  return { headline, pendingCount, resolvedCount, priorities, resolvedHistory }
 }
 
 export function buildSiteActionPlan(site: Site): SiteActionPlan {

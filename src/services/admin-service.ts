@@ -51,6 +51,17 @@ export const adminService = {
 
   resetOperationalData: (preserveEmail?: string) => adminRepository.resetOperationalData(preserveEmail),
 
+  runMaintenanceAction: (
+    action:
+      | 'archive_covered_needs'
+      | 'clean_dismissed_reports'
+      | 'delete_test_data'
+      | 'reset_dashboard'
+      | 'clean_old_events'
+      | 'delete_closed_needs'
+      | 'clean_old_notifications',
+  ) => adminRepository.runMaintenanceAction(action),
+
   async updateNeed(
     id: string,
     patch: {

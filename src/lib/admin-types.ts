@@ -49,6 +49,7 @@ export type SuperAdminModuleId =
   | 'inventory'
   | 'events'
   | 'audit'
+  | 'maintenance'
   | 'dev_reset'
 
 export interface AdminUpdateProfileInput {

@@ -29,6 +29,120 @@ function mapProfile(row: Record<string, unknown>): ProfileRow {
 }
 
 export const adminRepository = {
+  async runMaintenanceAction(
+    action:
+      | 'archive_covered_needs'
+      | 'clean_dismissed_reports'
+      | 'delete_test_data'
+      | 'reset_dashboard'
+      | 'clean_old_events'
+      | 'delete_closed_needs'
+      | 'clean_old_notifications',
+  ): Promise<{ action: string; affected: number }> {
+    const removeByIds = async (table: 'needs' | 'reports' | 'events' | 'notifications', ids: string[]) => {
+      if (ids.length === 0) return 0
+      const { error } = await supabase.from(table).delete().in('id', ids)
+      if (error) throw error
+      return ids.length
+    }
+
+    if (action === 'archive_covered_needs') {
+      const { data, error } = await supabase.from('needs').select('id, qty_required, qty_received')
+      if (error) throw error
+      const ids = ((data ?? []) as Array<{ id: string; qty_required: number; qty_received: number }>)
+        .filter((row) => row.qty_required > 0 && row.qty_received >= row.qty_required)
+        .map((row) => row.id)
+      return { action, affected: await removeByIds('needs', ids) }
+    }
+
+    if (action === 'clean_dismissed_reports') {
+      const { data, error } = await supabase.from('reports').select('id').eq('status', 'dismissed')
+      if (error) throw error
+      const ids = ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
+      return { action, affected: await removeByIds('reports', ids) }
+    }
+
+    if (action === 'delete_closed_needs') {
+      const { data, error } = await supabase.from('needs').select('id, qty_required, qty_received')
+      if (error) throw error
+      const ids = ((data ?? []) as Array<{ id: string; qty_required: number; qty_received: number }>)
+        .filter((row) => row.qty_required <= 0 || row.qty_received >= row.qty_required)
+        .map((row) => row.id)
+      return { action, affected: await removeByIds('needs', ids) }
+    }
+
+    if (action === 'clean_old_events') {
+      const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString()
+      const { data, error } = await supabase.from('events').select('id').lt('created_at', cutoff)
+      if (error) throw error
+      const ids = ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
+      return { action, affected: await removeByIds('events', ids) }
+    }
+
+    if (action === 'clean_old_notifications') {
+      const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString()
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id, read, created_at')
+      if (error) throw error
+      const ids = ((data ?? []) as Array<{ id: string; read: boolean; created_at: string }>)
+        .filter((row) => row.read || row.created_at < cutoff)
+        .map((row) => row.id)
+      return { action, affected: await removeByIds('notifications', ids) }
+    }
+
+    if (action === 'delete_test_data') {
+      const [needRows, reportRows, eventRows, notificationRows] = await Promise.all([
+        supabase.from('needs').select('id, item_name'),
+        supabase.from('reports').select('id, description'),
+        supabase.from('events').select('id, title, detail'),
+        supabase.from('notifications').select('id, title, message'),
+      ])
+
+      if (needRows.error) throw needRows.error
+      if (reportRows.error) throw reportRows.error
+      if (eventRows.error) throw eventRows.error
+      if (notificationRows.error) throw notificationRows.error
+
+      const looksLikeTest = (value?: string | null) => {
+        const text = (value ?? '').toLowerCase()
+        return text.includes('test') || text.includes('prueba') || text.includes('demo') || text.includes('faker')
+      }
+
+      const needIds = ((needRows.data ?? []) as Array<{ id: string; item_name: string }>)
+        .filter((row) => looksLikeTest(row.item_name))
+        .map((row) => row.id)
+      const reportIds = ((reportRows.data ?? []) as Array<{ id: string; description: string }>)
+        .filter((row) => looksLikeTest(row.description))
+        .map((row) => row.id)
+      const eventIds = ((eventRows.data ?? []) as Array<{ id: string; title: string; detail: string | null }>)
+        .filter((row) => looksLikeTest(row.title) || looksLikeTest(row.detail))
+        .map((row) => row.id)
+      const notificationIds = ((notificationRows.data ?? []) as Array<{ id: string; title: string; message: string }>)
+        .filter((row) => looksLikeTest(row.title) || looksLikeTest(row.message))
+        .map((row) => row.id)
+
+      const affected =
+        (await removeByIds('needs', needIds)) +
+        (await removeByIds('reports', reportIds)) +
+        (await removeByIds('events', eventIds)) +
+        (await removeByIds('notifications', notificationIds))
+      return { action, affected }
+    }
+
+    // Reinicio ligero del dashboard sin borrar usuarios/sitios.
+    const [needsResult, reportsResult, eventsResult, notificationsResult] = await Promise.all([
+      adminRepository.runMaintenanceAction('archive_covered_needs'),
+      adminRepository.runMaintenanceAction('clean_dismissed_reports'),
+      adminRepository.runMaintenanceAction('clean_old_events'),
+      adminRepository.runMaintenanceAction('clean_old_notifications'),
+    ])
+    return {
+      action,
+      affected: needsResult.affected + reportsResult.affected + eventsResult.affected + notificationsResult.affected,
+    }
+  },
+
   async listRegistry(): Promise<AdminRegistryRow[]> {
     const { data, error } = await supabase.rpc('admin_registry_overview')
     if (error) throw error

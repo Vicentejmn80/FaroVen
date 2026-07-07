@@ -1,12 +1,15 @@
-import { AlertTriangle, CheckCircle2, Siren } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { CheckCircle2, Siren } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { STATUS } from '@/lib/status-config'
 import { cn } from '@/lib/utils'
 import { buildSituationSummary } from '@/lib/situation-intelligence'
+import type { Need } from '@/domain/models'
 import type { Site } from '@/lib/types'
 
 interface SituationSummaryProps {
   sites: Site[]
+  needs?: Need[]
   title?: string
   compact?: boolean
   className?: string
@@ -18,14 +21,15 @@ interface SituationSummaryProps {
  */
 export function SituationSummary({
   sites,
+  needs = [],
   title = 'Resumen ejecutivo',
   compact = false,
   className,
 }: SituationSummaryProps) {
-  const summary = buildSituationSummary(sites)
+  const summary = useMemo(() => buildSituationSummary(sites, needs), [sites, needs])
+  const [showHistory, setShowHistory] = useState(false)
   const priorities = compact ? summary.priorities.slice(0, 2) : summary.priorities
-  const covered = compact ? summary.coveredNeeds.slice(0, 2) : summary.coveredNeeds
-  const urgent = compact ? summary.urgentCenters.slice(0, 2) : summary.urgentCenters
+  const history = compact ? summary.resolvedHistory.slice(0, 6) : summary.resolvedHistory
 
   return (
     <GlassCard className={cn('space-y-3', className)}>
@@ -41,48 +45,83 @@ export function SituationSummary({
 
       <section className="space-y-2">
         <p className="text-[11px] uppercase tracking-[0.14em] text-ink-subtle">Top 3 prioridades</p>
-        <div className="space-y-2">
-          {priorities.map((priority) => (
-            <div key={priority.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5">
-              <p className={`text-sm font-medium ${STATUS[priority.severity].text}`}>{priority.title}</p>
-              <p className="mt-0.5 text-xs text-ink-subtle">{priority.why}</p>
-              <p className="mt-1 text-xs text-ink">{priority.action}</p>
-            </div>
-          ))}
-        </div>
+        {priorities.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 text-xs text-ink-subtle">
+            No hay necesidades pendientes.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {priorities.map((priority) => (
+              <div key={priority.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5">
+                <p className="text-sm font-medium text-ink">{priority.resourceName}</p>
+                <p className="mt-0.5 text-xs text-ink-subtle">{priority.centerName}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-ink-faint">Prioridad</p>
+                    <p className={STATUS[priority.severity].text}>{labelPriority(priority.priority)}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-ink-faint">Cobertura actual</p>
+                    <p className="text-ink">
+                      {priority.currentQty} / {priority.targetQty}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-ink-faint">Cantidad actual</p>
+                    <p className="text-ink">{priority.currentQty}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] px-2 py-1">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-ink-faint">Cantidad objetivo</p>
+                    <p className="text-ink">{priority.targetQty}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-critical">Faltan: {priority.missingQty}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
-      <section className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+      <section>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-subtle">
-            <CheckCircle2 className="h-3.5 w-3.5 text-operational" /> Necesidades cubiertas
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-subtle">
+            <CheckCircle2 className="h-3.5 w-3.5 text-operational" /> Necesidades resueltas
           </p>
-          <ul className="space-y-1.5">
-            {covered.map((item) => (
-              <li key={item.id} className="text-xs text-ink">
-                {item.item}: {item.coverage}%{' '}
-                <span className="text-ink-subtle">
-                  ({item.centers.slice(0, 2).join(', ') || 'cobertura distribuida'})
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5">
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-subtle">
-            <AlertTriangle className="h-3.5 w-3.5 text-critical" /> Atencion inmediata
-          </p>
-          <ul className="space-y-1.5">
-            {urgent.map((center) => (
-              <li key={center.siteId} className="text-xs text-ink">
-                {center.name} <span className="text-ink-subtle">({center.zone})</span>
-                <p className="text-[11px] text-ink-faint">{center.reason}</p>
-              </li>
-            ))}
-          </ul>
+          <p className="text-sm text-ink">✓ {summary.resolvedCount} necesidades resueltas</p>
+          <button
+            type="button"
+            className="mt-2 text-xs font-semibold text-info"
+            onClick={() => setShowHistory((prev) => !prev)}
+          >
+            {showHistory ? 'Ocultar historial' : 'Ver historial'}
+          </button>
+          {showHistory && (
+            <div className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
+              {history.length === 0 ? (
+                <p className="text-xs text-ink-subtle">Sin historial reciente.</p>
+              ) : (
+                history.map((item) => (
+                  <div key={item.id} className="text-xs text-ink">
+                    <p>{item.resourceName}</p>
+                    <p className="text-ink-subtle">{item.centerName}</p>
+                    <p className="text-ink-faint">
+                      {item.currentQty}/{item.targetQty} · {item.coveragePct}% ·{' '}
+                      {item.resolvedAt.toLocaleString('es-VE')}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </section>
     </GlassCard>
   )
+}
+
+function labelPriority(priority: Need['priority']): string {
+  if (priority === 'critical') return 'CRITICA'
+  if (priority === 'high') return 'ALTA'
+  if (priority === 'medium') return 'MEDIA'
+  return 'BAJA'
 }

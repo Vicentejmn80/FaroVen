@@ -58,6 +58,7 @@ export function PwaUpdateBanner() {
     // Actualización detectada por el poller de version.json
     const onVersionUpdate = (e: Event) => {
       const detail = (e as CustomEvent<FaroUpdateEvent>).detail
+      if (!detail.critical) return
       dispatch({
         type: 'SHOW_UPDATE',
         critical: detail.critical,

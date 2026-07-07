@@ -138,8 +138,14 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
             <section className="mt-4 lg:mt-3">
               <SectionTitle className="lg:hidden">Qué debemos resolver ahora</SectionTitle>
               <div className="mt-2.5 lg:mt-0">
-                <SituationSummary sites={filteredSites} className="lg:hidden" />
-                <SituationSummary sites={filteredSites} title="Prioridades activas" compact className="hidden lg:block" />
+                <SituationSummary sites={filteredSites} needs={needs} className="lg:hidden" />
+                <SituationSummary
+                  sites={filteredSites}
+                  needs={needs}
+                  title="Prioridades activas"
+                  compact
+                  className="hidden lg:block"
+                />
               </div>
             </section>
 
