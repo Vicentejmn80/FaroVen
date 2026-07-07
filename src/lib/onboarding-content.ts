@@ -107,6 +107,3 @@ export const PRIORITY_LEVELS = [
   { id: 'low', label: 'Baja', color: '#30D158', description: 'Seguimiento sin presión inmediata.' },
   { id: 'covered', label: 'Cubierta', color: '#30D158', description: 'Stock suficiente. No requiere acción.' },
 ] as const
-
-export const COVERAGE_EXPLANATION =
-  'Cobertura = (recibido ÷ requerido) × 100. Un 100% significa que el centro tiene todo lo que pidió. Menos de 40% indica déficit severo.'

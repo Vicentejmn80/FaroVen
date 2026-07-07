@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { COVERAGE_EXPLANATION, PRIORITY_LEVELS } from '@/lib/onboarding-content'
+import { PRIORITY_LEVELS } from '@/lib/onboarding-content'
 
 interface PriorityCoverageGuideProps {
   compact?: boolean
@@ -30,7 +30,6 @@ export function PriorityCoverageGuide({ compact = false, className }: PriorityCo
           </div>
         ))}
       </div>
-      <p className="text-[11px] leading-relaxed text-ink-subtle">{COVERAGE_EXPLANATION}</p>
     </div>
   )
 }
