@@ -35,7 +35,7 @@ const CITIZEN_BASE: NavTab[] = [
 ]
 
 /** Tabs completos — rail lateral en desktop */
-export function getNavigationTabs(role: FaroRole): NavTab[] {
+export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab[] {
   const tabs = [...CITIZEN_BASE]
 
   if (canAccessCoordinatorPanel(role)) {
@@ -46,7 +46,7 @@ export function getNavigationTabs(role: FaroRole): NavTab[] {
     tabs.push({ id: 'admin', label: 'Administración', icon: Shield })
   }
 
-  if (canAccessSystemPanel(role)) {
+  if (canAccessSystemPanel(role, email)) {
     tabs.push({ id: 'system', label: 'Sistema', icon: Settings2 })
   }
 

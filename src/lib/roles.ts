@@ -42,6 +42,39 @@ export function canAccessAdminPanel(role: FaroRole | null | undefined): boolean 
   return role === FARO_ROLES.REGIONAL_ADMIN || role === FARO_ROLES.SUPER_ADMIN
 }
 
-export function canAccessSystemPanel(role: FaroRole | null | undefined): boolean {
-  return role === FARO_ROLES.SUPER_ADMIN
+/** Correos con acceso bootstrap a consola Sistema (deben tener role super_admin en DB). */
+export const SUPER_ADMIN_EMAILS = ['vicentejmn80@gmail.com'] as const
+
+export const PROFILE_STATUS_LABELS: Record<'active' | 'suspended' | 'pending', string> = {
+  active: 'Activo',
+  suspended: 'Suspendido',
+  pending: 'Pendiente',
+}
+
+export function isSuperAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false
+  return SUPER_ADMIN_EMAILS.includes(email.trim().toLowerCase() as (typeof SUPER_ADMIN_EMAILS)[number])
+}
+
+export function canAccessSystemPanel(role: FaroRole | null | undefined, email?: string | null): boolean {
+  return role === FARO_ROLES.SUPER_ADMIN || isSuperAdminEmail(email)
+}
+
+export function resolveDisplayRole(
+  profile: { role: Exclude<FaroRole, 'public'> | null; status: string } | null,
+  hasCoordinatorAssignment: boolean,
+): FaroRole {
+  if (!profile?.role || profile.status !== 'active') return FARO_ROLES.PUBLIC
+  if (profile.role === FARO_ROLES.COORDINATOR && !hasCoordinatorAssignment) return FARO_ROLES.PUBLIC
+  return profile.role
+}
+
+export function resolveDisplayRoleLabel(
+  profile: { role: Exclude<FaroRole, 'public'> | null; status: string } | null,
+  hasCoordinatorAssignment: boolean,
+): string {
+  if (profile?.role === FARO_ROLES.COORDINATOR && profile.status === 'active' && !hasCoordinatorAssignment) {
+    return 'Pendiente de centro'
+  }
+  return FARO_ROLE_LABELS[resolveDisplayRole(profile, hasCoordinatorAssignment)]
 }

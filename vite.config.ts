@@ -83,8 +83,8 @@ export default defineConfig({
         scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#050A14',
-        theme_color: '#0B1120',
+        background_color: '#003399',
+        theme_color: '#003399',
         lang: 'es',
         icons: [
           {
@@ -112,6 +112,18 @@ export default defineConfig({
             purpose: 'maskable',
           },
           {
+            src: '/icons/icon-monochrome-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'monochrome',
+          },
+          {
+            src: '/icons/icon-monochrome-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'monochrome',
+          },
+          {
             src: '/icons/apple-touch-icon.png',
             sizes: '180x180',
             type: 'image/png',
@@ -123,6 +135,8 @@ export default defineConfig({
         'icons/icon-512.png',
         'icons/icon-maskable-192.png',
         'icons/icon-maskable-512.png',
+        'icons/icon-monochrome-192.png',
+        'icons/icon-monochrome-512.png',
         'icons/apple-touch-icon.png',
         'icons/favicon-32.png',
         'icons/favicon-48.png',

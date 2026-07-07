@@ -6,8 +6,14 @@ export interface ProfileRow {
   id: string
   full_name: string
   email: string
+  phone: string | null
   role: Exclude<FaroRole, 'public'> | null
   organization_id: string | null
+  organization_name: string | null
+  profession: string | null
+  specialty: string | null
+  municipality: string | null
+  region: string | null
   status: 'active' | 'suspended' | 'pending'
   last_login_at: string | null
   created_at: string

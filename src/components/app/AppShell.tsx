@@ -34,7 +34,7 @@ import { useFaro } from '@/store/faro-context'
 import { AdjustNeedStockFlow } from '@/screens/adjust-need-stock-flow'
 import type { Site } from '@/lib/types'
 import { usePermissions, useAuth } from '@/store/auth-context'
-import { FARO_ROLES, canAccessSystemPanel } from '@/lib/roles'
+import { FARO_ROLES } from '@/lib/roles'
 import { RequireRole } from '@/components/auth/require-role'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { NotificationRow } from '@/domain/notification-models'
@@ -78,8 +78,8 @@ function ScreenLoading() {
 }
 
 export function AppShell() {
-  const { role, canAccessCoordinatorPanel, canAccessAdminPanel } = usePermissions()
-  const { session, pendingAuthIntent, clearPendingAuthIntent, refreshProfile } = useAuth()
+  const { role, canAccessCoordinatorPanel, canAccessAdminPanel, canAccessSystemPanel } = usePermissions()
+  const { session, user, pendingAuthIntent, clearPendingAuthIntent, refreshProfile } = useAuth()
   const { cachedAt } = useFaro()
   const [tab, setTab] = useState<TabId>('map')
   const [flow, setFlow] = useState<FlowId | null>(null)
@@ -97,7 +97,7 @@ export function AppShell() {
   const previousNetworkState = useRef(network.state)
   const { showToast } = useToast()
 
-  const tabs = useMemo(() => getNavigationTabs(role), [role])
+  const tabs = useMemo(() => getNavigationTabs(role, user?.email), [role, user?.email])
   const isCoordinatorOps = canAccessCoordinatorPanel
 
   const headerNotificationCount = useMemo(() => {
@@ -410,7 +410,7 @@ export function AppShell() {
               onClose={closeFlow}
               onAction={handleAction}
               onNavigate={setTab}
-              showSystem={canAccessSystemPanel(role)}
+              showSystem={canAccessSystemPanel}
             />
           )}
           {flow === 'auth' && (

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Lock,
   Mail,
+  Phone,
   ShieldCheck,
   UserRound,
 } from 'lucide-react'
@@ -43,6 +44,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
   } = useAuth()
   const [mode, setMode] = useState<AuthMode>(initialMode)
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -108,7 +110,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
       } else if (mode === 'signup') {
         countSignupDebug('auth-screen.handleSubmit calling signUp()')
         const captchaToken = await requestCaptchaToken()
-        const result = await signUp(email.trim(), password, fullName.trim(), captchaToken)
+        const result = await signUp(email.trim(), password, fullName.trim(), phone.trim(), captchaToken)
         if (result.needsEmailConfirmation) {
           setMode('check-email')
         } else {
@@ -164,7 +166,7 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     isSubmitting ||
     !email.trim() ||
     (mode !== 'recover' && mode !== 'check-email' && mode !== 'password-updated' && !password.trim()) ||
-    (mode === 'signup' && !fullName.trim()) ||
+    (mode === 'signup' && (!fullName.trim() || !phone.trim())) ||
     (mode === 'reset-password' && (!password.trim() || !confirmPassword.trim()))
 
   return (
@@ -270,14 +272,25 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
               <GlassCard className="space-y-4">
                 <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)} noValidate>
                 {mode === 'signup' && (
-                  <AuthField
-                    label="Nombre completo"
-                    icon={UserRound}
-                    value={fullName}
-                    onChange={setFullName}
-                    placeholder="Tu nombre"
-                    disabled={isSubmitting}
-                  />
+                  <>
+                    <AuthField
+                      label="Nombre completo"
+                      icon={UserRound}
+                      value={fullName}
+                      onChange={setFullName}
+                      placeholder="Tu nombre"
+                      disabled={isSubmitting}
+                    />
+                    <AuthField
+                      label="Teléfono"
+                      icon={Phone}
+                      value={phone}
+                      onChange={setPhone}
+                      type="tel"
+                      placeholder="0412-0000000"
+                      disabled={isSubmitting}
+                    />
+                  </>
                 )}
                 <AuthField
                   label="Correo electrónico"

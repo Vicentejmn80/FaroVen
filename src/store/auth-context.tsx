@@ -32,7 +32,7 @@ interface AuthContextValue {
   clearPendingAuthIntent: () => void
   refreshProfile: () => Promise<void>
   signInWithPassword: (email: string, password: string, captchaToken?: string) => Promise<void>
-  signUp: (email: string, password: string, fullName: string, captchaToken?: string) => Promise<SignUpResult>
+  signUp: (email: string, password: string, fullName: string, phone: string, captchaToken?: string) => Promise<SignUpResult>
   verifyEmailOtp: (email: string, token: string) => Promise<void>
   resendSignupConfirmation: (email: string, captchaToken?: string) => Promise<void>
   resetPassword: (email: string, captchaToken?: string) => Promise<void>
@@ -145,8 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(nextSession)
         await loadProfile(nextSession?.user ?? null)
       },
-      signUp: (email, password, fullName, captchaToken) =>
-        authService.signUp(email, password, fullName, captchaToken),
+      signUp: (email, password, fullName, phone, captchaToken) =>
+        authService.signUp(email, password, fullName, phone, captchaToken),
       verifyEmailOtp: async (email, token) => {
         const { session: nextSession } = await authService.verifyEmailOtp(email, token)
         setSession(nextSession)
@@ -169,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       canAccessCoordinatorPanel: canAccessCoordinatorPanel(role),
       canAccessAdminPanel: canAccessAdminPanel(role),
-      canAccessSystemPanel: canAccessSystemPanel(role),
+      canAccessSystemPanel: canAccessSystemPanel(role, session?.user?.email),
     }),
     [session, profile, role, loading, authError, pendingAuthIntent, loadProfile],
   )
@@ -191,7 +191,7 @@ export function usePermissions() {
     isPublic: role === FARO_ROLES.PUBLIC,
     isCoordinator: role === FARO_ROLES.COORDINATOR,
     isRegionalAdmin: role === FARO_ROLES.REGIONAL_ADMIN,
-    isSuperAdmin: role === FARO_ROLES.SUPER_ADMIN,
+    isSuperAdmin: canAccessSystemPanel,
     canAccessCoordinatorPanel,
     canAccessAdminPanel,
     canAccessSystemPanel,

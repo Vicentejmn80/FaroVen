@@ -12,8 +12,14 @@ function mapProfile(row: Record<string, unknown>): ProfileRow {
     id: String(row.id),
     full_name: String(row.full_name ?? ''),
     email: String(row.email ?? ''),
+    phone: row.phone ? String(row.phone) : null,
     role: (row.role as ProfileRow['role']) ?? null,
     organization_id: row.organization_id ? String(row.organization_id) : null,
+    organization_name: row.organization_name ? String(row.organization_name) : null,
+    profession: row.profession ? String(row.profession) : null,
+    specialty: row.specialty ? String(row.specialty) : null,
+    municipality: row.municipality ? String(row.municipality) : null,
+    region: row.region ? String(row.region) : null,
     status: (row.status as ProfileRow['status']) ?? 'active',
     last_login_at: row.last_login_at ? String(row.last_login_at) : null,
     created_at: String(row.created_at),
@@ -73,7 +79,7 @@ export const profileRepository = {
     return data ? mapProfile(data) : null
   },
 
-  async upsertOwn(userId: string, email: string, fullName: string): Promise<ProfileRow> {
+  async upsertOwn(userId: string, email: string, fullName: string, phone?: string): Promise<ProfileRow> {
     const { data, error } = await supabase
       .from('profiles')
       .upsert(
@@ -81,6 +87,7 @@ export const profileRepository = {
           id: userId,
           email,
           full_name: fullName,
+          phone: phone?.trim() || null,
           status: 'active',
           updated_at: new Date().toISOString(),
         },

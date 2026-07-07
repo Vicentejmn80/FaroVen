@@ -21,8 +21,13 @@ export function resolvePublicRole(profile: ProfileRow | null): FaroRole {
   return profile.role
 }
 
-async function syncProfileOnSession(user: User, email: string, fullName?: string) {
-  await profileRepository.upsertOwn(user.id, user.email ?? email, fullName ?? user.user_metadata?.full_name ?? '')
+async function syncProfileOnSession(user: User, email: string, fullName?: string, phone?: string) {
+  await profileRepository.upsertOwn(
+    user.id,
+    user.email ?? email,
+    fullName ?? user.user_metadata?.full_name ?? '',
+    phone ?? user.user_metadata?.phone ?? undefined,
+  )
   await profileRepository.touchLastLogin(user.id)
 }
 
@@ -41,15 +46,26 @@ export const authService = {
     return data
   },
 
-  async signUp(email: string, password: string, fullName: string, captchaToken?: string): Promise<SignUpResult> {
+  async signUp(
+    email: string,
+    password: string,
+    fullName: string,
+    phone: string,
+    captchaToken?: string,
+  ): Promise<SignUpResult> {
     countSignupDebug('authService.signUp → supabase.auth.signUp', { email })
+
+    const normalizedPhone = phone.trim()
+    if (!normalizedPhone) {
+      throw new Error('El teléfono es obligatorio.')
+    }
 
     const redirectTo = `${window.location.origin}${window.location.pathname}`
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, phone: normalizedPhone },
         emailRedirectTo: redirectTo,
         ...(captchaToken ? { captchaToken } : {}),
       },
@@ -59,7 +75,7 @@ export const authService = {
     const needsEmailConfirmation = Boolean(data.user && !data.session)
 
     if (data.user && data.session) {
-      await syncProfileOnSession(data.user, email, fullName)
+      await syncProfileOnSession(data.user, email, fullName, normalizedPhone)
       await authAuditRepository.log('user_created', data.user.id)
     }
 
