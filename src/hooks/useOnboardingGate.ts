@@ -1,30 +1,37 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { hasCompletedOnboarding, markOnboardingCompleted } from '@/lib/onboarding-storage'
 
 export function useOnboardingGate() {
   const [completed] = useState(() => hasCompletedOnboarding())
   const [showLanding, setShowLanding] = useState(!completed)
-  const [showWelcome, setShowWelcome] = useState(false)
+  const [showInitialOnboarding, setShowInitialOnboarding] = useState(false)
 
   const enterApp = useCallback(() => {
     setShowLanding(false)
     if (!hasCompletedOnboarding()) {
-      setShowWelcome(true)
+      setShowInitialOnboarding(true)
     }
   }, [])
 
-  const completeWelcome = useCallback(() => {
+  const completeInitialOnboarding = useCallback(() => {
     markOnboardingCompleted()
-    setShowWelcome(false)
+    setShowInitialOnboarding(false)
+  }, [])
+
+  // Permite reabrir la introducción desde Perfil
+  useEffect(() => {
+    const openIntro = () => setShowInitialOnboarding(true)
+    window.addEventListener('faro:open-onboarding', openIntro)
+    return () => window.removeEventListener('faro:open-onboarding', openIntro)
   }, [])
 
   return useMemo(
     () => ({
       showLanding,
-      showWelcome,
+      showInitialOnboarding,
       enterApp,
-      completeWelcome,
+      completeInitialOnboarding,
     }),
-    [showLanding, showWelcome, enterApp, completeWelcome],
+    [showLanding, showInitialOnboarding, enterApp, completeInitialOnboarding],
   )
 }

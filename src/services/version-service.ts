@@ -1,14 +1,9 @@
 /**
  * Servicio de detección de versiones para la PWA de FARO.
  *
- * Flujo:
- *  1. Al montar la app consulta /version.json.
- *  2. Compara con la versión grabada en build-time (__FARO_RELEASE_CODE__).
- *  3. Si difieren, emite 'faro:version-update-available' con { critical }.
- *  4. Repite cada POLL_INTERVAL_MS y también al volver a abrir la app (visibilitychange).
- *
- * La variable de entorno FARO_CRITICAL_UPDATE=true en el build establece el flag
- * critical en version.json, lo que mostrará un diálogo bloqueante.
+ * Compara el bundle activo (__FARO_RELEASE_CODE__) contra /version.json del servidor.
+ * Solo dispara el banner si AMBOS difieren (versión y commit), evitando falsos positivos
+ * cuando solo cambia la fecha del build pero el código es el mismo.
  */
 
 export interface VersionPayload {
@@ -24,8 +19,9 @@ export interface FaroUpdateEvent {
   critical: boolean
 }
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000   // 5 minutos
-const CACHE_BUST_TTL_MS = 30 * 1000      // re-consultar si han pasado >30s sin resultado
+const POLL_INTERVAL_MS = 5 * 60 * 1000
+const CACHE_BUST_TTL_MS = 30 * 1000
+const DISMISS_KEY = 'faro:update-dismissed'
 
 let pollerTimer: ReturnType<typeof setInterval> | null = null
 let lastChecked = 0
@@ -36,6 +32,13 @@ function localVersion(): string {
     return __FARO_RELEASE_CODE__
   }
   return 'FARO-dev'
+}
+
+function localCommit(): string {
+  if (typeof __FARO_BUILD_COMMIT__ !== 'undefined' && __FARO_BUILD_COMMIT__) {
+    return __FARO_BUILD_COMMIT__
+  }
+  return 'unknown'
 }
 
 async function fetchRemoteVersion(): Promise<VersionPayload | null> {
@@ -51,16 +54,31 @@ async function fetchRemoteVersion(): Promise<VersionPayload | null> {
   }
 }
 
+function isUpdateAvailable(remote: VersionPayload): boolean {
+  const local = localVersion()
+  if (local === 'FARO-dev') return false
+
+  // Requiere que versión Y commit difieran — evita alarmas si solo cambió el timestamp
+  const versionDiffers = remote.version !== local
+  const commitDiffers = Boolean(remote.commit && remote.commit !== localCommit())
+
+  return versionDiffers && commitDiffers
+}
+
 function dispatchUpdateEvent(remote: VersionPayload) {
   if (updateAlreadyFired) return
-  const event: FaroUpdateEvent = {
-    remote,
-    local: localVersion(),
-    critical: remote.critical,
+
+  // Si el usuario descartó el banner en esta sesión, no volver a molestar
+  // (salvo actualizaciones críticas)
+  if (!remote.critical && sessionStorage.getItem(DISMISS_KEY) === remote.version) {
+    return
   }
+
   updateAlreadyFired = true
   window.dispatchEvent(
-    new CustomEvent<FaroUpdateEvent>('faro:version-update-available', { detail: event }),
+    new CustomEvent<FaroUpdateEvent>('faro:version-update-available', {
+      detail: { remote, local: localVersion(), critical: remote.critical },
+    }),
   )
 }
 
@@ -72,35 +90,31 @@ async function checkVersion() {
   const remote = await fetchRemoteVersion()
   if (!remote) return
 
-  const local = localVersion()
-
-  // En dev local ('FARO-dev') no disparar falsas alarmas
-  if (local === 'FARO-dev') return
-
-  if (remote.version !== local) {
+  if (isUpdateAvailable(remote)) {
     dispatchUpdateEvent(remote)
   }
 }
 
+/** Marca la actualización como descartada para esta sesión. */
+export function dismissVersionUpdate(version: string) {
+  sessionStorage.setItem(DISMISS_KEY, version)
+}
+
 /** Inicia el poller. Llamar una sola vez desde main.tsx. */
 export function startVersionPoller() {
-  // Chequeo inmediato al arrancar
   void checkVersion()
 
-  // Polling periódico
   if (pollerTimer) clearInterval(pollerTimer)
   pollerTimer = setInterval(() => void checkVersion(), POLL_INTERVAL_MS)
 
-  // Chequeo al volver a la app (tab en primer plano, especialmente útil en Android/iOS)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      lastChecked = 0   // forzar nueva consulta
+      lastChecked = 0
       void checkVersion()
     }
   })
 }
 
-/** Detiene el poller (útil en tests). */
 export function stopVersionPoller() {
   if (pollerTimer) {
     clearInterval(pollerTimer)

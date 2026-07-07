@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ClipboardList } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
+import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
 import { EmptyState } from '@/components/ui/empty-state'
 import { RequireRole } from '@/components/auth/require-role'
 import { CoordinatorRequestReview } from '@/components/admin/coordinator-request-review'
@@ -143,6 +144,7 @@ function AdminScreenContent({
   return (
     <ScreenScaffold title="Administración" subtitle="Centro de operaciones regional">
       <div className="space-y-5 pt-2">
+        <ContextualHelpCard moduleId="admin" />
         <RegionalOpsDashboard />
 
         <section className="space-y-2">

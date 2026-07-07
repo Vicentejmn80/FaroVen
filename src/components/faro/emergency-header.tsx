@@ -1,4 +1,4 @@
-import { Bell } from 'lucide-react'
+import { Bell, CircleHelp } from 'lucide-react'
 import { ConnectivityIndicator } from './live-indicator'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { FaroIcon } from '@/components/brand/faro-icon'
@@ -13,7 +13,6 @@ interface EmergencyHeaderProps {
   className?: string
 }
 
-/** Logotipo FARO — faro minimalista en marca de palabra. */
 function FaroWordmark() {
   return (
     <div className="flex items-center gap-2.5">
@@ -23,10 +22,6 @@ function FaroWordmark() {
   )
 }
 
-/**
- * EmergencyHeader — barra superior limpia: marca, indicador en vivo,
- * notificaciones. Nada más.
- */
 export function EmergencyHeader({
   notifications = 0,
   onNotifications,
@@ -34,6 +29,10 @@ export function EmergencyHeader({
   connectionLabel = 'En linea',
   className,
 }: EmergencyHeaderProps) {
+  const openHelp = () => {
+    window.dispatchEvent(new CustomEvent('faro:open-help-center'))
+  }
+
   return (
     <header
       className={cn(
@@ -42,8 +41,17 @@ export function EmergencyHeader({
       )}
     >
       <FaroWordmark />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <ConnectivityIndicator state={connectionState} label={connectionLabel} />
+        <EmergencyButton
+          variant="glass"
+          size="icon"
+          onClick={openHelp}
+          aria-label="¿Cómo funciona FARO?"
+          title="¿Cómo funciona FARO?"
+        >
+          <CircleHelp className="h-[18px] w-[18px]" strokeWidth={1.75} />
+        </EmergencyButton>
         <EmergencyButton
           variant="glass"
           size="icon"

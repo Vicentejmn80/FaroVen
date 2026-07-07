@@ -9,6 +9,7 @@ import {
   TruckIcon,
 } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
+import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyBadge } from '@/components/faro/emergency-badge'
 import { CoordinatorDashboard } from '@/components/coordinator/coordinator-dashboard'
@@ -80,6 +81,7 @@ export function CoordinatorPanelScreen({
       subtitle={`${dashboard.siteTypeLabel} · Panel operativo`}
     >
       <div className="space-y-4 pt-2">
+        <ContextualHelpCard moduleId="ops" />
         <GlassCard className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.14em] text-ink-subtle">Centro asignado</p>

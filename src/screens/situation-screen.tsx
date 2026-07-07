@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { List, Map as MapIcon, PlusCircle } from 'lucide-react'
+import { List, Map as MapIcon, MapPin, PlusCircle } from 'lucide-react'
+import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
+import { GuidedEmptyState } from '@/components/onboarding/GuidedEmptyState'
+import { PriorityCoverageGuide } from '@/components/onboarding/PriorityCoverageGuide'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { SectionTitle } from '@/components/faro/section-title'
@@ -100,6 +103,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
           {/* Columna izquierda — contexto y reportes */}
           <div className="lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:pr-1">
             <PageHeader onRegisterSite={onRegisterSite} />
+            <ContextualHelpCard moduleId="map" className="mt-3" />
             <QuickAnswerBar
               query={query}
               onQuery={setQuery}
@@ -115,17 +119,20 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
             )}
 
             {!isLoading && !loadError && sites.length === 0 && (
-              <GlassCard inset={false} className="mt-4 space-y-3 p-4">
-                <p className="text-sm font-medium text-ink">Mapa vacío — datos en vivo desde Supabase</p>
-                <p className="text-sm text-ink-muted">
-                  No hay sitios activos. Registra el primer hospital, refugio o centro de acopio para que aparezca aquí.
-                </p>
-                {onRegisterSite && (
-                  <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onRegisterSite}>
-                    Registrar primer sitio
-                  </EmergencyButton>
-                )}
-              </GlassCard>
+              <GuidedEmptyState
+                className="mt-4"
+                icon={MapPin}
+                title="Aún no hay centros en el mapa"
+                description="Cuando los coordinadores registren hospitales, refugios o acopios, aparecerán aquí con sus necesidades en tiempo real."
+                hint="Si eres administrador, usa el botón Registrar para añadir el primer centro."
+                action={
+                  onRegisterSite ? (
+                    <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onRegisterSite}>
+                      Registrar primer sitio
+                    </EmergencyButton>
+                  ) : undefined
+                }
+              />
             )}
 
             <section className="mt-4 lg:mt-3">
@@ -171,6 +178,12 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
                   }))
                 }
               />
+            )}
+
+            {viewMode === 'list' && listSites.length > 0 && (
+              <div className="mt-4 hidden lg:block">
+                <PriorityCoverageGuide compact className="rounded-2xl border border-white/10 bg-white/[0.02] p-3" />
+              </div>
             )}
 
             <ReportsSection activity={filteredActivity} className="mt-5 lg:mt-4 lg:min-h-0 lg:flex-1" />
@@ -294,9 +307,11 @@ function NeedsByCenterSection({
       </div>
 
       {filteredItems.length === 0 ? (
-        <GlassCard inset={false} className="p-4">
-          <p className="text-sm text-ink-muted">No hay necesidades que coincidan con el filtro.</p>
-        </GlassCard>
+        <GuidedEmptyState
+          title="Sin resultados con este filtro"
+          description="Prueba otro nivel de prioridad o limpia la búsqueda para ver todos los centros."
+          hint="Las necesidades críticas aparecen primero en el resumen superior del mapa."
+        />
       ) : (
         <div className="space-y-3">
           {filteredItems.map(({ site, needs }) => (
@@ -577,7 +592,11 @@ function ReportsSection({
               <TimelineItem key={event.id} event={event} index={i} last={i === activity.length - 1} />
             ))
           ) : (
-            <p className="px-1 py-2 text-sm text-ink-subtle">Sin movimientos recientes.</p>
+            <GuidedEmptyState
+              title="Sin movimientos recientes"
+              description="Aquí verás actualizaciones de necesidades, reportes y llegadas de insumos a medida que ocurran."
+              hint="Toca un centro en el mapa para ver qué necesita ahora mismo."
+            />
           )}
         </div>
       </GlassCard>

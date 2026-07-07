@@ -1,17 +1,22 @@
 import {
   Bell,
   ChevronRight,
+  CircleHelp,
   LogOut,
+  RotateCcw,
   ShieldCheck,
   UserRound,
 } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
+import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useAuth } from '@/store/auth-context'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { FARO_ROLE_LABELS } from '@/lib/roles'
 import { formatBuildVersion } from '@/lib/build-info'
+import { resetAllOnboarding } from '@/lib/onboarding-storage'
+import { useToast } from '@/store/toast-context'
 
 interface ProfileScreenProps {
   onRequestCoordinatorAccess?: () => void
@@ -27,6 +32,7 @@ export function ProfileScreen({
 }: ProfileScreenProps) {
   const { user, profile, role, signOut } = useAuth()
   const { assignment } = useCoordinatorAssignment()
+  const { showToast } = useToast()
 
   const lastLogin = profile?.last_login_at
     ? new Date(profile.last_login_at).toLocaleString('es-VE')
@@ -42,9 +48,20 @@ export function ProfileScreen({
 
   const buildVersion = formatBuildVersion()
 
+  const openHelpCenter = () => {
+    window.dispatchEvent(new CustomEvent('faro:open-help-center'))
+  }
+
+  const handleResetOnboarding = () => {
+    resetAllOnboarding()
+    window.dispatchEvent(new CustomEvent('faro:open-onboarding'))
+    showToast('Tutoriales reiniciados. Verás las ayudas al visitar cada sección.', 'success')
+  }
+
   return (
     <ScreenScaffold title="Perfil" subtitle={user ? 'Tu cuenta' : 'Acceso ciudadano'}>
       <div className="space-y-5 pt-2">
+        <ContextualHelpCard moduleId="profile" />
         <GlassCard className="space-y-3">
           <div className="flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06]">
@@ -122,6 +139,39 @@ export function ProfileScreen({
             </button>
           </GlassCard>
         )}
+
+        <GlassCard className="space-y-2">
+          <button
+            type="button"
+            onClick={openHelpCenter}
+            className="flex w-full items-center gap-3 text-left"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06]">
+              <CircleHelp className="h-[18px] w-[18px] text-ink-muted" />
+            </span>
+            <span className="flex-1">
+              <span className="block text-[15px] text-ink">¿Cómo funciona FARO?</span>
+              <span className="block text-xs text-ink-subtle">Conceptos, prioridades y cobertura</span>
+            </span>
+            <ChevronRight className="h-4 w-4 text-ink-faint" />
+          </button>
+          {user && (
+            <button
+              type="button"
+              onClick={handleResetOnboarding}
+              className="flex w-full items-center gap-3 text-left"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06]">
+                <RotateCcw className="h-[18px] w-[18px] text-ink-muted" />
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] text-ink">Reiniciar tutoriales y ayudas</span>
+                <span className="block text-xs text-ink-subtle">Vuelve a ver las guías contextuales</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-ink-faint" />
+            </button>
+          )}
+        </GlassCard>
 
         {user && (
           <EmergencyButton variant="glass" size="lg" className="w-full text-critical" onClick={() => void signOut()}>

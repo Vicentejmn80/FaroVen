@@ -1,4 +1,5 @@
-import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { AnimatePresence, motion } from 'framer-motion'
 import { EmergencyHeader } from '@/components/faro/emergency-header'
 import { ConnectionBanner } from '@/components/faro/connection-banner'
@@ -40,27 +41,27 @@ import type { NotificationRow } from '@/domain/notification-models'
 
 type FlowId = ActionId | 'menu' | 'auth' | 'coordinator-request'
 
-const SituationScreen = lazy(() =>
+const SituationScreen = lazyWithRetry(() =>
   import('@/screens/situation-screen').then((m) => ({ default: m.SituationScreen })),
 )
-const ActivityScreen = lazy(() =>
+const ActivityScreen = lazyWithRetry(() =>
   import('@/screens/activity-screen').then((m) => ({ default: m.ActivityScreen })),
 )
-const ReportsScreen = lazy(() =>
+const ReportsScreen = lazyWithRetry(() =>
   import('@/screens/reports-screen').then((m) => ({ default: m.ReportsScreen })),
 )
-const CenterDetailScreen = lazy(() =>
+const CenterDetailScreen = lazyWithRetry(() =>
   import('@/screens/center-detail-screen').then((m) => ({ default: m.CenterDetailScreen })),
 )
-const CoordinatorPanelScreen = lazy(() =>
+const CoordinatorPanelScreen = lazyWithRetry(() =>
   import('@/screens/coordinator-panel-screen').then((m) => ({ default: m.CoordinatorPanelScreen })),
 )
-const AdminScreen = lazy(() => import('@/screens/admin-screen').then((m) => ({ default: m.AdminScreen })))
-const SystemAdminScreen = lazy(() =>
+const AdminScreen = lazyWithRetry(() => import('@/screens/admin-screen').then((m) => ({ default: m.AdminScreen })))
+const SystemAdminScreen = lazyWithRetry(() =>
   import('@/screens/system-admin-screen').then((m) => ({ default: m.SystemAdminScreen })),
 )
-const AuthScreen = lazy(() => import('@/screens/auth-screen').then((m) => ({ default: m.AuthScreen })))
-const CoordinatorRequestScreen = lazy(() =>
+const AuthScreen = lazyWithRetry(() => import('@/screens/auth-screen').then((m) => ({ default: m.AuthScreen })))
+const CoordinatorRequestScreen = lazyWithRetry(() =>
   import('@/screens/coordinator-request-screen').then((m) => ({ default: m.CoordinatorRequestScreen })),
 )
 
@@ -310,7 +311,10 @@ export function AppShell() {
                 transition={{ duration: 0.18 }}
                 className="h-full min-h-0"
               >
-                <ScreenErrorBoundary screenName="la pantalla">
+                <ScreenErrorBoundary
+                  screenName="la pantalla"
+                  resetKey={tab === 'map' && detailSite ? `detail-${detailSite.id}` : tab}
+                >
                   <Suspense fallback={<ScreenLoading />}>
                   {tab === 'ops' && (
                     <RequireRole

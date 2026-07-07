@@ -1,16 +1,16 @@
 import { useEffect, useReducer } from 'react'
 import { RefreshCcw, Zap } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
-import type { FaroUpdateEvent } from '@/services/version-service'
+import { dismissVersionUpdate, type FaroUpdateEvent } from '@/services/version-service'
 
 type UpdateState =
   | { phase: 'idle' }
-  | { phase: 'banner'; critical: false; updating: boolean }
+  | { phase: 'banner'; critical: false; updating: boolean; remoteVersion?: string }
   | { phase: 'critical'; critical: true; updating: boolean }
 
 type Action =
-  | { type: 'SHOW_UPDATE'; critical: boolean }
-  | { type: 'DISMISS' }
+  | { type: 'SHOW_UPDATE'; critical: boolean; remoteVersion?: string }
+  | { type: 'DISMISS'; remoteVersion?: string }
   | { type: 'START_UPDATE' }
   | { type: 'RESET' }
 
@@ -20,8 +20,9 @@ function reducer(state: UpdateState, action: Action): UpdateState {
       if (state.phase !== 'idle') return state
       return action.critical
         ? { phase: 'critical', critical: true, updating: false }
-        : { phase: 'banner', critical: false, updating: false }
+        : { phase: 'banner', critical: false, updating: false, remoteVersion: action.remoteVersion }
     case 'DISMISS':
+      if (action.remoteVersion) dismissVersionUpdate(action.remoteVersion)
       return state.phase === 'banner' ? { phase: 'idle' } : state
     case 'START_UPDATE':
       if (state.phase === 'idle') return state
@@ -54,7 +55,11 @@ export function PwaUpdateBanner() {
     // Actualización detectada por el poller de version.json
     const onVersionUpdate = (e: Event) => {
       const detail = (e as CustomEvent<FaroUpdateEvent>).detail
-      dispatch({ type: 'SHOW_UPDATE', critical: detail.critical })
+      dispatch({
+        type: 'SHOW_UPDATE',
+        critical: detail.critical,
+        remoteVersion: detail.remote.version,
+      })
     }
     window.addEventListener('faro:version-update-available', onVersionUpdate)
 
@@ -144,7 +149,9 @@ export function PwaUpdateBanner() {
             variant="glass"
             size="sm"
             className="flex-1"
-            onClick={() => dispatch({ type: 'DISMISS' })}
+            onClick={() =>
+              dispatch({ type: 'DISMISS', remoteVersion: state.remoteVersion })
+            }
             disabled={state.updating}
           >
             Más tarde

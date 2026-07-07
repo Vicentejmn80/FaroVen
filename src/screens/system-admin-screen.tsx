@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Shield } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
+import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
 import { GlassCard } from '@/components/ui/glass-card'
 import { AuditTimeline } from '@/components/audit/AuditTimeline'
 import { SystemHealthPanel } from '@/components/admin/system-health-panel'
@@ -71,6 +72,7 @@ function SystemAdminScreenContent() {
   return (
     <ScreenScaffold title="Sistema" subtitle="Super administración">
       <div className="space-y-4 pt-2">
+        <ContextualHelpCard moduleId="system" />
         <GlassCard className="flex items-center gap-3">
           <Shield className="h-5 w-5 text-info" />
           <div>

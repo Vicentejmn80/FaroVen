@@ -13,6 +13,8 @@ import {
   X,
 } from 'lucide-react'
 import { FaroIcon } from '@/components/brand/faro-icon'
+import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
+import { GuidedEmptyState } from '@/components/onboarding/GuidedEmptyState'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -187,6 +189,7 @@ export function ReportsScreen() {
   return (
     <ScreenScaffold title="Reporte ciudadano" subtitle="Ayuda a tu comunidad">
       <div className="space-y-5 pb-6 pt-2">
+        <ContextualHelpCard moduleId="reports" />
         <GlassCard className="flex items-start gap-3 border border-purple-400/20 bg-purple-500/[0.08]">
           <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-200">
             <Heart className="h-5 w-5" />
@@ -232,10 +235,12 @@ export function ReportsScreen() {
               </p>
 
               {registeredSites.length === 0 ? (
-                <GlassCard className="text-sm text-ink-muted">
-                  Aún no hay centros registrados en FARO. Cuando un coordinador registre
-                  hospitales, refugios o centros de acopio, podrás reportar sobre ellos aquí.
-                </GlassCard>
+                <GuidedEmptyState
+                  icon={MapPin}
+                  title="Aún no hay centros registrados"
+                  description="Los reportes ciudadanos se vinculan a centros activos en FARO. Cuando existan hospitales, refugios o acopios, podrás reportar sobre ellos."
+                  hint="Si conoces un centro que debería estar aquí, contacta a un coordinador o administrador."
+                />
               ) : selectedSite ? (
                 <SelectedLocationChip
                   site={selectedSite}

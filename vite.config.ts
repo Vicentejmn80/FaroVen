@@ -3,12 +3,36 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const buildDate = new Date().toISOString()
-const buildCommit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? getLocalCommit()
-const releaseCode = formatReleaseCode()
+
+/** Lee version.json generado por prebuild — fuente única de verdad para el bundle. */
+function loadReleaseMeta() {
+  try {
+    const raw = readFileSync(path.resolve(__dirname, 'public/version.json'), 'utf8')
+    const parsed = JSON.parse(raw) as {
+      version: string
+      buildDate: string
+      commit?: string
+    }
+    return {
+      releaseCode: parsed.version,
+      buildDate: parsed.buildDate,
+      buildCommit: parsed.commit ?? getLocalCommit(),
+    }
+  } catch {
+    const buildDate = new Date().toISOString()
+    return {
+      releaseCode: formatReleaseCode(),
+      buildDate,
+      buildCommit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? getLocalCommit(),
+    }
+  }
+}
+
+const { releaseCode, buildDate, buildCommit } = loadReleaseMeta()
 
 function formatReleaseCode(): string {
   const now = new Date()
