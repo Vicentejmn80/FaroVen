@@ -6,6 +6,12 @@
   "installCommand": "npm install --include=dev",
   "headers": [
     {
+      "source": "/icons/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
       "source": "/push/onesignal/OneSignalSDKWorker.js",
       "headers": [
         {

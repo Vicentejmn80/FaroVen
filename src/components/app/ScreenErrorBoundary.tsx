@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { RefreshCcw } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { isChunkLoadError } from '@/lib/lazy-with-retry'
+import { clearPwaAssetCaches } from '@/lib/pwa-cache'
 
 interface Props {
   children: ReactNode
@@ -42,6 +43,8 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   }
 
   private reload = async () => {
+    await clearPwaAssetCaches()
+
     if (window.__faroUpdateSW) {
       try {
         await window.__faroUpdateSW(true)

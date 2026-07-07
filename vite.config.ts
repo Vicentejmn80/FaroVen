@@ -154,6 +154,24 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
+            urlPattern: /\/manifest\.webmanifest$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'pwa-manifest',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 3, maxAgeSeconds: 60 * 5 },
+            },
+          },
+          {
+            urlPattern: /\/icons\/.*\.(png|webp|svg)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'pwa-icons',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
             urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
             handler: 'CacheFirst',
             options: {

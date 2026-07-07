@@ -2,6 +2,7 @@ import { useEffect, useReducer } from 'react'
 import { RefreshCcw, Zap } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { dismissVersionUpdate, type FaroUpdateEvent } from '@/services/version-service'
+import { clearPwaAssetCaches } from '@/lib/pwa-cache'
 
 type UpdateState =
   | { phase: 'idle' }
@@ -36,6 +37,8 @@ function reducer(state: UpdateState, action: Action): UpdateState {
 
 /** Activa el nuevo Service Worker y fuerza recarga de la página. */
 async function performUpdate() {
+  await clearPwaAssetCaches()
+
   // Si hay un SW esperando, lo activamos vía vite-plugin-pwa
   if (typeof window.__faroUpdateSW === 'function') {
     await window.__faroUpdateSW(true)
