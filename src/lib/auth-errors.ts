@@ -45,6 +45,22 @@ export function formatAuthError(message: string): string {
     return 'No puedes responder a esta solicitud.'
   }
 
+  if (normalized.includes('confirm_super_admin_required')) {
+    return 'Confirma la eliminación de un Super Administrador.'
+  }
+
+  if (normalized.includes('cannot_delete_self') || normalized.includes('cannot_demote_self')) {
+    return 'No puedes eliminar ni degradar tu propia cuenta.'
+  }
+
+  if (normalized.includes('cannot_modify_super_admin')) {
+    return 'No se puede modificar a otro Super Administrador sin confirmación explícita.'
+  }
+
+  if (normalized.includes('not_authorized')) {
+    return 'No tienes permisos para esta acción.'
+  }
+
   if (
     normalized.includes('jwt') ||
     normalized.includes('token') ||

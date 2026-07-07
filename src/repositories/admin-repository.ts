@@ -61,7 +61,7 @@ export const adminRepository = {
       user_id: String(row.user_id),
       type: String(row.type ?? ''),
       title: String(row.title ?? ''),
-      body: String(row.body ?? ''),
+      body: String(row.message ?? row.body ?? ''),
       read: Boolean(row.read),
       created_at: String(row.created_at),
     }))
@@ -120,5 +120,61 @@ export const adminRepository = {
   async deleteNotification(notificationId: string): Promise<void> {
     const { error } = await supabase.from('notifications').delete().eq('id', notificationId)
     if (error) throw error
+  },
+
+  async demoteUser(userId: string): Promise<ProfileRow> {
+    const { data, error } = await supabase.rpc('admin_demote_user', { p_user_id: userId })
+    if (error) throw error
+    return mapProfile(data as Record<string, unknown>)
+  },
+
+  async deleteUser(userId: string, confirmSuperAdmin = false): Promise<void> {
+    const { error } = await supabase.rpc('admin_delete_user', {
+      p_user_id: userId,
+      p_confirm_super_admin: confirmSuperAdmin,
+    })
+    if (error) throw error
+  },
+
+  async deleteReport(reportId: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_delete_report', { p_report_id: reportId })
+    if (error) throw error
+  },
+
+  async deleteEvent(eventId: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_delete_event', { p_event_id: eventId })
+    if (error) throw error
+  },
+
+  async createNeed(input: {
+    needableType: RegisterSiteType
+    needableId: string
+    itemName: string
+    priority: string
+    qtyRequired: number
+    qtyReceived?: number
+  }): Promise<void> {
+    const { error } = await supabase.rpc('admin_create_need', {
+      p_needable_type: input.needableType,
+      p_needable_id: input.needableId,
+      p_item_name: input.itemName,
+      p_priority: input.priority,
+      p_qty_required: input.qtyRequired,
+      p_qty_received: input.qtyReceived ?? 0,
+    })
+    if (error) throw error
+  },
+
+  async markNeedCovered(needId: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_mark_need_covered', { p_need_id: needId })
+    if (error) throw error
+  },
+
+  async resetOperationalData(preserveEmail?: string): Promise<Record<string, unknown>> {
+    const { data, error } = await supabase.rpc('admin_reset_operational_data', {
+      p_preserve_email: preserveEmail ?? 'vicentejmn80@gmail.com',
+    })
+    if (error) throw error
+    return (data as Record<string, unknown>) ?? {}
   },
 }

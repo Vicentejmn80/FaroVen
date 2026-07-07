@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { AdminUpdateProfileInput } from '@/lib/admin-types'
 import type { ProfileRow } from '@/repositories/auth-types'
+import type { RegisterSiteType } from '@/repositories/types'
 import { adminService } from '@/services/admin-service'
 import { AUTH_QUERY_KEYS } from '@/hooks/useAuthRequests'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 
 export const ADMIN_QUERY_KEYS = {
   registry: ['admin', 'registry'] as const,
@@ -10,12 +12,23 @@ export const ADMIN_QUERY_KEYS = {
   needs: ['admin', 'needs'] as const,
   reports: ['admin', 'reports'] as const,
   notifications: ['admin', 'notifications'] as const,
+  events: ['admin', 'events'] as const,
 }
 
-function invalidateAdminQueries(queryClient: ReturnType<typeof useQueryClient>) {
+function invalidateAllAdmin(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.registry })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.coordinators })
+  void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.needs })
+  void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.reports })
+  void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.notifications })
+  void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.events })
   void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.profilesAdmin })
+  void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.pendingRequests })
+  void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.audit })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centers] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.needs] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.reports] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.events] })
   void queryClient.invalidateQueries({ queryKey: ['sites-registry'] })
   void queryClient.invalidateQueries({ queryKey: ['anchor-sites'] })
 }
@@ -56,6 +69,15 @@ export function useAdminReports(enabled: boolean) {
   })
 }
 
+export function useAdminEvents(enabled: boolean) {
+  return useQuery({
+    queryKey: ADMIN_QUERY_KEYS.events,
+    queryFn: () => adminService.listEvents(),
+    enabled,
+    staleTime: 15_000,
+  })
+}
+
 export function useAdminNotificationsList(enabled: boolean) {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.notifications,
@@ -69,14 +91,13 @@ export function useAdminMutations() {
   const queryClient = useQueryClient()
 
   const afterUserChange = async () => {
-    invalidateAdminQueries(queryClient)
-    await queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.audit })
+    invalidateAllAdmin(queryClient)
   }
 
   const deleteSite = useMutation({
-    mutationFn: ({ siteType, siteId }: { siteType: 'hospital' | 'shelter' | 'supply_center'; siteId: string }) =>
+    mutationFn: ({ siteType, siteId }: { siteType: RegisterSiteType; siteId: string }) =>
       adminService.deleteSite(siteType, siteId),
-    onSuccess: () => invalidateAdminQueries(queryClient),
+    onSuccess: () => invalidateAllAdmin(queryClient),
   })
 
   const removeCoordinator = useMutation({
@@ -89,6 +110,17 @@ export function useAdminMutations() {
     onSuccess: () => afterUserChange(),
   })
 
+  const demoteUser = useMutation({
+    mutationFn: (userId: string) => adminService.demoteUser(userId),
+    onSuccess: () => afterUserChange(),
+  })
+
+  const deleteUser = useMutation({
+    mutationFn: ({ userId, confirmSuperAdmin }: { userId: string; confirmSuperAdmin?: boolean }) =>
+      adminService.deleteUser(userId, confirmSuperAdmin),
+    onSuccess: () => afterUserChange(),
+  })
+
   const updateUserStatus = useMutation({
     mutationFn: ({ userId, status }: { userId: string; status: ProfileRow['status'] }) =>
       adminService.updateUserStatus(userId, status),
@@ -98,6 +130,13 @@ export function useAdminMutations() {
   const updateProfile = useMutation({
     mutationFn: (input: AdminUpdateProfileInput) => adminService.updateProfile(input),
     onSuccess: () => afterUserChange(),
+  })
+
+  const createNeed = useMutation({
+    mutationFn: (input: Parameters<typeof adminService.createNeed>[0]) => adminService.createNeed(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.needs })
+    },
   })
 
   const deleteNeed = useMutation({
@@ -126,6 +165,13 @@ export function useAdminMutations() {
     },
   })
 
+  const markNeedCovered = useMutation({
+    mutationFn: (needId: string) => adminService.markNeedCovered(needId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.needs })
+    },
+  })
+
   const reviewReport = useMutation({
     mutationFn: ({
       id,
@@ -148,6 +194,20 @@ export function useAdminMutations() {
     },
   })
 
+  const deleteReport = useMutation({
+    mutationFn: (id: string) => adminService.deleteReport(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.reports })
+    },
+  })
+
+  const deleteEvent = useMutation({
+    mutationFn: (id: string) => adminService.deleteEvent(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.events })
+    },
+  })
+
   const deleteNotification = useMutation({
     mutationFn: (id: string) => adminService.deleteNotification(id),
     onSuccess: () => {
@@ -155,16 +215,28 @@ export function useAdminMutations() {
     },
   })
 
+  const resetOperationalData = useMutation({
+    mutationFn: (preserveEmail?: string) => adminService.resetOperationalData(preserveEmail),
+    onSuccess: () => invalidateAllAdmin(queryClient),
+  })
+
   return {
     deleteSite,
     removeCoordinator,
     revokeCoordinatorRole,
+    demoteUser,
+    deleteUser,
     updateUserStatus,
     updateProfile,
+    createNeed,
     deleteNeed,
     updateNeed,
+    markNeedCovered,
     reviewReport,
     restoreReport,
+    deleteReport,
+    deleteEvent,
     deleteNotification,
+    resetOperationalData,
   }
 }

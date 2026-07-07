@@ -39,6 +39,7 @@ export interface AdminNotificationRow {
 export type SuperAdminModuleId =
   | 'users'
   | 'coordinators'
+  | 'requests'
   | 'hospitals'
   | 'shelters'
   | 'supply_centers'
@@ -46,7 +47,9 @@ export type SuperAdminModuleId =
   | 'reports'
   | 'notifications'
   | 'inventory'
+  | 'events'
   | 'audit'
+  | 'dev_reset'
 
 export interface AdminUpdateProfileInput {
   userId: string

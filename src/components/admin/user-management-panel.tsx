@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Building2, Shield, UserCog, UserMinus, Users, UserX } from 'lucide-react'
+import { Building2, Pencil, Shield, Trash2, UserCog, UserMinus, Users, UserX } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -22,7 +22,7 @@ interface UserManagementPanelProps {
   busyId: string | null
   onPromoteAdmin: (userId: string) => Promise<void>
   onPromoteCoordinator: (userId: string, siteId: string) => Promise<void>
-  onUserAction?: (action: string, profile: ProfileRow) => Promise<void>
+  onUserAction?: (action: string, profile: ProfileRow, extra?: boolean) => Promise<void>
 }
 
 export function UserManagementPanel({
@@ -37,6 +37,8 @@ export function UserManagementPanel({
 }: UserManagementPanelProps) {
   const [coordinatorTarget, setCoordinatorTarget] = useState<ProfileRow | null>(null)
   const [adminTarget, setAdminTarget] = useState<ProfileRow | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProfileRow | null>(null)
+  const [confirmSuperAdminDelete, setConfirmSuperAdminDelete] = useState(false)
   const [selectedSiteId, setSelectedSiteId] = useState<string>('')
 
   const registeredSites = useMemo(
@@ -173,6 +175,17 @@ export function UserManagementPanel({
                         Quitar rol coordinador
                       </EmergencyButton>
                     )}
+                    {profile.role === FARO_ROLES.REGIONAL_ADMIN && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="w-full"
+                        disabled={busyId === profile.id}
+                        onClick={() => void onUserAction?.('demote', profile)}
+                      >
+                        Quitar rol admin
+                      </EmergencyButton>
+                    )}
                     {profile.status === 'active' ? (
                       <EmergencyButton
                         variant="glass"
@@ -195,7 +208,35 @@ export function UserManagementPanel({
                         Reactivar
                       </EmergencyButton>
                     )}
+                    {!isSelf && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="w-full text-critical sm:col-span-2"
+                        disabled={busyId === profile.id}
+                        onClick={() => {
+                          setConfirmSuperAdminDelete(false)
+                          setDeleteTarget(profile)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Eliminar usuario
+                      </EmergencyButton>
+                    )}
                   </div>
+                )}
+
+                {canManage && profile.role !== FARO_ROLES.SUPER_ADMIN && (
+                  <EmergencyButton
+                    variant="glass"
+                    size="sm"
+                    className="w-full"
+                    disabled={busyId === profile.id}
+                    onClick={() => void onUserAction?.('edit-profile', profile)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar perfil
+                  </EmergencyButton>
                 )}
 
                 {isSelf && (
@@ -251,6 +292,55 @@ export function UserManagementPanel({
             >
               <UserCog className="h-4 w-4" />
               Confirmar coordinador
+            </EmergencyButton>
+          </div>
+        </FlowSheet>
+      )}
+
+      {deleteTarget && (
+        <FlowSheet
+          title="Eliminar usuario permanentemente"
+          subtitle={deleteTarget.full_name || deleteTarget.email}
+          onClose={() => {
+            setDeleteTarget(null)
+            setConfirmSuperAdminDelete(false)
+          }}
+        >
+          <div className="space-y-4 px-5 pb-8">
+            <GlassCard className="space-y-2 border-critical/30 bg-critical/5">
+              <p className="text-sm font-medium text-critical">Acción irreversible</p>
+              <p className="text-sm text-ink-muted">
+                Se eliminarán el perfil, datos de coordinador, preferencias, suscripciones push y la cuenta de Auth.
+              </p>
+            </GlassCard>
+            {deleteTarget.role === FARO_ROLES.SUPER_ADMIN && (
+              <label className="flex items-start gap-2 text-sm text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={confirmSuperAdminDelete}
+                  onChange={(e) => setConfirmSuperAdminDelete(e.target.checked)}
+                  className="mt-1"
+                />
+                Confirmo eliminar a otro Super Administrador
+              </label>
+            )}
+            <EmergencyButton
+              variant="primary"
+              size="lg"
+              className="w-full bg-critical hover:bg-critical/90"
+              disabled={
+                busyId === deleteTarget.id ||
+                (deleteTarget.role === FARO_ROLES.SUPER_ADMIN && !confirmSuperAdminDelete)
+              }
+              onClick={async () => {
+                if (!onUserAction) return
+                await onUserAction('delete-user', deleteTarget, confirmSuperAdminDelete)
+                setDeleteTarget(null)
+                setConfirmSuperAdminDelete(false)
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar definitivamente
             </EmergencyButton>
           </div>
         </FlowSheet>

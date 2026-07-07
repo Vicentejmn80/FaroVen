@@ -4,12 +4,15 @@ import {
   ArrowLeft,
   Bell,
   Building2,
+  Calendar,
   ClipboardList,
+  FileQuestion,
   HeartPulse,
   Home,
   Package,
   ScrollText,
   Shield,
+  Trash2,
   Users,
   UserCog,
   Warehouse,
@@ -21,10 +24,14 @@ import { AuditTimeline } from '@/components/audit/AuditTimeline'
 import { SystemHealthPanel } from '@/components/admin/system-health-panel'
 import { UserManagementPanel } from '@/components/admin/user-management-panel'
 import { CreateCenterWizard } from '@/components/admin/create-center-wizard'
-import { useAdminProfiles } from '@/hooks/useAuthRequests'
+import { CoordinatorRequestReview } from '@/components/admin/coordinator-request-review'
+import { FlowSheet } from '@/components/faro/flow-sheet'
+import { fieldClassName } from '@/components/faro/flow-sheet'
+import { useAdminProfiles, useCoordinatorRequestMutations, usePendingCoordinatorRequests } from '@/hooks/useAuthRequests'
 import { useAuditTimeline } from '@/hooks/useAuditTimeline'
 import {
   useAdminCoordinators,
+  useAdminEvents,
   useAdminMutations,
   useAdminNeeds,
   useAdminNotificationsList,
@@ -37,8 +44,10 @@ import { formatAuthError } from '@/lib/auth-errors'
 import { useAuth } from '@/store/auth-context'
 import { useFaro } from '@/store/faro-context'
 import { siteToNeedableType } from '@/lib/site-utils'
-import type { ProfileRow } from '@/repositories/auth-types'
+import type { ProfileRow, CoordinatorRequestRow } from '@/repositories/auth-types'
+import type { Site } from '@/lib/types'
 import type { Need, Report } from '@/domain/models'
+import type { Event } from '@/domain/models'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 
 function invalidateSitesCache(queryClient: ReturnType<typeof useQueryClient>) {
@@ -50,6 +59,7 @@ function invalidateSitesCache(queryClient: ReturnType<typeof useQueryClient>) {
 const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; description: string }[] = [
   { id: 'users', label: 'Usuarios', icon: Users, description: 'Roles, estado y perfiles' },
   { id: 'coordinators', label: 'Coordinadores', icon: UserCog, description: 'Asignaciones y centros' },
+  { id: 'requests', label: 'Solicitudes', icon: FileQuestion, description: 'Aprobar o rechazar acceso' },
   { id: 'hospitals', label: 'Hospitales', icon: HeartPulse, description: 'Registro y mantenimiento' },
   { id: 'shelters', label: 'Refugios', icon: Home, description: 'Registro y mantenimiento' },
   { id: 'supply_centers', label: 'Acopios', icon: Warehouse, description: 'Centros de acopio' },
@@ -57,7 +67,9 @@ const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; desc
   { id: 'reports', label: 'Reportes', icon: ScrollText, description: 'Moderación ciudadana' },
   { id: 'notifications', label: 'Notificaciones', icon: Bell, description: 'Bandeja del sistema' },
   { id: 'inventory', label: 'Inventario', icon: Package, description: 'Stock por centro' },
+  { id: 'events', label: 'Eventos', icon: Calendar, description: 'Timeline operativo' },
   { id: 'audit', label: 'Auditoría', icon: Shield, description: 'Eventos auth y operativos' },
+  { id: 'dev_reset', label: 'Limpieza dev', icon: Trash2, description: 'Reset operacional (solo dev)' },
 ]
 
 export function SuperAdminConsole() {
@@ -72,11 +84,19 @@ export function SuperAdminConsole() {
   const coordinators = useAdminCoordinators(enabled)
   const needs = useAdminNeeds(enabled)
   const reports = useAdminReports(enabled)
+  const events = useAdminEvents(enabled)
   const notifications = useAdminNotificationsList(enabled)
+  const pendingRequests = usePendingCoordinatorRequests(enabled)
+  const requestMutations = useCoordinatorRequestMutations()
   const mutations = useAdminMutations()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showCreateCenter, setShowCreateCenter] = useState(false)
+  const [editProfile, setEditProfile] = useState<ProfileRow | null>(null)
+  const [editFullName, setEditFullName] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [requestAssignments, setRequestAssignments] = useState<Record<string, string>>({})
+  const [devResetConfirm, setDevResetConfirm] = useState('')
 
   const coordinatorByUserId = useMemo(() => {
     const map = new Map<string, AdminCoordinatorRow>()
@@ -120,7 +140,7 @@ export function SuperAdminConsole() {
     }
   }
 
-  async function handleUserAction(action: string, profile: ProfileRow) {
+  async function handleUserAction(action: string, profile: ProfileRow, extra?: boolean) {
     setBusyId(profile.id)
     setError(null)
     try {
@@ -128,8 +148,18 @@ export function SuperAdminConsole() {
         await mutations.updateUserStatus.mutateAsync({ userId: profile.id, status: 'suspended' })
       } else if (action === 'activate') {
         await mutations.updateUserStatus.mutateAsync({ userId: profile.id, status: 'active' })
-      } else if (action === 'revoke-coordinator' || action === 'demote') {
+      } else if (action === 'revoke-coordinator') {
         await mutations.revokeCoordinatorRole.mutateAsync(profile.id)
+      } else if (action === 'demote') {
+        await mutations.demoteUser.mutateAsync(profile.id)
+      } else if (action === 'delete-user') {
+        await mutations.deleteUser.mutateAsync({ userId: profile.id, confirmSuperAdmin: extra })
+      } else if (action === 'edit-profile') {
+        setEditProfile(profile)
+        setEditFullName(profile.full_name)
+        setEditPhone(profile.phone ?? '')
+        setBusyId(null)
+        return
       }
       await refetchProfiles()
       await refreshProfile()
@@ -164,6 +194,50 @@ export function SuperAdminConsole() {
             onPromoteAdmin={promoteAdmin}
             onPromoteCoordinator={promoteCoordinator}
             onUserAction={handleUserAction}
+          />
+        )}
+
+        {activeModule === 'requests' && (
+          <RequestsModule
+            rows={pendingRequests.data ?? []}
+            loading={pendingRequests.isLoading}
+            assignments={requestAssignments}
+            onAssign={(requestId, siteId) =>
+              setRequestAssignments((prev) => ({ ...prev, [requestId]: siteId }))
+            }
+            busyId={busyId}
+            onApprove={async (request) => {
+              const siteId = requestAssignments[request.id] || request.requested_site_id
+              if (!siteId || !request.requested_site_type) {
+                setError('Selecciona un centro antes de aprobar.')
+                return
+              }
+              setBusyId(request.id)
+              try {
+                await requestMutations.approve.mutateAsync({
+                  requestId: request.id,
+                  assignedSiteType: request.requested_site_type,
+                  assignedSiteId: siteId,
+                })
+                await pendingRequests.refetch()
+                await refetchProfiles()
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+            onReject={async (requestId) => {
+              setBusyId(requestId)
+              try {
+                await requestMutations.reject.mutateAsync({ requestId })
+                await pendingRequests.refetch()
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
           />
         )}
 
@@ -212,8 +286,29 @@ export function SuperAdminConsole() {
         {activeModule === 'needs' && (
           <NeedsModule
             rows={needs.data ?? []}
+            sites={sites}
             loading={needs.isLoading}
             busyId={busyId}
+            onCreate={async (input) => {
+              setBusyId('create-need')
+              try {
+                await mutations.createNeed.mutateAsync(input)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+            onMarkCovered={async (id) => {
+              setBusyId(id)
+              try {
+                await mutations.markNeedCovered.mutateAsync(id)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
             onDelete={async (id) => {
               setBusyId(id)
               try {
@@ -254,6 +349,53 @@ export function SuperAdminConsole() {
                 setBusyId(null)
               }
             }}
+            onDeletePermanent={async (id) => {
+              setBusyId(id)
+              try {
+                await mutations.deleteReport.mutateAsync(id)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+          />
+        )}
+
+        {activeModule === 'events' && (
+          <EventsModule
+            rows={events.data ?? []}
+            loading={events.isLoading}
+            busyId={busyId}
+            onDelete={async (id) => {
+              setBusyId(id)
+              try {
+                await mutations.deleteEvent.mutateAsync(id)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+          />
+        )}
+
+        {activeModule === 'dev_reset' && (
+          <DevResetModule
+            confirmText={devResetConfirm}
+            onConfirmTextChange={setDevResetConfirm}
+            busy={mutations.resetOperationalData.isPending}
+            onReset={async () => {
+              setError(null)
+              try {
+                await mutations.resetOperationalData.mutateAsync('vicentejmn80@gmail.com')
+                setDevResetConfirm('')
+                await refetchProfiles()
+                invalidateSitesCache(queryClient)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              }
+            }}
           />
         )}
 
@@ -291,6 +433,49 @@ export function SuperAdminConsole() {
               invalidateSitesCache(queryClient)
             }}
           />
+        )}
+
+        {editProfile && (
+          <FlowSheet
+            title="Editar perfil"
+            subtitle={editProfile.email}
+            onClose={() => setEditProfile(null)}
+          >
+            <div className="space-y-3 px-5 pb-8">
+              <label className="block space-y-1">
+                <span className="text-xs text-ink-subtle">Nombre</span>
+                <input className={fieldClassName} value={editFullName} onChange={(e) => setEditFullName(e.target.value)} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-ink-subtle">Teléfono</span>
+                <input className={fieldClassName} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+              </label>
+              <EmergencyButton
+                variant="primary"
+                size="lg"
+                className="w-full"
+                disabled={busyId === editProfile.id}
+                onClick={async () => {
+                  setBusyId(editProfile.id)
+                  try {
+                    await mutations.updateProfile.mutateAsync({
+                      userId: editProfile.id,
+                      fullName: editFullName,
+                      phone: editPhone,
+                    })
+                    setEditProfile(null)
+                    await refetchProfiles()
+                  } catch (err) {
+                    setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+                  } finally {
+                    setBusyId(null)
+                  }
+                }}
+              >
+                Guardar cambios
+              </EmergencyButton>
+            </div>
+          </FlowSheet>
         )}
       </div>
     )
@@ -437,39 +622,108 @@ function SitesModule({
 
 function NeedsModule({
   rows,
+  sites,
   loading,
   busyId,
+  onCreate,
+  onMarkCovered,
   onDelete,
 }: {
   rows: Need[]
+  sites: Site[]
   loading: boolean
   busyId: string | null
+  onCreate: (input: {
+    needableType: 'hospital' | 'shelter' | 'supply_center'
+    needableId: string
+    itemName: string
+    priority: string
+    qtyRequired: number
+  }) => Promise<void>
+  onMarkCovered: (id: string) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }) {
+  const [itemName, setItemName] = useState('')
+  const [siteId, setSiteId] = useState('')
+  const registeredSites = sites.filter((s) => s.type !== 'organization')
+
   if (loading) return <p className="text-sm text-ink-subtle">Cargando necesidades…</p>
-  if (rows.length === 0) return <EmptyState icon={ClipboardList} title="Sin necesidades" />
 
   return (
-    <section className="space-y-2">
-      {rows.slice(0, 100).map((need) => (
-        <GlassCard key={need.id} className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-ink">{need.type}</p>
-            <p className="text-xs text-ink-subtle">
-              Prioridad {need.priority} · {need.available}/{need.required}
-            </p>
-          </div>
-          <EmergencyButton
-            variant="glass"
-            size="sm"
-            className="shrink-0 text-critical"
-            disabled={busyId === need.id}
-            onClick={() => void onDelete(need.id)}
-          >
-            Eliminar
-          </EmergencyButton>
-        </GlassCard>
-      ))}
+    <section className="space-y-3">
+      <GlassCard className="space-y-2">
+        <p className="text-sm font-medium text-ink">Crear necesidad</p>
+        <input
+          className={fieldClassName}
+          placeholder="Nombre del ítem"
+          value={itemName}
+          onChange={(e) => setItemName(e.target.value)}
+        />
+        <select className={fieldClassName} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
+          <option value="">Seleccionar centro</option>
+          {registeredSites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <EmergencyButton
+          variant="primary"
+          size="sm"
+          className="w-full"
+          disabled={!itemName.trim() || !siteId || busyId === 'create-need'}
+          onClick={() => {
+            const site = registeredSites.find((s) => s.id === siteId)
+            if (!site || site.type === 'organization') return
+            void onCreate({
+              needableType: siteToNeedableType(site),
+              needableId: siteId,
+              itemName: itemName.trim(),
+              priority: 'medium',
+              qtyRequired: 1,
+            }).then(() => {
+              setItemName('')
+              setSiteId('')
+            })
+          }}
+        >
+          Crear
+        </EmergencyButton>
+      </GlassCard>
+
+      {rows.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="Sin necesidades" />
+      ) : (
+        rows.slice(0, 100).map((need) => (
+          <GlassCard key={need.id} className="space-y-2">
+            <div>
+              <p className="text-sm font-medium text-ink">{need.type}</p>
+              <p className="text-xs text-ink-subtle">
+                Prioridad {need.priority} · {need.available}/{need.required}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                disabled={busyId === need.id}
+                onClick={() => void onMarkCovered(need.id)}
+              >
+                Marcar cubierta
+              </EmergencyButton>
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                className="text-critical"
+                disabled={busyId === need.id}
+                onClick={() => void onDelete(need.id)}
+              >
+                Eliminar
+              </EmergencyButton>
+            </div>
+          </GlassCard>
+        ))
+      )}
     </section>
   )
 }
@@ -506,12 +760,14 @@ function ReportsModule({
   busyId,
   onReview,
   onRestore,
+  onDeletePermanent,
 }: {
   rows: Report[]
   loading: boolean
   busyId: string | null
   onReview: (id: string, status: 'verified' | 'dismissed') => Promise<void>
   onRestore: (id: string) => Promise<void>
+  onDeletePermanent: (id: string) => Promise<void>
 }) {
   if (loading) return <p className="text-sm text-ink-subtle">Cargando reportes…</p>
   if (rows.length === 0) return <EmptyState icon={ScrollText} title="Sin reportes" />
@@ -525,7 +781,7 @@ function ReportsModule({
             {report.status} · {report.createdAt.toLocaleString('es-VE')}
           </p>
           <div className="grid grid-cols-2 gap-2">
-            {report.status === 'new' ? (
+            {report.status === 'new' && (
               <>
                 <EmergencyButton
                   variant="glass"
@@ -538,14 +794,14 @@ function ReportsModule({
                 <EmergencyButton
                   variant="glass"
                   size="sm"
-                  className="text-critical"
                   disabled={busyId === report.id}
                   onClick={() => void onReview(report.id, 'dismissed')}
                 >
                   Descartar
                 </EmergencyButton>
               </>
-            ) : (
+            )}
+            {report.status !== 'new' && (
               <EmergencyButton
                 variant="glass"
                 size="sm"
@@ -556,10 +812,129 @@ function ReportsModule({
                 Restaurar a pendiente
               </EmergencyButton>
             )}
+            <EmergencyButton
+              variant="glass"
+              size="sm"
+              className="col-span-2 text-critical"
+              disabled={busyId === report.id}
+              onClick={() => void onDeletePermanent(report.id)}
+            >
+              Eliminar definitivamente
+            </EmergencyButton>
           </div>
         </GlassCard>
       ))}
     </section>
+  )
+}
+
+function RequestsModule({
+  rows,
+  loading,
+  assignments,
+  onAssign,
+  busyId,
+  onApprove,
+  onReject,
+}: {
+  rows: CoordinatorRequestRow[]
+  loading: boolean
+  assignments: Record<string, string>
+  onAssign: (requestId: string, siteId: string) => void
+  busyId: string | null
+  onApprove: (request: CoordinatorRequestRow) => Promise<void>
+  onReject: (requestId: string) => Promise<void>
+}) {
+  if (loading) return <p className="text-sm text-ink-subtle">Cargando solicitudes…</p>
+  if (rows.length === 0) return <EmptyState icon={FileQuestion} title="Sin solicitudes pendientes" />
+
+  return (
+    <section className="space-y-3">
+      {rows.map((request) => (
+        <CoordinatorRequestReview
+          key={request.id}
+          request={request}
+          assignedSiteId={assignments[request.id] ?? request.requested_site_id ?? ''}
+          onAssignedSiteChange={(siteId) => onAssign(request.id, siteId)}
+          onApprove={() => void onApprove(request)}
+          onReject={() => void onReject(request.id)}
+          onRequestInfo={() => undefined}
+          busy={busyId === request.id}
+        />
+      ))}
+    </section>
+  )
+}
+
+function EventsModule({
+  rows,
+  loading,
+  busyId,
+  onDelete,
+}: {
+  rows: Event[]
+  loading: boolean
+  busyId: string | null
+  onDelete: (id: string) => Promise<void>
+}) {
+  if (loading) return <p className="text-sm text-ink-subtle">Cargando eventos…</p>
+  if (rows.length === 0) return <EmptyState icon={Calendar} title="Sin eventos" />
+
+  return (
+    <section className="space-y-2">
+      {rows.slice(0, 80).map((event) => (
+        <GlassCard key={event.id} className="space-y-2">
+          <p className="text-sm font-medium text-ink">{event.title}</p>
+          <p className="text-xs text-ink-subtle">{event.createdAt.toLocaleString('es-VE')}</p>
+          <EmergencyButton
+            variant="glass"
+            size="sm"
+            className="w-full text-critical"
+            disabled={busyId === event.id}
+            onClick={() => void onDelete(event.id)}
+          >
+            Eliminar
+          </EmergencyButton>
+        </GlassCard>
+      ))}
+    </section>
+  )
+}
+
+function DevResetModule({
+  confirmText,
+  onConfirmTextChange,
+  busy,
+  onReset,
+}: {
+  confirmText: string
+  onConfirmTextChange: (v: string) => void
+  busy: boolean
+  onReset: () => Promise<void>
+}) {
+  return (
+    <GlassCard className="space-y-3 border-critical/30">
+      <p className="text-sm font-medium text-critical">Limpieza operacional (desarrollo)</p>
+      <p className="text-sm text-ink-muted">
+        Elimina reportes, necesidades, centros, usuarios de prueba y logs. Conserva{' '}
+        <strong>vicentejmn80@gmail.com</strong> como super_admin.
+      </p>
+      <input
+        className={fieldClassName}
+        placeholder='Escribe BORRAR para confirmar'
+        value={confirmText}
+        onChange={(e) => onConfirmTextChange(e.target.value)}
+      />
+      <EmergencyButton
+        variant="primary"
+        size="lg"
+        className="w-full bg-critical"
+        disabled={busy || confirmText.trim().toUpperCase() !== 'BORRAR'}
+        onClick={() => void onReset()}
+      >
+        Ejecutar limpieza
+      </EmergencyButton>
+    </GlassCard>
   )
 }
 
