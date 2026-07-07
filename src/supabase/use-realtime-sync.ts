@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { isSupabaseEnabled, supabase } from '@/lib/supabase'
 
@@ -10,11 +10,14 @@ interface RealtimeSyncOptions {
 
 export function useRealtimeSync({ channelName = 'faro-realtime', tables, invalidateKeys }: RealtimeSyncOptions) {
   const queryClient = useQueryClient()
+  const tablesKey = useMemo(() => tables.join(','), [tables])
+  const keysKey = useMemo(() => invalidateKeys.join(','), [invalidateKeys])
 
   useEffect(() => {
     if (!isSupabaseEnabled) return
 
     const channel = supabase.channel(channelName)
+
     for (const table of tables) {
       channel.on(
         'postgres_changes',
@@ -26,10 +29,11 @@ export function useRealtimeSync({ channelName = 'faro-realtime', tables, invalid
         },
       )
     }
+
     channel.subscribe()
 
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [channelName, invalidateKeys, queryClient, tables])
+  }, [channelName, tablesKey, keysKey, queryClient])
 }

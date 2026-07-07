@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react'
 import { useAuth } from '@/store/auth-context'
 import { NOTIFICATION_QUERY_KEYS } from '@/domain/notification-models'
 import { notificationService } from '@/notification-service/notification-service'
-import { isSupabaseEnabled, supabase } from '@/lib/supabase'
+import { subscribeNotificationChanges } from '@/lib/notification-realtime'
 
 export { NOTIFICATION_QUERY_KEYS }
 
@@ -20,27 +20,8 @@ export function useNotifications() {
   })
 
   useEffect(() => {
-    if (!enabled || !user?.id || !isSupabaseEnabled) return
-
-    const channel = supabase
-      .channel(`notifications-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.list })
-        },
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
+    if (!enabled || !user?.id) return
+    return subscribeNotificationChanges(user.id, queryClient)
   }, [enabled, user?.id, queryClient])
 
   const unreadCount = useMemo(
