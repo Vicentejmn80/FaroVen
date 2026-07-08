@@ -52,15 +52,19 @@ function priorityRank(priority: NeedPriority): number {
 }
 
 function isResolvedNeed(need: Need): boolean {
+  if (need.status === 'resolved') return true
+  if (need.status === 'pending_closure' || need.status === 'reopened' || need.status === 'active') return false
   if (need.required <= 0) return true
-  return need.status === 'covered' || need.status === 'resolved' || (need.required > 0 && need.available >= need.required)
+  return need.required > 0 && need.available >= need.required
 }
 
 export function buildSituationSummary(sites: Site[], needs: Need[] = []): SituationSummaryData {
   const siteById = new Map(sites.map((site) => [site.id, site]))
   const filteredNeeds = needs.filter((need) => siteById.has(need.centerId))
 
-  const unresolved = filteredNeeds.filter((need) => !isResolvedNeed(need))
+  const unresolved = filteredNeeds.filter(
+    (need) => !isResolvedNeed(need) && need.status !== 'pending_closure',
+  )
   const resolved = filteredNeeds.filter((need) => isResolvedNeed(need))
 
   const priorities = [...unresolved]
@@ -71,7 +75,7 @@ export function buildSituationSummary(sites: Site[], needs: Need[] = []): Situat
       const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority)
       if (priorityDiff !== 0) return priorityDiff
 
-      return a.updatedAt.getTime() - b.updatedAt.getTime()
+      return a.createdAt.getTime() - b.createdAt.getTime()
     })
     .slice(0, 3)
     .map((need) => {
@@ -90,7 +94,7 @@ export function buildSituationSummary(sites: Site[], needs: Need[] = []): Situat
         targetQty: need.required,
         missingQty,
         severity,
-        createdAt: need.updatedAt,
+        createdAt: need.createdAt,
       }
     })
 

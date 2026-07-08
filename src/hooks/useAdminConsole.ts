@@ -13,6 +13,7 @@ export const ADMIN_QUERY_KEYS = {
   reports: ['admin', 'reports'] as const,
   notifications: ['admin', 'notifications'] as const,
   events: ['admin', 'events'] as const,
+  operational: ['admin', 'operational-settings'] as const,
 }
 
 function invalidateAllAdmin(queryClient: ReturnType<typeof useQueryClient>) {
@@ -22,6 +23,7 @@ function invalidateAllAdmin(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.reports })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.notifications })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.events })
+  void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.operational })
   void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.profilesAdmin })
   void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.pendingRequests })
   void queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.audit })
@@ -82,6 +84,15 @@ export function useAdminNotificationsList(enabled: boolean) {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.notifications,
     queryFn: () => adminService.listNotifications(150),
+    enabled,
+    staleTime: 15_000,
+  })
+}
+
+export function useAdminOperationalSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: ADMIN_QUERY_KEYS.operational,
+    queryFn: () => adminService.getOperationalSettings(),
     enabled,
     staleTime: 15_000,
   })
@@ -220,6 +231,14 @@ export function useAdminMutations() {
     onSuccess: () => invalidateAllAdmin(queryClient),
   })
 
+  const updateOperationalSetting = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: number }) =>
+      adminService.updateOperationalSetting(key, value),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.operational })
+    },
+  })
+
   const runMaintenanceAction = useMutation({
     mutationFn: (
       action:
@@ -253,5 +272,6 @@ export function useAdminMutations() {
     deleteNotification,
     resetOperationalData,
     runMaintenanceAction,
+    updateOperationalSetting,
   }
 }

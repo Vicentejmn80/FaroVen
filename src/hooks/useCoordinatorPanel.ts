@@ -38,7 +38,12 @@ export function useCoordinatorNeeds(): Need[] {
     if (!site) return []
     return state.needs
       .filter((n) => n.centerId === site.id)
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .sort((a, b) => {
+        const aPending = a.status === 'pending_closure' ? 1 : 0
+        const bPending = b.status === 'pending_closure' ? 1 : 0
+        if (aPending !== bPending) return bPending - aPending
+        return b.updatedAt.getTime() - a.updatedAt.getTime()
+      })
   }, [site, state.needs])
 }
 

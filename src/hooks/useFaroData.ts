@@ -32,6 +32,9 @@ function reviveDates(input: Record<string, unknown>): Record<string, unknown> {
   const copy = { ...input }
   if (typeof copy['updatedAt'] === 'string') copy['updatedAt'] = new Date(copy['updatedAt'])
   if (typeof copy['createdAt'] === 'string') copy['createdAt'] = new Date(copy['createdAt'])
+  if (typeof copy['cycleStartedAt'] === 'string') copy['cycleStartedAt'] = new Date(copy['cycleStartedAt'])
+  if (typeof copy['expiresAt'] === 'string') copy['expiresAt'] = new Date(copy['expiresAt'])
+  if (typeof copy['closedAt'] === 'string') copy['closedAt'] = new Date(copy['closedAt'])
   return copy
 }
 

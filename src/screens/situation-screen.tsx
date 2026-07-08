@@ -453,7 +453,11 @@ function DetailChip({ label, value }: { label: string; value: string | number })
 }
 
 function isCovered(need: { required: number; available: number; status: string }) {
-  return need.status === 'covered' || (need.required > 0 && need.available >= need.required)
+  return (
+    need.status === 'resolved' ||
+    need.status === 'pending_closure' ||
+    (need.required > 0 && need.available >= need.required)
+  )
 }
 
 function coveragePct(need: { required: number; available: number }) {

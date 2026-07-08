@@ -5,6 +5,7 @@ import { needRepository } from '@/repositories/need-repository'
 import { reportRepository } from '@/repositories/report-repository'
 import type {
   AdjustNeedStockInput,
+  CloseNeedCycleInput,
   RegisterNeedInput,
   RegisterSiteInput,
   ReviewReportInput,
@@ -53,6 +54,14 @@ export async function adjustNeedStock(input: AdjustNeedStockInput): Promise<Need
 
 export async function updateNeed(input: UpdateNeedInput): Promise<Need> {
   return needRepository.update(input)
+}
+
+export async function refreshNeedCycles(): Promise<number> {
+  return needRepository.refreshCycles()
+}
+
+export async function closeNeedCycle(input: CloseNeedCycleInput): Promise<Need> {
+  return needRepository.closeCycle(input)
 }
 
 export async function markNeedCovered(needId: string): Promise<Need> {

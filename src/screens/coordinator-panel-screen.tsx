@@ -21,6 +21,7 @@ import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import {
   useCoordinatorDashboard,
   useCoordinatorSite,
+  useCoordinatorNeeds,
 } from '@/hooks/useCoordinatorPanel'
 import type { CoordinatorModuleId } from '@/services/coordinator-service'
 import { cn, timeAgo } from '@/lib/utils'
@@ -61,8 +62,10 @@ export function CoordinatorPanelScreen({
   const { assignment } = useCoordinatorAssignment()
   const site = useCoordinatorSite()
   const dashboard = useCoordinatorDashboard()
+  const coordinatorNeeds = useCoordinatorNeeds()
   const [internalModule, setInternalModule] = useState<CoordinatorModuleId>('dashboard')
   const module = activeModule ?? internalModule
+  const pendingClosures = coordinatorNeeds.filter((need) => need.status === 'pending_closure').length
 
   const setModule = (next: CoordinatorModuleId) => {
     if (onModuleChange) onModuleChange(next)
@@ -110,6 +113,11 @@ export function CoordinatorPanelScreen({
               >
                 <Icon className="h-3.5 w-3.5" />
                 {item.label}
+                {item.id === 'needs' && pendingClosures > 0 && (
+                  <span className="ml-1 rounded-full bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+                    {pendingClosures}
+                  </span>
+                )}
               </button>
             )
           })}

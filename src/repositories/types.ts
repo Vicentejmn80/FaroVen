@@ -56,6 +56,13 @@ export interface AdjustNeedStockInput {
   notes?: string
 }
 
+export interface CloseNeedCycleInput {
+  needId: string
+  receivedQty: number
+  continueCycle: boolean
+  closureReason?: string | null
+}
+
 export interface UpdateNeedInput {
   id: string
   itemName?: string

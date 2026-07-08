@@ -25,7 +25,10 @@ export function AdjustNeedStockFlow({ onClose, mode, presetSiteId }: AdjustNeedS
   const needsBySite = useMemo(
     () =>
       state.needs
-        .filter((need) => need.centerId === siteId)
+        .filter(
+          (need) =>
+            need.centerId === siteId && need.status !== 'pending_closure' && need.status !== 'resolved',
+        )
         .sort((a, b) => {
           if (a.priority === b.priority) return b.updatedAt.getTime() - a.updatedAt.getTime()
           return a.priority === 'critical' ? -1 : b.priority === 'critical' ? 1 : 0

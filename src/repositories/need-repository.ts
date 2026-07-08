@@ -2,7 +2,7 @@ import type { Need } from '@/domain/models'
 import { supabase } from '@/lib/supabase'
 import type { NeedRow } from '@/types/supabase'
 import { needRowToNeed } from './mappers'
-import type { RegisterNeedInput, UpdateNeedInput } from './types'
+import type { CloseNeedCycleInput, RegisterNeedInput, UpdateNeedInput } from './types'
 
 export class NeedRepository {
   async list(): Promise<Need[]> {
@@ -69,6 +69,23 @@ export class NeedRepository {
     if (readError) throw readError
     const required = (current as { qty_required: number }).qty_required
     return this.updateReceived(id, required)
+  }
+
+  async refreshCycles(): Promise<number> {
+    const { data, error } = await supabase.rpc('refresh_need_cycles')
+    if (error) throw error
+    return typeof data === 'number' ? data : 0
+  }
+
+  async closeCycle(input: CloseNeedCycleInput): Promise<Need> {
+    const { data, error } = await supabase.rpc('close_need_cycle', {
+      p_need_id: input.needId,
+      p_received_qty: input.receivedQty,
+      p_continue: input.continueCycle,
+      p_closure_reason: input.closureReason ?? null,
+    })
+    if (error) throw error
+    return needRowToNeed(data as NeedRow)
   }
 }
 

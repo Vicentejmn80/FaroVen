@@ -36,6 +36,8 @@ import type { Site } from '@/lib/types'
 import { usePermissions, useAuth } from '@/store/auth-context'
 import { FARO_ROLES } from '@/lib/roles'
 import { RequireRole } from '@/components/auth/require-role'
+import { refreshNeedCycles } from '@/services/repository-service'
+import { NeedCycleClosureModal } from '@/components/coordinator/need-cycle-closure-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { NotificationRow } from '@/domain/notification-models'
 
@@ -80,7 +82,9 @@ function ScreenLoading() {
 export function AppShell() {
   const { role, canAccessCoordinatorPanel, canAccessAdminPanel, canAccessSystemPanel } = usePermissions()
   const { session, user, pendingAuthIntent, clearPendingAuthIntent, refreshProfile } = useAuth()
+  const { assignment } = useCoordinatorAssignment()
   const { cachedAt } = useFaro()
+  const { state } = useFaro()
   const [tab, setTab] = useState<TabId>('map')
   const [flow, setFlow] = useState<FlowId | null>(null)
   const [needPresetSiteId, setNeedPresetSiteId] = useState<string | undefined>()
@@ -99,6 +103,12 @@ export function AppShell() {
 
   const tabs = useMemo(() => getNavigationTabs(role, user?.email), [role, user?.email])
   const isCoordinatorOps = canAccessCoordinatorPanel
+  const pendingClosures = useMemo(() => {
+    if (!isCoordinatorOps || !assignment?.siteId) return []
+    return state.needs.filter(
+      (need) => need.centerId === assignment.siteId && need.status === 'pending_closure',
+    )
+  }, [assignment?.siteId, isCoordinatorOps, state.needs])
 
   const headerNotificationCount = useMemo(() => {
     if (session && notifications.enabled) return notifications.unreadCount
@@ -219,6 +229,33 @@ export function AppShell() {
   useEffect(() => {
     if (tab !== 'profile') setProfileSubview('main')
   }, [tab])
+
+  useEffect(() => {
+    if (!session || !isCoordinatorOps) return
+    let active = true
+
+    const refresh = async () => {
+      try {
+        await refreshNeedCycles()
+      } catch {
+        // noop: ciclo se refresca en el siguiente intento
+      }
+    }
+
+    void refresh()
+    const timer = setInterval(() => {
+      if (active) void refresh()
+    }, 5 * 60 * 1000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      active = false
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [session, isCoordinatorOps])
 
   useEffect(() => {
     const openPrefs = () => {
@@ -481,6 +518,13 @@ export function AppShell() {
           onAccept={() => void pushNotif.acceptPush()}
           onDismiss={pushNotif.dismissModal}
         />
+
+        {pendingClosures.length > 0 && (
+          <NeedCycleClosureModal
+            needs={pendingClosures}
+            centerName={assignment?.siteName}
+          />
+        )}
       </div>
     </div>
   )

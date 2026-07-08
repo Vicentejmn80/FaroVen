@@ -17,6 +17,7 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
   const needs = useCoordinatorNeeds()
   const { markCovered } = useCoordinatorMutations()
   const [editing, setEditing] = useState<Need | null>(null)
+  const pendingClosures = needs.filter((need) => need.status === 'pending_closure')
 
   return (
     <div className="space-y-3">
@@ -27,6 +28,12 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
         </EmergencyButton>
       </div>
 
+      {pendingClosures.length > 0 && (
+        <GlassCard className="border-warning/30 bg-warning/10 text-sm text-ink">
+          Hay {pendingClosures.length} necesidad(es) pendientes de cierre operativo.
+        </GlassCard>
+      )}
+
       {needs.length === 0 ? (
         <GlassCard className="text-sm text-ink-muted">
           No hay necesidades registradas. Crea la primera para que los ciudadanos vean qué falta.
@@ -35,6 +42,7 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
         needs.map((need) => {
           const coverage = Math.round((need.available / Math.max(need.required, 1)) * 100)
           const covered = need.available >= need.required && need.required > 0
+          const isPending = need.status === 'pending_closure'
           return (
             <GlassCard key={need.id} className="space-y-2.5">
               <div className="flex items-start justify-between gap-2">
@@ -47,10 +55,16 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
                 <span
                   className={cn(
                     'text-xs font-medium',
-                    covered ? 'text-operational' : coverage < 40 ? 'text-critical' : 'text-warning',
+                    isPending
+                      ? 'text-warning'
+                      : covered
+                        ? 'text-operational'
+                        : coverage < 40
+                          ? 'text-critical'
+                          : 'text-warning',
                   )}
                 >
-                  {coverage}% cubierto
+                  {isPending ? 'Cierre pendiente' : `${coverage}% cubierto`}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -63,10 +77,15 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
                 />
               </div>
               <div className="flex flex-wrap gap-2">
-                <EmergencyButton variant="glass" size="sm" onClick={() => setEditing(need)}>
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => setEditing(need)}
+                >
                   <Pencil className="h-3.5 w-3.5" /> Editar
                 </EmergencyButton>
-                {!covered && (
+                {!covered && !isPending && (
                   <EmergencyButton
                     variant="glass"
                     size="sm"

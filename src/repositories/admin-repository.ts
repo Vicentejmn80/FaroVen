@@ -29,6 +29,23 @@ function mapProfile(row: Record<string, unknown>): ProfileRow {
 }
 
 export const adminRepository = {
+  async getOperationalSettings(): Promise<{ needCycleDurationHours: number }> {
+    const { data, error } = await supabase.from('operational_settings').select('key, value_int')
+    if (error) throw error
+    const rows = (data ?? []) as Array<{ key: string; value_int: number }>
+    const duration = rows.find((row) => row.key === 'need_cycle_duration_hours')?.value_int ?? 24
+    return { needCycleDurationHours: duration }
+  },
+
+  async updateOperationalSetting(key: string, value: number): Promise<void> {
+    const { error } = await supabase.from('operational_settings').upsert({
+      key,
+      value_int: value,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  },
+
   async runMaintenanceAction(
     action:
       | 'archive_covered_needs'
@@ -47,12 +64,32 @@ export const adminRepository = {
     }
 
     if (action === 'archive_covered_needs') {
-      const { data, error } = await supabase.from('needs').select('id, qty_required, qty_received')
+      const { data, error } = await supabase
+        .from('needs')
+        .select('id, qty_required, qty_received, status')
       if (error) throw error
-      const ids = ((data ?? []) as Array<{ id: string; qty_required: number; qty_received: number }>)
-        .filter((row) => row.qty_required > 0 && row.qty_received >= row.qty_required)
+      const ids = (
+        (data ?? []) as Array<{
+          id: string
+          qty_required: number
+          qty_received: number
+          status: string | null
+        }>
+      )
+        .filter(
+          (row) =>
+            row.qty_required > 0 &&
+            row.qty_received >= row.qty_required &&
+            row.status !== 'resolved',
+        )
         .map((row) => row.id)
-      return { action, affected: await removeByIds('needs', ids) }
+      if (!ids.length) return { action, affected: 0 }
+      const { error: updateError } = await supabase
+        .from('needs')
+        .update({ status: 'resolved', closed_at: new Date().toISOString() })
+        .in('id', ids)
+      if (updateError) throw updateError
+      return { action, affected: ids.length }
     }
 
     if (action === 'clean_dismissed_reports') {
@@ -63,10 +100,15 @@ export const adminRepository = {
     }
 
     if (action === 'delete_closed_needs') {
-      const { data, error } = await supabase.from('needs').select('id, qty_required, qty_received')
+      const { data, error } = await supabase.from('needs').select('id, status, qty_required, qty_received')
       if (error) throw error
-      const ids = ((data ?? []) as Array<{ id: string; qty_required: number; qty_received: number }>)
-        .filter((row) => row.qty_required <= 0 || row.qty_received >= row.qty_required)
+      const ids = (
+        (data ?? []) as Array<{ id: string; status: string | null; qty_required: number; qty_received: number }>
+      )
+        .filter(
+          (row) =>
+            row.status === 'resolved' || row.qty_required <= 0 || row.qty_received >= row.qty_required,
+        )
         .map((row) => row.id)
       return { action, affected: await removeByIds('needs', ids) }
     }

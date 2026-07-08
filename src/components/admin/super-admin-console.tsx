@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   Bell,
@@ -36,6 +36,7 @@ import {
   useAdminMutations,
   useAdminNeeds,
   useAdminNotificationsList,
+  useAdminOperationalSettings,
   useAdminRegistry,
   useAdminReports,
 } from '@/hooks/useAdminConsole'
@@ -70,6 +71,7 @@ const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; desc
   { id: 'inventory', label: 'Inventario', icon: Package, description: 'Stock por centro' },
   { id: 'events', label: 'Eventos', icon: Calendar, description: 'Timeline operativo' },
   { id: 'audit', label: 'Auditoría', icon: Shield, description: 'Eventos auth y operativos' },
+  { id: 'operational_settings', label: 'Configuración operativa', icon: Wrench, description: 'Ciclo operativo de necesidades' },
   { id: 'maintenance', label: 'Mantenimiento', icon: Wrench, description: 'Limpieza y saneamiento del tablero' },
   { id: 'dev_reset', label: 'Limpieza dev', icon: Trash2, description: 'Reset operacional (solo dev)' },
 ]
@@ -88,6 +90,7 @@ export function SuperAdminConsole() {
   const reports = useAdminReports(enabled)
   const events = useAdminEvents(enabled)
   const notifications = useAdminNotificationsList(enabled)
+  const operationalSettings = useAdminOperationalSettings(enabled)
   const pendingRequests = usePendingCoordinatorRequests(enabled)
   const requestMutations = useCoordinatorRequestMutations()
   const mutations = useAdminMutations()
@@ -434,6 +437,25 @@ export function SuperAdminConsole() {
                 setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
               } finally {
                 setBusyId(null)
+              }
+            }}
+          />
+        )}
+
+        {activeModule === 'operational_settings' && (
+          <OperationalSettingsModule
+            settings={operationalSettings.data}
+            loading={operationalSettings.isLoading}
+            busy={mutations.updateOperationalSetting.isPending}
+            onSave={async (value) => {
+              setError(null)
+              try {
+                await mutations.updateOperationalSetting.mutateAsync({
+                  key: 'need_cycle_duration_hours',
+                  value,
+                })
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
               }
             }}
           />
@@ -1046,6 +1068,74 @@ function MaintenanceModule({
           </EmergencyButton>
         </GlassCard>
       ))}
+    </section>
+  )
+}
+
+function OperationalSettingsModule({
+  settings,
+  loading,
+  busy,
+  onSave,
+}: {
+  settings: { needCycleDurationHours: number } | undefined
+  loading: boolean
+  busy: boolean
+  onSave: (value: number) => Promise<void>
+}) {
+  const [value, setValue] = useState(String(settings?.needCycleDurationHours ?? 24))
+
+  useEffect(() => {
+    if (settings?.needCycleDurationHours) {
+      setValue(String(settings.needCycleDurationHours))
+    }
+  }, [settings?.needCycleDurationHours])
+
+  if (loading) return <p className="text-sm text-ink-subtle">Cargando configuración…</p>
+
+  return (
+    <section className="space-y-3">
+      <GlassCard className="space-y-3">
+        <p className="text-sm font-medium text-ink">Duración del Ciclo Operativo</p>
+        <p className="text-xs text-ink-subtle">
+          Define cuántas horas permanece activa una necesidad antes de exigir cierre de ciclo.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {['12', '24', '36', '48', '72'].map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setValue(opt)}
+              className={
+                value === opt
+                  ? 'rounded-2xl border border-info/60 bg-info-soft px-3 py-2 text-xs text-ink'
+                  : 'rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-ink-muted'
+              }
+            >
+              {opt} h
+            </button>
+          ))}
+        </div>
+        <label className="block text-xs text-ink-subtle">
+          Valor personalizado (horas)
+          <input
+            type="number"
+            min={1}
+            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-sm text-ink outline-none"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </label>
+        <EmergencyButton
+          variant="primary"
+          size="lg"
+          className="w-full"
+          disabled={busy || !Number(value)}
+          onClick={() => void onSave(Number(value))}
+        >
+          Guardar configuración
+        </EmergencyButton>
+      </GlassCard>
     </section>
   )
 }

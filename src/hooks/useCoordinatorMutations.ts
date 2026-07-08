@@ -3,12 +3,14 @@ import { requireSupabase } from '@/lib/require-supabase'
 import { humanizeSupabaseError } from '@/lib/supabase-errors'
 import {
   adjustNeedStock,
+  closeNeedCycle,
   markNeedCovered,
   reviewReport,
   updateNeed,
 } from '@/services/repository-service'
 import type {
   AdjustNeedStockInput,
+  CloseNeedCycleInput,
   ReviewReportInput,
   UpdateNeedInput,
 } from '@/repositories/types'
@@ -72,6 +74,21 @@ export function useCoordinatorMutations() {
     },
   })
 
+  const closeCycleMutation = useMutation({
+    mutationFn: async (input: CloseNeedCycleInput) => {
+      requireSupabase()
+      try {
+        return await closeNeedCycle(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      invalidateAll(queryClient)
+      showToast('Resultado registrado.', 'success')
+    },
+  })
+
   const reviewReportMutation = useMutation({
     mutationFn: async (input: ReviewReportInput) => {
       requireSupabase()
@@ -94,6 +111,7 @@ export function useCoordinatorMutations() {
     updateNeed: updateNeedMutation,
     markCovered: markCoveredMutation,
     adjustStock: adjustStockMutation,
+    closeNeedCycle: closeCycleMutation,
     reviewReport: reviewReportMutation,
   }
 }

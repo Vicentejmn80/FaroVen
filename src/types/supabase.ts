@@ -57,7 +57,15 @@ export interface NeedRow {
   qty_required: number
   qty_received: number
   pct_covered?: number | null
+  status?: string | null
+  created_at?: string | null
   updated_at: string | null
+  cycle_duration_hours?: number | null
+  cycle_number?: number | null
+  cycle_started_at?: string | null
+  expires_at?: string | null
+  closed_at?: string | null
+  closure_reason?: string | null
 }
 
 export interface ReportRow {

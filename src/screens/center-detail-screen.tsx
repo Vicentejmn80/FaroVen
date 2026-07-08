@@ -54,7 +54,9 @@ export function CenterDetailScreen({
     site.needs[0]?.priority
   const priorityLabel = highestPriority === 'critical' ? 'Alta' : highestPriority === 'high' ? 'Media' : 'Baja'
   const centerNeeds: Need[] = state.needs.filter((need) => need.centerId === site.id)
-  const activeNeeds = centerNeeds.filter((need) => need.available < need.required)
+  const activeNeeds = centerNeeds.filter(
+    (need) => isActiveNeed(need) && need.available < need.required,
+  )
   const criticalNeeds = activeNeeds
     .filter((need) => need.priority === 'critical' || need.priority === 'high')
     .sort((a, b) => {
@@ -190,4 +192,8 @@ function buildHumanStatusSummary(site: Site, activeNeeds: number) {
     return `Centro operativo. Actualmente recibe donaciones focalizadas para ${activeNeeds} necesidad(es) activa(s), con actualizaciones continuas del coordinador.`
   }
   return 'Centro operativo. La atención y logística se mantienen estables, con monitoreo continuo para responder a nuevos cambios.'
+}
+
+function isActiveNeed(need: Need) {
+  return need.status !== 'pending_closure' && need.status !== 'resolved'
 }

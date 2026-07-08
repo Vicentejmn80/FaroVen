@@ -8,7 +8,7 @@ export type CenterType =
 export type OperationalStatus = 'critical' | 'warning' | 'operational' | 'info'
 export type PriorityLevel = 'critical' | 'high' | 'medium' | 'low'
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
-export type NeedStatus = 'active' | 'covered' | 'resolved'
+export type NeedStatus = 'active' | 'pending_closure' | 'resolved' | 'reopened'
 export type ReportStatus = 'new' | 'verified' | 'discarded'
 export type ReportType = 'inventory' | 'saturation' | 'access' | 'shelter' | 'health' | 'other'
 export type UserRole = 'citizen' | 'volunteer' | 'coordinator' | 'admin'
@@ -52,7 +52,14 @@ export interface Need {
   available: number
   priority: PriorityLevel
   status: NeedStatus
+  createdAt: Date
   updatedAt: Date
+  expiresAt?: Date | null
+  cycleDurationHours?: number
+  cycleNumber?: number
+  cycleStartedAt?: Date
+  closedAt?: Date | null
+  closureReason?: string | null
 }
 
 export interface Report {

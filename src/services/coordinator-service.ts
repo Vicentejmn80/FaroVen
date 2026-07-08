@@ -29,8 +29,12 @@ function needCoverage(need: Need): number {
   return Math.round((need.available / Math.max(need.required, 1)) * 100)
 }
 
+function isActiveNeed(need: Need): boolean {
+  return need.status !== 'pending_closure' && need.status !== 'resolved'
+}
+
 export function computeProductSaturation(needs: Need[]): number {
-  const active = needs.filter((n) => n.available < n.required)
+  const active = needs.filter((n) => isActiveNeed(n) && n.available < n.required)
   if (!active.length) return 100
   const avg =
     active.reduce((sum, need) => sum + needCoverage(need), 0) / active.length
@@ -65,7 +69,7 @@ export function buildCoordinatorDashboard(
 ): CoordinatorDashboardMetrics {
   const siteType = siteToNeedableType(site)
   const centerNeeds = needs.filter((n) => n.centerId === site.id)
-  const activeNeeds = centerNeeds.filter((n) => n.available < n.required)
+  const activeNeeds = centerNeeds.filter((n) => isActiveNeed(n) && n.available < n.required)
   const pendingReports = reports.filter(
     (r) => r.centerId === site.id && r.status === 'new',
   )

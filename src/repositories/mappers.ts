@@ -37,9 +37,17 @@ export function toPriorityLevel(status: OperationalStatus, occupancyPct: number)
   return 'low'
 }
 
-export function toNeedStatus(required: number, received: number): NeedStatus {
-  if (received >= required && required > 0) return 'covered'
-  return received <= 0 ? 'active' : 'active'
+export function toNeedStatus(
+  required: number,
+  received: number,
+  status?: string | null,
+): NeedStatus {
+  if (status === 'pending_closure') return 'pending_closure'
+  if (status === 'reopened') return 'reopened'
+  if (status === 'resolved') return 'resolved'
+  if (status === 'active') return 'active'
+  if (received >= required && required > 0) return 'resolved'
+  return 'active'
 }
 
 export function toDate(value?: string | null): Date {
@@ -171,8 +179,15 @@ export function needRowToNeed(row: NeedRow): Need {
     required: row.qty_required,
     available: row.qty_received,
     priority: row.priority,
-    status: toNeedStatus(row.qty_required, row.qty_received),
+    status: toNeedStatus(row.qty_required, row.qty_received, row.status),
+    createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at),
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+    cycleDurationHours: row.cycle_duration_hours ?? undefined,
+    cycleNumber: row.cycle_number ?? undefined,
+    cycleStartedAt: row.cycle_started_at ? new Date(row.cycle_started_at) : undefined,
+    closedAt: row.closed_at ? new Date(row.closed_at) : null,
+    closureReason: row.closure_reason ?? null,
   }
 }
 

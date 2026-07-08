@@ -23,6 +23,11 @@ export const INITIAL_ONBOARDING_STEPS = [
     showPriorityGuide: true,
   },
   {
+    id: 'cycle',
+    title: 'Ciclo Operativo FARO',
+    body: 'Cada necesidad permanece activa durante un ciclo operativo. Al finalizar, FARO solicitará el resultado para mantener la información actualizada.',
+  },
+  {
     id: 'start',
     title: 'Comienza a usar FARO',
     body: 'Explora el mapa y toca un centro para ver qué necesita. Las ayudas contextuales aparecerán la primera vez que visites cada sección.',

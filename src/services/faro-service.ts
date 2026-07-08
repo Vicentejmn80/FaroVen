@@ -21,6 +21,11 @@ function coverage(need: Need): number {
   return Math.max(0, Math.min(100, Math.round((need.available / Math.max(need.required, 1)) * 100)))
 }
 
+function isActiveNeed(need: Need): boolean {
+  if (need.status === 'pending_closure' || need.status === 'resolved') return false
+  return true
+}
+
 function toSiteNeed(need: Need): SiteNeed {
   return {
     id: need.id,
@@ -71,6 +76,7 @@ export function toSite(center: Center, needsByCenter: Map<string, Need[]>, index
 }
 
 function summarizeNeedEvent(need: Need, center: Center): Event | null {
+  if (!isActiveNeed(need)) return null
   const pct = coverage(need)
   if (need.priority === 'critical' && pct < 45) {
     return {
@@ -83,7 +89,7 @@ function summarizeNeedEvent(need: Need, center: Center): Event | null {
       createdAt: need.updatedAt,
     }
   }
-  if (need.status === 'covered' || pct >= 85) {
+  if (need.status === 'resolved' || pct >= 100) {
     return {
       id: `evt-covered-${need.id}`,
       kind: 'resolved',
@@ -152,6 +158,7 @@ export function buildTimelineEvents(
 export function getSites(dataset: FaroDataset = EMPTY_FARO_DATASET): Site[] {
   const needsByCenter = new Map<string, Need[]>()
   for (const need of dataset.needs) {
+    if (!isActiveNeed(need)) continue
     const list = needsByCenter.get(need.centerId) ?? []
     list.push(need)
     needsByCenter.set(need.centerId, list)
@@ -174,7 +181,9 @@ export function getReportsByCenter(centerId: string, dataset: FaroDataset = EMPT
 }
 
 export function getCriticalNeeds(dataset: FaroDataset = EMPTY_FARO_DATASET): Need[] {
-  return dataset.needs.filter((need) => need.priority === 'critical' || coverage(need) < 40)
+  return dataset.needs.filter(
+    (need) => isActiveNeed(need) && (need.priority === 'critical' || coverage(need) < 40),
+  )
 }
 
 export function getLatestActivity(limit = 8, dataset: FaroDataset = EMPTY_FARO_DATASET): Event[] {

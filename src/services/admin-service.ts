@@ -16,6 +16,7 @@ export const adminService = {
   listNeeds: () => needRepository.list(),
   listReports: () => reportRepository.list(),
   listEvents: () => eventRepository.list(),
+  getOperationalSettings: () => adminRepository.getOperationalSettings(),
 
   deleteSite: (siteType: RegisterSiteType, siteId: string) =>
     adminRepository.deleteSite(siteType, siteId),
@@ -50,6 +51,9 @@ export const adminService = {
   deleteEvent: (eventId: string) => adminRepository.deleteEvent(eventId),
 
   resetOperationalData: (preserveEmail?: string) => adminRepository.resetOperationalData(preserveEmail),
+
+  updateOperationalSetting: (key: string, value: number) =>
+    adminRepository.updateOperationalSetting(key, value),
 
   runMaintenanceAction: (
     action:

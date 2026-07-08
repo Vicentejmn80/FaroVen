@@ -16,6 +16,7 @@ const ICONS: Record<string, LucideIcon> = {
   'message-square': MessageSquare,
   'package': Package,
   'alert-triangle': AlertTriangle,
+  'cycle-expired': AlertTriangle,
   bell: Bell,
 }
 
@@ -24,6 +25,7 @@ export function notificationIcon(type: string, iconKey?: string | null): LucideI
   if (type.includes('report')) return FileText
   if (type.includes('coordinator') || type.includes('request')) return UserPlus
   if (type.includes('need') || type.includes('delivery')) return Package
+  if (type.includes('cycle')) return AlertTriangle
   if (type.includes('error') || type.includes('critical')) return AlertTriangle
   if (type.includes('feedback') || type.includes('message') || type.includes('faro')) return MessageSquare
   if (type.includes('admin')) return Shield
