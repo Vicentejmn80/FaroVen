@@ -91,20 +91,67 @@ export function filterCenterEvents(events: Event[], siteId: string): Event[] {
   return events.filter((e) => e.centerId === siteId)
 }
 
+/** Historial operativo del centro: hitos, no micro-updates. */
+export function filterCenterHistoryEvents(events: Event[], siteId: string): Event[] {
+  const HIGH_VALUE = new Set([
+    'need_created',
+    'need_resolved',
+    'need_reopened',
+    'cycle_closed',
+    'inventory_complete',
+    'coordinator_approved',
+    'center_opened',
+    'report',
+    'resolved',
+    'request',
+  ])
+  return events
+    .filter((e) => e.centerId === siteId)
+    .filter((e) => {
+      if (HIGH_VALUE.has(e.kind)) return true
+      if (e.kind === 'saturation') {
+        return e.title.includes('cambió de estado') || e.title.includes('Nivel de saturación')
+      }
+      return false
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+}
+
 export function eventActorLabel(event: Event): string {
-  if (event.kind === 'report') return 'Ciudadano / Coordinador'
+  if (event.kind === 'report') return 'Ciudadano'
+  if (event.kind === 'coordinator_approved') return 'Administración'
+  if (event.kind === 'center_opened') return 'Sistema'
   return 'Coordinador del centro'
 }
 
 export function eventActionLabel(event: Event): string {
-  const title = event.title.toLowerCase()
-  if (title.includes('llegada')) return 'Donación recibida'
-  if (title.includes('salida')) return 'Salida de inventario'
-  if (title.includes('cubierta')) return 'Necesidad cubierta'
-  if (title.includes('aprobado')) return 'Reporte aprobado'
-  if (title.includes('rechazado')) return 'Reporte rechazado'
-  if (event.kind === 'saturation') return 'Saturación actualizada'
-  if (event.kind === 'inventory') return 'Inventario actualizado'
-  if (event.kind === 'report') return 'Reporte ciudadano'
-  return event.title
+  switch (event.kind) {
+    case 'need_created':
+      return 'Necesidad creada'
+    case 'need_resolved':
+    case 'resolved':
+      return 'Necesidad resuelta'
+    case 'need_reopened':
+      return 'Necesidad reabierta'
+    case 'cycle_closed':
+      return 'Ciclo operativo cerrado'
+    case 'inventory_complete':
+      return 'Inventario completado'
+    case 'coordinator_approved':
+      return 'Coordinador aprobado'
+    case 'center_opened':
+      return 'Centro registrado'
+    case 'report':
+      return event.title.includes('aprobado')
+        ? 'Reporte aprobado'
+        : event.title.includes('rechazado')
+          ? 'Reporte rechazado'
+          : 'Reporte ciudadano'
+    case 'saturation':
+      return 'Estado del centro'
+    case 'request':
+      return 'Necesidad crítica'
+    default:
+      return event.title
+  }
 }

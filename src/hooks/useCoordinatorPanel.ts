@@ -3,7 +3,7 @@ import { useFaro } from '@/store/faro-context'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import {
   buildCoordinatorDashboard,
-  filterCenterEvents,
+  filterCenterHistoryEvents,
   reportInboxFilter,
   type CoordinatorDashboardMetrics,
   type InboxFilter,
@@ -63,7 +63,7 @@ export function useCoordinatorHistory(): Event[] {
   const { state } = useFaro()
   return useMemo(() => {
     if (!site) return []
-    const fromEvents = filterCenterEvents(state.events, site.id)
+    const fromEvents = filterCenterHistoryEvents(state.events, site.id)
     if (fromEvents.length) return fromEvents
     return getTimelineByCenter(site.id, state)
   }, [site, state])

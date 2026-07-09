@@ -82,8 +82,8 @@ function summarizeNeedEvent(need: Need, center: Center): Event | null {
     return {
       id: `evt-need-${need.id}`,
       kind: 'request',
-      title: `${center.name} necesita ${need.type}`,
-      detail: `${need.type} con cobertura de ${pct}%.`,
+      title: `Nueva necesidad crítica`,
+      detail: `${need.type} · ${center.name}`,
       centerId: center.id,
       status: 'critical',
       createdAt: need.updatedAt,
@@ -93,27 +93,14 @@ function summarizeNeedEvent(need: Need, center: Center): Event | null {
     return {
       id: `evt-covered-${need.id}`,
       kind: 'resolved',
-      title: `${center.name} estabilizó ${need.type}`,
-      detail: `${need.type} se encuentra cubierta en ${pct}%.`,
+      title: `Necesidad resuelta`,
+      detail: `${need.type} · ${center.name}`,
       centerId: center.id,
       status: 'operational',
       createdAt: need.updatedAt,
     }
   }
   return null
-}
-
-function centerStatusEvent(center: Center): Event {
-  const occupancy = Math.round((center.capacity.current / Math.max(center.capacity.total, 1)) * 100)
-  return {
-    id: `evt-center-${center.id}-${center.updatedAt.getTime()}`,
-    kind: 'saturation',
-    title: `${center.name} actualizó su estado`,
-    detail: `Ocupación en ${occupancy}% (${center.location.zone}).`,
-    centerId: center.id,
-    status: center.status,
-    createdAt: center.updatedAt,
-  }
 }
 
 function reportToEvent(report: Report, centerName?: string): Event {
@@ -134,23 +121,27 @@ export function buildTimelineEvents(
   options?: { authoritativeEvents?: boolean },
 ): Event[] {
   if (options?.authoritativeEvents && dataset.events.length) {
-    return [...dataset.events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    return [...dataset.events]
+      .filter(isHighValueEvent)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   }
 
   const centerById = new Map(dataset.centers.map((center) => [center.id, center]))
 
-  const generatedFromCenters = dataset.centers.map(centerStatusEvent)
+  // Fallback sintético: solo hitos (necesidades críticas/resueltas + reportes). Sin micro-updates de centro.
   const generatedFromNeeds = dataset.needs
     .map((need) => {
       const center = centerById.get(need.centerId)
       return center ? summarizeNeedEvent(need, center) : null
     })
     .filter((event): event is Event => event !== null)
-  const generatedFromReports = dataset.reports.map((report) =>
-    reportToEvent(report, report.centerId ? centerById.get(report.centerId)?.name : undefined),
-  )
+  const generatedFromReports = dataset.reports
+    .filter((report) => report.status === 'new' || report.status === 'verified')
+    .map((report) =>
+      reportToEvent(report, report.centerId ? centerById.get(report.centerId)?.name : undefined),
+    )
 
-  return [...generatedFromCenters, ...generatedFromNeeds, ...generatedFromReports].sort(
+  return [...generatedFromNeeds, ...generatedFromReports].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   )
 }
@@ -190,18 +181,63 @@ export function getLatestActivity(limit = 8, dataset: FaroDataset = EMPTY_FARO_D
   return buildTimelineEvents(dataset, { authoritativeEvents: dataset.events.length > 0 }).slice(0, limit)
 }
 
+const HIGH_VALUE_KINDS = new Set([
+  'need_created',
+  'need_resolved',
+  'need_reopened',
+  'cycle_closed',
+  'inventory_complete',
+  'coordinator_approved',
+  'center_opened',
+  'report',
+  'resolved',
+  'request',
+])
+
+/** Filtra ruido legado (Actualización de inventario, etc.). */
+export function isHighValueEvent(event: Event): boolean {
+  if (HIGH_VALUE_KINDS.has(event.kind)) return true
+  if (event.kind === 'saturation') {
+    return (
+      event.title.includes('cambió de estado') ||
+      event.title.includes('Nivel de saturación') ||
+      event.title.includes('registrado')
+    )
+  }
+  if (event.kind === 'inventory') {
+    return (
+      event.title.includes('Nueva necesidad') ||
+      event.title.includes('cubierta') ||
+      event.title.includes('completado')
+    )
+  }
+  return false
+}
+
+function mapActivityKind(kind: Event['kind']): ActivityEvent['kind'] {
+  switch (kind) {
+    case 'need_created':
+    case 'need_resolved':
+    case 'need_reopened':
+    case 'cycle_closed':
+    case 'inventory_complete':
+    case 'coordinator_approved':
+    case 'center_opened':
+    case 'inventory':
+    case 'saturation':
+    case 'report':
+    case 'request':
+    case 'resolved':
+      return kind
+    default:
+      return 'report'
+  }
+}
+
 export function toActivityEvent(event: Event, siteName?: string): ActivityEvent {
-  const allowedKind: ActivityEvent['kind'] =
-    event.kind === 'inventory' ||
-    event.kind === 'saturation' ||
-    event.kind === 'report' ||
-    event.kind === 'request' ||
-    event.kind === 'resolved'
-      ? event.kind
-      : 'report'
   return {
     id: event.id,
-    kind: allowedKind,
+    kind: mapActivityKind(event.kind),
     title: event.title,
     detail: event.detail,
     siteName,

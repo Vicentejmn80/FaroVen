@@ -14,6 +14,12 @@ export type ReportType = 'inventory' | 'saturation' | 'access' | 'shelter' | 'he
 export type UserRole = 'citizen' | 'volunteer' | 'coordinator' | 'admin'
 export type EventKind =
   | 'inventory'
+  | 'inventory_complete'
+  | 'need_created'
+  | 'need_resolved'
+  | 'need_reopened'
+  | 'cycle_closed'
+  | 'coordinator_approved'
   | 'saturation'
   | 'report'
   | 'request'

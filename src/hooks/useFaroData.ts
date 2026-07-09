@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Event } from '@/domain/models'
 import type { ActivityEvent } from '@/lib/types'
-import { getActivityFeed, getGuideLibrary, getSites, toActivityEvent } from '@/services/faro-service'
+import {
+  getActivityFeed,
+  getGuideLibrary,
+  getSites,
+  isHighValueEvent,
+  toActivityEvent,
+} from '@/services/faro-service'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { isSupabaseEnabled } from '@/lib/supabase'
 import { FARO_QUERY_KEYS } from './query-keys'
@@ -94,7 +100,15 @@ export function useFaroData() {
   const sites = getSites({ centers, needs, reports, events })
 
   const latestActivity = useMemo<ActivityEvent[]>(() => {
-    if (events.length) return events.slice(0, 8).map((event: Event) => toActivityEvent(event))
+    if (events.length) {
+      const centerById = new Map(centers.map((center) => [center.id, center.name]))
+      return events
+        .filter((event: Event) => isHighValueEvent(event))
+        .slice(0, 8)
+        .map((event: Event) =>
+          toActivityEvent(event, event.centerId ? centerById.get(event.centerId) : undefined),
+        )
+    }
     return getActivityFeed(8, { centers, needs, reports, events })
   }, [centers, needs, reports, events])
 

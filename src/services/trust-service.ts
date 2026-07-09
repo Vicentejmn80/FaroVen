@@ -68,10 +68,20 @@ function resolveLastUpdated(site: Site, center: Center | undefined, needs: Need[
 function resolveUpdatedBy(events: Event[], center: Center | undefined): string {
   const recent = events[0]
   if (recent) {
-    const actor = eventActorLabel(recent)
     if (recent.kind === 'report') return 'Reporte ciudadano verificado'
-    if (recent.kind === 'inventory' || recent.kind === 'saturation') return 'Coordinador del centro'
-    return actor
+    if (recent.kind === 'coordinator_approved') return 'Administración'
+    if (
+      recent.kind === 'inventory' ||
+      recent.kind === 'inventory_complete' ||
+      recent.kind === 'need_created' ||
+      recent.kind === 'need_resolved' ||
+      recent.kind === 'need_reopened' ||
+      recent.kind === 'cycle_closed' ||
+      recent.kind === 'saturation'
+    ) {
+      return 'Coordinador del centro'
+    }
+    return eventActorLabel(recent)
   }
   if (center?.responsible.name) return center.responsible.name
   return 'Coordinador del centro'
@@ -132,7 +142,15 @@ export function computeTrustScore(input: {
   else if (hours < 72) recency = 12
 
   const coordinatorEvents = events.filter(
-    (e) => e.kind === 'inventory' || e.kind === 'saturation' || e.kind === 'resolved',
+    (e) =>
+      e.kind === 'inventory' ||
+      e.kind === 'inventory_complete' ||
+      e.kind === 'need_created' ||
+      e.kind === 'need_resolved' ||
+      e.kind === 'need_reopened' ||
+      e.kind === 'cycle_closed' ||
+      e.kind === 'saturation' ||
+      e.kind === 'resolved',
   )
   const recentCoordinator = coordinatorEvents.some((e) => now - e.createdAt.getTime() < 7 * DAY_MS)
   const recentNeedUpdates = needs.some((n) => now - n.updatedAt.getTime() < 2 * DAY_MS)

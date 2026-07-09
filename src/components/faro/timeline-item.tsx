@@ -1,5 +1,15 @@
 import { motion } from 'framer-motion'
-import { Boxes, FileText, HeartHandshake, PackageCheck, TrendingUp } from 'lucide-react'
+import {
+  Boxes,
+  FileText,
+  HeartHandshake,
+  PackageCheck,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  TrendingUp,
+  UserCheck,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/utils'
 import { STATUS } from '@/lib/status-config'
@@ -7,10 +17,17 @@ import type { ActivityEvent, ActivityKind } from '@/lib/types'
 
 const KIND_ICON: Record<ActivityKind, typeof Boxes> = {
   inventory: Boxes,
+  inventory_complete: PackageCheck,
+  need_created: HeartHandshake,
+  need_resolved: PackageCheck,
+  need_reopened: RotateCcw,
+  cycle_closed: RefreshCw,
+  coordinator_approved: UserCheck,
   saturation: TrendingUp,
   report: FileText,
   request: HeartHandshake,
   resolved: PackageCheck,
+  center_opened: ShieldCheck,
 }
 
 interface TimelineItemProps {

@@ -25,7 +25,7 @@ export function CoordinatorHistoryModule() {
     <div className="space-y-3">
       <p className="text-sm font-medium text-ink">Historial del centro</p>
       <p className="text-xs text-ink-subtle">
-        Línea de tiempo con donaciones, necesidades, saturación y reportes revisados.
+        Hitos operativos: necesidades creadas o resueltas, ciclos cerrados, reportes y cambios de estado.
       </p>
       <GlassCard inset={false} className="p-3">
         {activity.length === 0 ? (

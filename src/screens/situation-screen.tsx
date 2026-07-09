@@ -594,7 +594,7 @@ function ReportsSection({
 }) {
   return (
     <section className={cn('space-y-2.5', className)}>
-      <SectionTitle>Reportes recientes</SectionTitle>
+      <SectionTitle>Actividad reciente</SectionTitle>
       <GlassCard inset={false} className="p-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
         <div className="no-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
           {activity.length ? (
@@ -603,9 +603,9 @@ function ReportsSection({
             ))
           ) : (
             <GuidedEmptyState
-              title="Sin movimientos recientes"
-              description="Aquí verás actualizaciones de necesidades, reportes y llegadas de insumos a medida que ocurran."
-              hint="Toca un centro en el mapa para ver qué necesita ahora mismo."
+              title="Sin hitos recientes"
+              description="Aquí verás necesidades creadas o resueltas, ciclos cerrados, reportes y centros nuevos."
+              hint="Toca un centro en el mapa para ver el detalle operativo."
             />
           )}
         </div>

@@ -214,20 +214,28 @@ export function reportRowToReport(row: ReportRow): Report {
   }
 }
 
+const EVENT_KINDS = new Set([
+  'inventory',
+  'inventory_complete',
+  'need_created',
+  'need_resolved',
+  'need_reopened',
+  'cycle_closed',
+  'coordinator_approved',
+  'saturation',
+  'report',
+  'request',
+  'resolved',
+  'road_blocked',
+  'center_opened',
+  'person_found',
+] as const)
+
 export function eventRowToEvent(row: EventRow): Event {
+  const kind = EVENT_KINDS.has(row.kind as never) ? (row.kind as Event['kind']) : 'report'
   return {
     id: row.id,
-    kind:
-      row.kind === 'inventory' ||
-      row.kind === 'saturation' ||
-      row.kind === 'report' ||
-      row.kind === 'request' ||
-      row.kind === 'resolved' ||
-      row.kind === 'road_blocked' ||
-      row.kind === 'center_opened' ||
-      row.kind === 'person_found'
-        ? row.kind
-        : 'report',
+    kind,
     title: row.title,
     detail: row.detail ?? '',
     centerId: row.center_id ?? undefined,

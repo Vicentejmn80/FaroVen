@@ -21,7 +21,19 @@ export type {
 } from '@/domain/models'
 
 /** Unión de actividad que usa la UI del timeline actual. */
-export type ActivityKind = 'inventory' | 'saturation' | 'report' | 'request' | 'resolved'
+export type ActivityKind =
+  | 'inventory'
+  | 'inventory_complete'
+  | 'need_created'
+  | 'need_resolved'
+  | 'need_reopened'
+  | 'cycle_closed'
+  | 'coordinator_approved'
+  | 'saturation'
+  | 'report'
+  | 'request'
+  | 'resolved'
+  | 'center_opened'
 
 export interface ActivityEvent {
   id: string
