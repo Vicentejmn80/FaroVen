@@ -1,6 +1,33 @@
 export function formatAuthError(message: string): string {
   const normalized = message.toLowerCase()
 
+  // Mensajes ya traducidos (evitar doble format service → UI)
+  if (
+    message.startsWith('Límite de correos') ||
+    message.startsWith('Correo o contraseña') ||
+    message.startsWith('Confirma tu correo') ||
+    message.startsWith('Este correo ya está') ||
+    message.startsWith('El enlace de confirmación') ||
+    message.startsWith('Supabase no está configurado') ||
+    message.startsWith('[FARO] Supabase no configurado')
+  ) {
+    return message
+  }
+
+  if (normalized.includes('no api key found')) {
+    return 'Supabase no está configurado en el servidor. Contacta al administrador (faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY en Vercel).'
+  }
+
+  if (
+    normalized.includes('rate limit') ||
+    normalized.includes('over_email_send_rate_limit') ||
+    normalized.includes('email rate limit exceeded') ||
+    normalized.includes('status code 429') ||
+    normalized.startsWith('429')
+  ) {
+    return 'Límite de correos alcanzado. Espera unos minutos e inténtalo de nuevo.'
+  }
+
   if (normalized.includes('invalid login credentials')) {
     return 'Correo o contraseña incorrectos.'
   }
@@ -9,20 +36,28 @@ export function formatAuthError(message: string): string {
     return 'Confirma tu correo antes de iniciar sesión.'
   }
 
-  if (
-    normalized.includes('rate limit') ||
-    normalized.includes('over_email_send_rate_limit') ||
-    normalized.includes('email rate limit exceeded')
-  ) {
-    return 'Límite de correos alcanzado. Espera unos minutos e inténtalo de nuevo.'
-  }
-
   if (normalized.includes('user already registered') || normalized.includes('already been registered')) {
     return 'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.'
   }
 
   if (normalized.includes('email address not confirmed')) {
     return 'Confirma tu correo antes de iniciar sesión. Revisa tu bandeja o solicita un nuevo código.'
+  }
+
+  if (
+    normalized.includes('otp_expired') ||
+    normalized.includes('invalid or has expired') ||
+    normalized.includes('one-time token not found')
+  ) {
+    return 'El enlace de confirmación expiró o ya fue usado. Solicita uno nuevo desde el registro.'
+  }
+
+  if (
+    normalized.includes('user from sub claim') ||
+    normalized.includes('user_not_found') ||
+    normalized.includes('refresh_token_not_found')
+  ) {
+    return 'Tu sesión expiró o la cuenta fue eliminada. Cierra sesión e inicia de nuevo.'
   }
 
   if (

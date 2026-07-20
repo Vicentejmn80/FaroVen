@@ -75,6 +75,15 @@ export async function resolveAuthSession(): Promise<ResolvedAuth> {
     }
   }
 
+  const staleSessionMessage = userError?.message?.toLowerCase() ?? ''
+  if (
+    staleSessionMessage.includes('user from sub claim') ||
+    staleSessionMessage.includes('user_not_found') ||
+    staleSessionMessage.includes('refresh_token_not_found')
+  ) {
+    await supabase.auth.signOut({ scope: 'local' })
+  }
+
   if (hasSupabaseAuthCallback() || clockSkewWarning) {
     await delay(400)
     const { data: lateSession } = await supabase.auth.getSession()

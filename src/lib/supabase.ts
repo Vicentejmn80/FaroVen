@@ -26,4 +26,15 @@ const { url: supabaseUrl, anonKey: supabaseAnonKey } = assertSupabaseEnv()
 /** Solo true si el módulo cargó — la validación falla antes de crear el cliente. */
 export const isSupabaseEnabled = true
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    headers: {
+      apikey: supabaseAnonKey,
+    },
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts",
-    "prebuild": "node scripts/gen-icons.mjs && node scripts/write-version.mjs",
+    "prebuild": "node scripts/gen-icons.mjs && node scripts/write-version.mjs && node scripts/verify-vite-env.mjs",
     "build": "tsc --noEmit && vite build --config vite.config.ts",
     "preview": "vite preview",
     "lint": "eslint .",
