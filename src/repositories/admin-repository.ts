@@ -22,6 +22,12 @@ function mapProfile(row: Record<string, unknown>): ProfileRow {
     municipality: row.municipality ? String(row.municipality) : null,
     region: row.region ? String(row.region) : null,
     status: (row.status as ProfileRow['status']) ?? 'active',
+    network_role_selected_at: row.network_role_selected_at ? String(row.network_role_selected_at) : null,
+    pending_role: (row.pending_role as ProfileRow['pending_role']) ?? null,
+    role_request_reason: row.role_request_reason ? String(row.role_request_reason) : null,
+    role_request_status: (row.role_request_status as ProfileRow['role_request_status']) ?? null,
+    role_request_reviewed_at: row.role_request_reviewed_at ? String(row.role_request_reviewed_at) : null,
+    participation_intent: (row.participation_intent as ProfileRow['participation_intent']) ?? null,
     last_login_at: row.last_login_at ? String(row.last_login_at) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
@@ -187,13 +193,14 @@ export const adminRepository = {
 
   async listRegistry(): Promise<AdminRegistryRow[]> {
     const { data, error } = await supabase.rpc('admin_registry_overview')
-    if (error) throw error
+    // RPC ausente / 404 / sin permiso: no tumbar la consola
+    if (error) return []
     return (data ?? []) as AdminRegistryRow[]
   },
 
   async listCoordinators(): Promise<AdminCoordinatorRow[]> {
     const { data, error } = await supabase.rpc('admin_list_coordinators')
-    if (error) throw error
+    if (error) return []
     return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
       profile_id: String(row.profile_id),
       auth_user_id: String(row.auth_user_id),

@@ -25,6 +25,15 @@ export function formatAuthError(message: string): string {
     return 'Confirma tu correo antes de iniciar sesión. Revisa tu bandeja o solicita un nuevo código.'
   }
 
+  if (
+    normalized.includes('clock') ||
+    normalized.includes('skew') ||
+    normalized.includes('issued in the future') ||
+    normalized.includes('jwt expired')
+  ) {
+    return 'La hora de tu dispositivo no coincide con el servidor. Sincroniza la hora del sistema e inténtalo de nuevo.'
+  }
+
   if (normalized.includes('password should be at least')) {
     return 'La contraseña debe tener al menos 6 caracteres.'
   }
@@ -59,6 +68,30 @@ export function formatAuthError(message: string): string {
 
   if (normalized.includes('not_authorized')) {
     return 'No tienes permisos para esta acción.'
+  }
+
+  if (normalized.includes('coordinator_requires_site')) {
+    return 'Para coordinador debes asignar un centro desde el módulo Coordinadores.'
+  }
+
+  if (normalized.includes('site_already_has_coordinator')) {
+    return 'Ese centro ya tiene coordinador. Recarga la página e inténtalo de nuevo, o elige otro centro.'
+  }
+
+  if (normalized.includes('site_not_found')) {
+    return 'El centro seleccionado no existe en la base de datos.'
+  }
+
+  if (normalized.includes('invalid_site_type')) {
+    return 'Tipo de centro no válido para asignación.'
+  }
+
+  if (normalized.includes('profile_not_found')) {
+    return 'No se encontró el perfil del usuario.'
+  }
+
+  if (normalized.includes('role_change_forbidden')) {
+    return 'No se pudo cambiar el rol. Verifica que iniciaste sesión como Super Admin.'
   }
 
   if (

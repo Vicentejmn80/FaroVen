@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BarChart3, CheckCircle2, PackagePlus, Truck, TruckIcon } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
+import { ActionCard } from '@/components/ui/action-card'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { NeedItemLabel } from '@/components/faro/need-item-label'
@@ -165,29 +166,5 @@ export function CoordinatorHubScreen({
         </section>
       </div>
     </ScreenScaffold>
-  )
-}
-
-function ActionCard({
-  icon: Icon,
-  label,
-  hint,
-  onClick,
-}: {
-  icon: typeof PackagePlus
-  label: string
-  hint: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="glass rounded-3xl p-3 text-left transition-colors hover:bg-white/[0.09]"
-    >
-      <Icon className="h-4.5 w-4.5 text-info" />
-      <p className="mt-2 text-sm font-medium text-ink">{label}</p>
-      <p className="text-xs text-ink-subtle">{hint}</p>
-    </button>
   )
 }

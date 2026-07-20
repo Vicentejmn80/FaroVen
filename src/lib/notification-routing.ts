@@ -1,4 +1,4 @@
-import type { TabId } from '@/components/faro/app-navigation'
+import { normalizeTabId, type TabId } from '@/components/faro/app-navigation'
 import type { CoordinatorModuleId } from '@/services/coordinator-service'
 
 export interface NotificationNavigationTarget {
@@ -15,7 +15,7 @@ export function parseNotificationActionUrl(actionUrl: string | null | undefined)
   const parts = actionUrl.split(':')
   if (parts[0] !== 'tab') return null
 
-  const tab = parts[1] as TabId
+  const tab = normalizeTabId(parts[1]) ?? (parts[1] as TabId)
   const target: NotificationNavigationTarget = { tab }
 
   if (tab === 'admin' && parts[2] === 'request' && parts[3]) {

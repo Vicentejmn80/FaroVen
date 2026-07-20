@@ -87,8 +87,8 @@ export interface GuideFeedbackInput {
 export interface FaroTeamContact {
   name: string
   role: string
-  phone: string
-  phoneDisplay: string
+  phone?: string
+  phoneDisplay?: string
   email: string
   emailNote?: string
 }

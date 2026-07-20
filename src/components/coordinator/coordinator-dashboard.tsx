@@ -1,8 +1,9 @@
 import { ArrowRight, ClipboardList, PackagePlus, Users } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
+import { MetricCard } from '@/components/ui/metric-card'
 import type { CoordinatorDashboardMetrics } from '@/services/coordinator-service'
-import { cn, timeAgo } from '@/lib/utils'
+import { timeAgo } from '@/lib/utils'
 
 interface CoordinatorDashboardProps {
   metrics: CoordinatorDashboardMetrics
@@ -22,12 +23,12 @@ export function CoordinatorDashboard({
       <div className="grid grid-cols-2 gap-2.5">
         <MetricCard
           label="Necesidades activas"
-          value={String(metrics.activeNeedsCount)}
+          value={metrics.activeNeedsCount}
           tone={metrics.activeNeedsCount > 0 ? 'warning' : 'operational'}
         />
         <MetricCard
           label="Reportes pendientes"
-          value={String(metrics.pendingReportsCount)}
+          value={metrics.pendingReportsCount}
           tone={metrics.pendingReportsCount > 0 ? 'critical' : 'operational'}
         />
         <MetricCard
@@ -57,25 +58,6 @@ function saturationTone(pct: number, inverted = false): 'operational' | 'warning
   if (effective >= 85) return 'critical'
   if (effective >= 65) return 'warning'
   return 'operational'
-}
-
-function MetricCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string
-  tone: 'operational' | 'warning' | 'critical'
-}) {
-  const toneClass =
-    tone === 'critical' ? 'text-critical' : tone === 'warning' ? 'text-warning' : 'text-operational'
-  return (
-    <GlassCard className="space-y-1 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-ink-subtle">{label}</p>
-      <p className={cn('text-2xl font-semibold tabular-nums', toneClass)}>{value}</p>
-    </GlassCard>
-  )
 }
 
 function QuickLink({

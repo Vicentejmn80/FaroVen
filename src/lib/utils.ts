@@ -48,16 +48,68 @@ export function buildMapLink(lat: number, lng: number): string | null {
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`
 }
 
-/** Abrir ruta hacia el centro (Google Maps, sin API key). */
-export function buildNavigateLink(lat: number, lng: number): string | null {
-  if (!isValidCoord(lat, lng)) return null
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`
+export type NavigateDestination = {
+  lat: number
+  lng: number
+  /** Nombre del centro — mejora la etiqueta en Google Maps */
+  name?: string | null
+  /** Dirección textual de respaldo si faltan coordenadas */
+  address?: string | null
 }
 
-export function openExternalNavigation(lat: number, lng: number): boolean {
-  const url = buildNavigateLink(lat, lng) ?? buildMapLink(lat, lng)
-  if (!url) return false
-  window.open(url, '_blank', 'noopener,noreferrer')
+/**
+ * Ruta en Google Maps hacia el punto exacto del centro.
+ * Usa lat/lng como destino (pin preciso). Si no hay coords válidas, busca por nombre/dirección.
+ */
+export function buildNavigateLink(
+  latOrDest: number | NavigateDestination,
+  lng?: number,
+  label?: string | null,
+): string | null {
+  const dest: NavigateDestination =
+    typeof latOrDest === 'object'
+      ? latOrDest
+      : { lat: latOrDest, lng: lng ?? NaN, name: label }
+
+  const lat = parseCoord(dest.lat)
+  const lon = parseCoord(dest.lng)
+
+  if (isValidCoord(lat, lon)) {
+    // destination=lat,lng fuerza el pin exacto registrado en FARO
+    const params = new URLSearchParams({
+      api: '1',
+      destination: `${lat},${lon}`,
+      travelmode: 'driving',
+    })
+    return `https://www.google.com/maps/dir/?${params.toString()}`
+  }
+
+  const textQuery = [dest.name, dest.address].filter(Boolean).join(', ').trim()
+  if (!textQuery) return null
+  const params = new URLSearchParams({
+    api: '1',
+    destination: textQuery,
+    travelmode: 'driving',
+  })
+  return `https://www.google.com/maps/dir/?${params.toString()}`
+}
+
+export function openExternalNavigation(
+  latOrDest: number | NavigateDestination,
+  lng?: number,
+  label?: string | null,
+): boolean {
+  const url =
+    typeof latOrDest === 'object'
+      ? buildNavigateLink(latOrDest)
+      : buildNavigateLink(latOrDest, lng, label)
+  const fallback =
+    typeof latOrDest === 'object'
+      ? buildMapLink(latOrDest.lat, latOrDest.lng)
+      : buildMapLink(latOrDest, lng ?? NaN)
+  const target = url ?? fallback
+  if (!target) return false
+  window.open(target, '_blank', 'noopener,noreferrer')
   return true
 }
 

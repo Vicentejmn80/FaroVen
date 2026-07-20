@@ -17,6 +17,7 @@ import {
   UserCog,
   Warehouse,
   Wrench,
+  FlaskConical,
 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -43,6 +44,7 @@ import {
 import type { AdminCoordinatorRow, AdminRegistryRow, SuperAdminModuleId } from '@/lib/admin-types'
 import { authService } from '@/services/auth-service'
 import { formatAuthError } from '@/lib/auth-errors'
+import { DevWorkspace } from '@/components/dev/dev-workspace'
 import { useAuth } from '@/store/auth-context'
 import { useFaro } from '@/store/faro-context'
 import { siteToNeedableType } from '@/lib/site-utils'
@@ -74,24 +76,42 @@ const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; desc
   { id: 'operational_settings', label: 'Configuración operativa', icon: Wrench, description: 'Ciclo operativo de necesidades' },
   { id: 'maintenance', label: 'Mantenimiento', icon: Wrench, description: 'Limpieza y saneamiento del tablero' },
   { id: 'dev_reset', label: 'Limpieza dev', icon: Trash2, description: 'Reset operacional (solo dev)' },
+  { id: 'lab', label: 'Laboratorio', icon: FlaskConical, description: 'Herramientas de desarrollo' },
 ]
 
 export function SuperAdminConsole() {
   const [activeModule, setActiveModule] = useState<SuperAdminModuleId | null>(null)
-  const { user, refreshProfile } = useAuth()
+  const { user, refreshProfile, simulatedRole, setSimulatedRole, canAccessSystemPanel } = useAuth()
   const queryClient = useQueryClient()
   const { sites } = useFaro()
-  const enabled = true
-  const { data: profiles = [], refetch: refetchProfiles } = useAdminProfiles(enabled)
-  const auditTimeline = useAuditTimeline(enabled)
-  const registry = useAdminRegistry(enabled)
-  const coordinators = useAdminCoordinators(enabled)
-  const needs = useAdminNeeds(enabled)
-  const reports = useAdminReports(enabled)
-  const events = useAdminEvents(enabled)
-  const notifications = useAdminNotificationsList(enabled)
-  const operationalSettings = useAdminOperationalSettings(enabled)
-  const pendingRequests = usePendingCoordinatorRequests(enabled)
+  // Solo disparar RPCs admin si el rol lo requiere y el módulo activo las usa
+  const canAdmin = canAccessSystemPanel
+  const loadUsers = canAdmin && (activeModule === 'users' || activeModule === 'coordinators')
+  const loadRequests = canAdmin && activeModule === 'requests'
+  const loadRegistry = canAdmin && (
+    activeModule === 'hospitals' ||
+    activeModule === 'shelters' ||
+    activeModule === 'supply_centers' ||
+    activeModule === 'coordinators'
+  )
+  const loadCoordinators = canAdmin && (activeModule === 'coordinators' || activeModule === 'users')
+  const loadNeeds = canAdmin && (activeModule === 'needs' || activeModule === 'inventory')
+  const loadReports = canAdmin && activeModule === 'reports'
+  const loadEvents = canAdmin && activeModule === 'events'
+  const loadNotifications = canAdmin && activeModule === 'notifications'
+  const loadOperational = canAdmin && activeModule === 'operational_settings'
+  const loadAudit = canAdmin && activeModule === 'audit'
+
+  const { data: profiles = [], refetch: refetchProfiles } = useAdminProfiles(loadUsers)
+  const auditTimeline = useAuditTimeline(loadAudit)
+  const registry = useAdminRegistry(loadRegistry)
+  const coordinators = useAdminCoordinators(loadCoordinators)
+  const needs = useAdminNeeds(loadNeeds)
+  const reports = useAdminReports(loadReports)
+  const events = useAdminEvents(loadEvents)
+  const notifications = useAdminNotificationsList(loadNotifications)
+  const operationalSettings = useAdminOperationalSettings(loadOperational)
+  const pendingRequests = usePendingCoordinatorRequests(loadRequests)
   const requestMutations = useCoordinatorRequestMutations()
   const mutations = useAdminMutations()
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -108,6 +128,14 @@ export function SuperAdminConsole() {
     const map = new Map<string, AdminCoordinatorRow>()
     for (const row of coordinators.data ?? []) {
       map.set(row.auth_user_id, row)
+    }
+    return map
+  }, [coordinators.data])
+
+  const coordinatorBySiteId = useMemo(() => {
+    const map = new Map<string, AdminCoordinatorRow>()
+    for (const row of coordinators.data ?? []) {
+      map.set(row.site_id, row)
     }
     return map
   }, [coordinators.data])
@@ -195,6 +223,7 @@ export function SuperAdminConsole() {
             profiles={profiles}
             sites={sites}
             coordinatorByUserId={coordinatorByUserId}
+            coordinatorBySiteId={coordinatorBySiteId}
             currentUserId={user?.id}
             busyId={busyId}
             onPromoteAdmin={promoteAdmin}
@@ -466,6 +495,14 @@ export function SuperAdminConsole() {
             <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">Auditoría</p>
             <AuditTimeline entries={auditTimeline.entries} loading={auditTimeline.isLoading} />
           </section>
+        )}
+
+        {activeModule === 'lab' && (
+          <DevWorkspace
+            simulatedRole={simulatedRole}
+            onSimulate={setSimulatedRole}
+            onStopSimulation={() => setSimulatedRole(null)}
+          />
         )}
 
         {showCreateCenter && (

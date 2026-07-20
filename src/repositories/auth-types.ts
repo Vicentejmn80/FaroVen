@@ -1,4 +1,4 @@
-import type { FaroRole } from '@/lib/roles'
+import type { FaroRole, NetworkRoleRequestStatus } from '@/lib/roles'
 import type { CoordinatorRequestStatus } from '@/lib/roles'
 import type { RegisterSiteType } from '@/repositories/types'
 
@@ -15,6 +15,12 @@ export interface ProfileRow {
   municipality: string | null
   region: string | null
   status: 'active' | 'suspended' | 'pending'
+  network_role_selected_at: string | null
+  pending_role: Exclude<FaroRole, 'public'> | null
+  role_request_reason: string | null
+  role_request_status: NetworkRoleRequestStatus | null
+  role_request_reviewed_at: string | null
+  participation_intent: 'need_help' | 'want_to_help' | 'represent_org' | null
   last_login_at: string | null
   created_at: string
   updated_at: string

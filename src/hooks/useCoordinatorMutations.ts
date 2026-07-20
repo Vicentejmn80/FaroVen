@@ -8,6 +8,7 @@ import {
   reviewReport,
   updateNeed,
 } from '@/services/repository-service'
+import { autoCaseService } from '@/services/auto-case-service'
 import type {
   AdjustNeedStockInput,
   CloseNeedCycleInput,
@@ -100,10 +101,14 @@ export function useCoordinatorMutations() {
     },
     onSuccess: (report) => {
       invalidateAll(queryClient)
-      showToast(
-        report.status === 'verified' ? 'Reporte aprobado.' : 'Reporte rechazado.',
-        report.status === 'verified' ? 'success' : 'warning',
-      )
+      if (report.status === 'verified') {
+        autoCaseService.createFromReport(report).catch(() => {
+          console.warn('[AUTO-CASE] No se pudo crear caso automático para reporte:', report.id)
+        })
+        showToast('Reporte aprobado. Caso creado automáticamente.', 'success')
+      } else {
+        showToast('Reporte rechazado.', 'warning')
+      }
     },
   })
 

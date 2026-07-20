@@ -2,6 +2,15 @@ import { divIcon, type DivIcon } from 'leaflet'
 import { STATUS, SITE_META } from '@/lib/status-config'
 import type { Site } from '@/lib/types'
 
+type MissionPriority = 'low' | 'medium' | 'high' | 'critical'
+
+const MISSION_COLORS: Record<MissionPriority, string> = {
+  critical: '#FF453A',
+  high: '#FFD60A',
+  medium: '#0A84FF',
+  low: '#30D158',
+}
+
 /**
  * Crea un ícono HTML para Leaflet manteniendo el mismo lenguaje visual
  * de FARO (glass + semántica por estado + realce activo).
@@ -40,5 +49,28 @@ export function createPickerMarkerIcon(): DivIcon {
     className: 'faro-picker-marker-wrapper',
     iconSize: [36, 48],
     iconAnchor: [18, 44],
+  })
+}
+
+export function createMissionMarkerIcon(
+  mission: { title: string; priority: MissionPriority },
+  active = false,
+  dimmed = false,
+): DivIcon {
+  const color = MISSION_COLORS[mission.priority] ?? MISSION_COLORS.medium
+  const html = `
+    <div class="faro-mission-marker ${active ? 'is-active' : ''} ${dimmed ? 'is-dimmed' : ''}" style="--marker-color:${color}">
+      <div class="faro-mission-marker__bubble" title="${mission.title}">
+        <span class="faro-mission-marker__dot" aria-hidden="true"></span>
+      </div>
+      <span class="faro-mission-marker__tip"></span>
+    </div>
+  `
+
+  return divIcon({
+    html,
+    className: 'faro-mission-marker-wrapper',
+    iconSize: [40, 52],
+    iconAnchor: [20, 42],
   })
 }

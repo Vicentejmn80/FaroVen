@@ -18,6 +18,7 @@ interface UserManagementPanelProps {
   profiles: ProfileRow[]
   sites: Site[]
   coordinatorByUserId?: Map<string, AdminCoordinatorRow>
+  coordinatorBySiteId?: Map<string, AdminCoordinatorRow>
   currentUserId?: string
   busyId: string | null
   onPromoteAdmin: (userId: string) => Promise<void>
@@ -29,6 +30,7 @@ export function UserManagementPanel({
   profiles,
   sites,
   coordinatorByUserId,
+  coordinatorBySiteId,
   currentUserId,
   busyId,
   onPromoteAdmin,
@@ -259,10 +261,13 @@ export function UserManagementPanel({
         >
           <div className="space-y-3 px-5 pb-8">
             <p className="text-sm text-ink-muted">
-              Debes seleccionar el hospital, refugio o acopio antes de confirmar. No se guardará sin un centro válido.
+              Selecciona el hospital, refugio o acopio. Si el centro ya tiene coordinador, se reasignará al confirmar.
             </p>
             <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
-              {registeredSites.map((site) => (
+              {registeredSites.map((site) => {
+                const occupant = coordinatorBySiteId?.get(site.id)
+                const isSelf = occupant?.auth_user_id === coordinatorTarget.id
+                return (
                 <li key={site.id}>
                   <button
                     type="button"
@@ -274,12 +279,31 @@ export function UserManagementPanel({
                         : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]',
                     )}
                   >
-                    <p className="text-sm font-medium text-ink">{site.name}</p>
-                    <p className="text-xs text-ink-subtle">{site.zone}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink">{site.name}</p>
+                        <p className="text-xs text-ink-subtle">{site.zone}</p>
+                      </div>
+                      {occupant && !isSelf && (
+                        <span className="shrink-0 rounded-lg bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                          Ocupado
+                        </span>
+                      )}
+                    </div>
+                    {occupant && !isSelf && (
+                      <p className="mt-1 text-[11px] text-ink-muted">
+                        Coordinador actual: {occupant.full_name || occupant.email}
+                      </p>
+                    )}
                   </button>
                 </li>
-              ))}
+              )})}
             </ul>
+            {selectedSiteId && coordinatorBySiteId?.get(selectedSiteId)?.auth_user_id !== coordinatorTarget.id && coordinatorBySiteId?.has(selectedSiteId) && (
+              <p className="rounded-xl border border-warning/25 bg-warning/10 px-3 py-2 text-xs text-warning">
+                Este centro ya tiene coordinador. Al confirmar, el anterior perderá el rol de coordinador.
+              </p>
+            )}
             {registeredSites.length === 0 && (
               <p className="text-sm text-ink-subtle">No hay centros registrados aún.</p>
             )}

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { ReportRow } from '@/types/supabase'
 import { reportRowToReport } from './mappers'
 import type { SubmitReportInput, ReviewReportInput, RegisterSiteType } from './types'
+import { generateTrackingCode } from '@/lib/portal-report-tracking'
 
 export class ReportRepository {
   async list(): Promise<Report[]> {
@@ -40,6 +41,44 @@ export class ReportRepository {
       .order('created_at', { ascending: false })
     if (error) throw error
     return ((data ?? []) as ReportRow[]).map(reportRowToReport)
+  }
+
+  async createPublic(input: {
+    description: string
+    contactName?: string
+    contactPhone?: string
+    contactEmail?: string
+    location?: string
+    category?: string
+  }): Promise<{ report: Report; trackingCode: string }> {
+    const trackingCode = generateTrackingCode()
+    const contactInfo = [input.contactName, input.contactPhone, input.contactEmail].filter(Boolean).join(' | ') || null
+    const description = [input.category, input.location, input.description].filter(Boolean).join(' — ')
+
+    const { data, error } = await supabase
+      .from('reports')
+      .insert({
+        type: 'other',
+        description,
+        contact_info: contactInfo,
+        tracking_code: trackingCode,
+        status: 'pending',
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return { report: reportRowToReport(data as ReportRow), trackingCode }
+  }
+
+  async findByTrackingCode(code: string): Promise<Report | null> {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*')
+      .eq('tracking_code', code.trim().toUpperCase())
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return reportRowToReport(data as ReportRow)
   }
 
   async updateReview(input: ReviewReportInput): Promise<Report> {

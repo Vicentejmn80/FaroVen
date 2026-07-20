@@ -20,7 +20,9 @@ import type { CoordinatorModuleId } from '@/services/coordinator-service'
 import {
   BottomNavigation,
   DesktopNavigation,
+  getMobilePrimaryTabs,
   getNavigationTabs,
+  normalizeTabId,
   type TabId,
 } from '@/components/faro/app-navigation'
 import { ActionsScreen, type ActionId } from '@/screens/actions-screen'
@@ -34,17 +36,33 @@ import { useFaro } from '@/store/faro-context'
 import { AdjustNeedStockFlow } from '@/screens/adjust-need-stock-flow'
 import type { Site } from '@/lib/types'
 import { usePermissions, useAuth } from '@/store/auth-context'
-import { FARO_ROLES } from '@/lib/roles'
+import { ROLE_LABELS } from '@/services/dev-service'
+import { FARO_ROLES, type FaroRole } from '@/lib/roles'
 import { RequireRole } from '@/components/auth/require-role'
 import { refreshNeedCycles } from '@/services/repository-service'
 import { NeedCycleClosureModal } from '@/components/coordinator/need-cycle-closure-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { NotificationRow } from '@/domain/notification-models'
+import { LegalFooter } from '@/components/legal/legal-footer'
+import { PendingRoleBanner } from '@/components/auth/pending-role-banner'
 
-type FlowId = ActionId | 'menu' | 'auth' | 'coordinator-request'
+type FlowId =
+  | ActionId
+  | 'menu'
+  | 'auth'
+  | 'coordinator-request'
+  | 'legal-terms'
+  | 'legal-privacy'
+  | 'legal-notice'
+  | 'legal-cookies'
+  | 'legal-contact'
+  | 'legal-about'
 
 const SituationScreen = lazyWithRetry(() =>
   import('@/screens/situation-screen').then((m) => ({ default: m.SituationScreen })),
+)
+const OperationsHub = lazyWithRetry(() =>
+  import('@/components/operations-hub/operations-hub').then((m) => ({ default: m.OperationsHub })),
 )
 const ActivityScreen = lazyWithRetry(() =>
   import('@/screens/activity-screen').then((m) => ({ default: m.ActivityScreen })),
@@ -66,6 +84,32 @@ const AuthScreen = lazyWithRetry(() => import('@/screens/auth-screen').then((m) 
 const CoordinatorRequestScreen = lazyWithRetry(() =>
   import('@/screens/coordinator-request-screen').then((m) => ({ default: m.CoordinatorRequestScreen })),
 )
+const LegalTermsScreen = lazyWithRetry(() =>
+  import('@/screens/legal-terms-screen').then((m) => ({ default: m.LegalTermsScreen })),
+)
+const LegalPrivacyScreen = lazyWithRetry(() =>
+  import('@/screens/legal-privacy-screen').then((m) => ({ default: m.LegalPrivacyScreen })),
+)
+const LegalNoticeScreen = lazyWithRetry(() =>
+  import('@/screens/legal-notice-screen').then((m) => ({ default: m.LegalNoticeScreen })),
+)
+const LegalCookiesScreen = lazyWithRetry(() =>
+  import('@/screens/legal-cookies-screen').then((m) => ({ default: m.LegalCookiesScreen })),
+)
+const ContactScreen = lazyWithRetry(() =>
+  import('@/screens/contact-screen').then((m) => ({ default: m.ContactScreen })),
+)
+const AboutFaroScreen = lazyWithRetry(() =>
+  import('@/screens/about-faro-screen').then((m) => ({ default: m.AboutFaroScreen })),
+)
+const VolunteerNeedsScreen = lazyWithRetry(() =>
+  import('@/screens/volunteer-needs-screen').then((m) => ({ default: m.VolunteerNeedsScreen })),
+)
+const VolunteerCollaborationsScreen = lazyWithRetry(() =>
+  import('@/screens/volunteer-collaborations-screen').then((m) => ({
+    default: m.VolunteerCollaborationsScreen,
+  })),
+)
 
 type ProfileSubview = 'main' | 'notification-preferences'
 
@@ -80,12 +124,12 @@ function ScreenLoading() {
 }
 
 export function AppShell() {
-  const { role, canAccessCoordinatorPanel, canAccessAdminPanel, canAccessSystemPanel } = usePermissions()
-  const { session, user, pendingAuthIntent, clearPendingAuthIntent, refreshProfile } = useAuth()
+  const { role, canAccessCoordinatorPanel, canAccessAdminPanel, canAccessSystemPanel, isVolunteer } =
+    usePermissions()
+  const { session, user, pendingAuthIntent, clearPendingAuthIntent, refreshProfile, simulatedRole, setSimulatedRole } = useAuth()
   const { assignment } = useCoordinatorAssignment()
-  const { cachedAt } = useFaro()
-  const { state } = useFaro()
-  const [tab, setTab] = useState<TabId>('map')
+  const { cachedAt, sites, state } = useFaro()
+  const [activeView, setActiveViewState] = useState<TabId>(isVolunteer ? 'needs' : 'map')
   const [flow, setFlow] = useState<FlowId | null>(null)
   const [needPresetSiteId, setNeedPresetSiteId] = useState<string | undefined>()
   const [detailSite, setDetailSite] = useState<Site | null>(null)
@@ -102,7 +146,17 @@ export function AppShell() {
   const { showToast } = useToast()
 
   const tabs = useMemo(() => getNavigationTabs(role, user?.email), [role, user?.email])
+  const mobileTabs = useMemo(() => getMobilePrimaryTabs(role, user?.email), [role, user?.email])
   const isCoordinatorOps = canAccessCoordinatorPanel
+  const defaultTab: TabId = isVolunteer ? 'needs' : 'map'
+
+  /** Navegación manual: una sola vista activa; limpia detalle al salir del mapa. */
+  const setActiveView = useCallback((next: TabId) => {
+    const view = normalizeTabId(next) ?? next
+    setActiveViewState(view)
+    if (view !== 'map') setDetailSite(null)
+  }, [])
+
   const pendingClosures = useMemo(() => {
     if (!isCoordinatorOps || !assignment?.siteId) return []
     return state.needs.filter(
@@ -133,9 +187,10 @@ export function AppShell() {
   }, [session, flow])
 
   useEffect(() => {
-    const allowed = tabs.map((t) => t.id)
-    if (!allowed.includes(tab)) setTab('map')
-  }, [tabs, tab])
+    const allowed = new Set(tabs.map((t) => t.id))
+    const current = normalizeTabId(activeView) ?? activeView
+    if (!allowed.has(current)) setActiveView(defaultTab)
+  }, [tabs, activeView, defaultTab, setActiveView])
 
   // Fallback: si hay notificación de aprobación pero el JWT aún no refleja el rol.
   useEffect(() => {
@@ -145,7 +200,7 @@ export function AppShell() {
   }, [notifications.data, role, refreshProfile])
 
   const applyNotificationNavigation = useCallback((target: NotificationNavigationTarget) => {
-    if (target.tab) setTab(target.tab)
+    if (target.tab) setActiveView(target.tab)
     if (target.focusRequestId) setFocusRequestId(target.focusRequestId)
     if (target.focusReportId) {
       setFocusReportId(target.focusReportId)
@@ -154,7 +209,7 @@ export function AppShell() {
     if (target.coordinatorModule) setCoordinatorModule(target.coordinatorModule)
     if (target.flow === 'coordinator-request') startTransition(() => setFlow('coordinator-request'))
     setHubOpen(false)
-  }, [])
+  }, [setActiveView])
 
   useEffect(() => {
     const target = parseNavQueryParam(window.location.search)
@@ -181,8 +236,8 @@ export function AppShell() {
   }
 
   useEffect(() => {
-    if (tab !== 'map' && detailSite) setDetailSite(null)
-  }, [tab, detailSite])
+    if (activeView !== 'map' && detailSite) setDetailSite(null)
+  }, [activeView, detailSite])
 
   useEffect(() => {
     if (previousNetworkState.current === network.state) return
@@ -202,19 +257,35 @@ export function AppShell() {
     startTransition(() => setFlow(null))
   }, [])
 
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<{ doc?: string }>).detail
+      if (!detail?.doc) return
+      if (detail.doc === 'terms') openFlow('legal-terms')
+      if (detail.doc === 'privacy') openFlow('legal-privacy')
+      if (detail.doc === 'notice') openFlow('legal-notice')
+      if (detail.doc === 'cookies') openFlow('legal-cookies')
+      if (detail.doc === 'contact') openFlow('legal-contact')
+      if (detail.doc === 'about') openFlow('legal-about')
+    }
+    window.addEventListener('faro:open-legal', listener)
+    return () => window.removeEventListener('faro:open-legal', listener)
+  }, [openFlow])
+
   const openMenu = () => {
     if (isCoordinatorOps || canAccessAdminPanel) {
       openFlow('menu')
       return
     }
     closeFlow()
-    setTab('reports')
+    // Voluntario: FAB → necesidades; ciudadano → reportar
+    setActiveView(isVolunteer ? 'needs' : 'reports')
   }
 
   const handleAction = (action: ActionId) => {
     if (action === 'report') {
       closeFlow()
-      setTab('reports')
+      setActiveView(isVolunteer ? 'needs' : 'reports')
       return
     }
     if (action === 'register-need') setNeedPresetSiteId(undefined)
@@ -227,8 +298,8 @@ export function AppShell() {
   }
 
   useEffect(() => {
-    if (tab !== 'profile') setProfileSubview('main')
-  }, [tab])
+    if (activeView !== 'profile') setProfileSubview('main')
+  }, [activeView])
 
   useEffect(() => {
     if (!session || !isCoordinatorOps) return
@@ -259,15 +330,15 @@ export function AppShell() {
 
   useEffect(() => {
     const openPrefs = () => {
-      setTab('profile')
+      setActiveView('profile')
       setProfileSubview('notification-preferences')
     }
     window.addEventListener('faro:open-notification-preferences', openPrefs)
     return () => window.removeEventListener('faro:open-notification-preferences', openPrefs)
-  }, [])
+  }, [setActiveView])
 
   const openSystemUsers = () => {
-    setTab('system')
+    setActiveView('system')
     setHubOpen(false)
   }
 
@@ -283,7 +354,7 @@ export function AppShell() {
     }
     if (notification.type === 'coordinator_request_approved') {
       void refreshProfile()
-      setTab('ops')
+      setActiveView('ops')
       setHubOpen(false)
       return
     }
@@ -301,8 +372,11 @@ export function AppShell() {
       setHubOpen(true)
       return
     }
-    setTab('activity')
+    setActiveView(isVolunteer ? 'collaborations' : 'activity')
   }
+
+  const viewKey =
+    activeView === 'map' && detailSite ? `detail-${detailSite.id}` : (normalizeTabId(activeView) ?? activeView)
 
   const openAuth = () => openFlow('auth')
   const openCoordinatorRequest = () => openFlow('coordinator-request')
@@ -316,8 +390,8 @@ export function AppShell() {
         <div id="faro-portals" aria-hidden="false" />
 
         <DesktopNavigation
-          active={tab}
-          onChange={setTab}
+          active={activeView}
+          onChange={setActiveView}
           onCreate={openMenu}
           tabs={tabs}
           createLabel={
@@ -325,11 +399,14 @@ export function AppShell() {
               ? 'Acciones de coordinación'
               : canAccessAdminPanel
                 ? 'Menú de administración'
-                : 'Enviar reporte'
+                : isVolunteer
+                  ? 'Ofrecer ayuda'
+                  : 'Enviar reporte'
           }
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <PendingRoleBanner />
           <EmergencyHeader
             notifications={headerNotificationCount}
             onNotifications={handleNotifications}
@@ -338,101 +415,107 @@ export function AppShell() {
           />
           <ConnectionBanner state={network.state} label={network.label} cachedAt={cachedAt} />
 
+          {simulatedRole && (
+            <div className="mx-4 mt-2 flex items-center justify-between rounded-2xl border border-info/30 bg-info/10 px-3 py-2">
+              <span className="text-xs text-info">
+                Simulación activa — Viendo interfaz de: <strong>{ROLE_LABELS[simulatedRole]}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSimulatedRole(null)}
+                className="text-xs font-medium text-info underline"
+              >
+                Salir
+              </button>
+            </div>
+          )}
+
           <main className="relative min-h-0 flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
-                key={tab === 'map' && detailSite ? `detail-${detailSite.id}` : tab}
+                key={viewKey}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
                 className="h-full min-h-0"
               >
-                <ScreenErrorBoundary
-                  screenName="la pantalla"
-                  resetKey={tab === 'map' && detailSite ? `detail-${detailSite.id}` : tab}
-                >
+                <ScreenErrorBoundary screenName="la pantalla" resetKey={viewKey}>
                   <Suspense fallback={<ScreenLoading />}>
-                  {tab === 'ops' && (
-                    <RequireRole
-                      allowed={[FARO_ROLES.COORDINATOR]}
-                      onRequestAuth={openAuth}
-                    >
-                      <CoordinatorOpsRoute
-                        activeModule={coordinatorModule}
-                        onModuleChange={setCoordinatorModule}
-                        focusReportId={focusReportId}
-                        onFocusReportClear={() => setFocusReportId(null)}
-                        onOpenDetail={openDetail}
-                        onRegisterNeed={openRegisterNeed}
-                        onUpdateSaturation={(siteId) => {
-                          setNeedPresetSiteId(siteId)
-                          openFlow('update-saturation')
-                        }}
-                        onRegisterArrival={(siteId) => {
-                          setNeedPresetSiteId(siteId)
-                          openFlow('register-arrival')
-                        }}
-                        onRegisterDispatch={(siteId) => {
-                          setNeedPresetSiteId(siteId)
-                          openFlow('register-dispatch')
-                        }}
-                        onRequestAuth={openAuth}
-                        onRequestCoordinatorAccess={openCoordinatorRequest}
-                      />
-                    </RequireRole>
-                  )}
-                  {tab === 'map' &&
-                    (detailSite ? (
-                      <CenterDetailScreen
-                        site={detailSite}
-                        onBack={() => setDetailSite(null)}
-                        canEdit={canAccessAdminPanel}
-                      />
-                    ) : (
-                      <SituationScreen
-                        onOpenDetail={openDetail}
-                        onRegisterSite={
-                          canAccessAdminPanel ? () => openFlow('register-site') : undefined
-                        }
-                      />
-                    ))}
-                  {tab === 'reports' && <ReportsScreen />}
-                  {tab === 'activity' && <ActivityScreen />}
-                  {tab === 'profile' &&
-                    (profileSubview === 'notification-preferences' ? (
-                      <NotificationPreferencesScreen onBack={() => setProfileSubview('main')} />
-                    ) : (
-                      <ProfileScreen
-                        onRequestAuth={openAuth}
-                        onRequestCoordinatorAccess={openCoordinatorRequest}
-                        onOpenNotificationPreferences={() => setProfileSubview('notification-preferences')}
-                      />
-                    ))}
-                  {tab === 'admin' && (
-                    <AdminScreen
-                      onRequestAuth={openAuth}
+                    <ShellActiveView
+                      activeView={activeView}
+                      role={role}
+                      detailSite={detailSite}
+                      profileSubview={profileSubview}
+                      canAccessAdminPanel={canAccessAdminPanel}
+                      coordinatorModule={coordinatorModule}
+                      focusReportId={focusReportId}
                       focusRequestId={focusRequestId}
+                      onModuleChange={setCoordinatorModule}
+                      onFocusReportClear={() => setFocusReportId(null)}
                       onFocusRequestClear={() => setFocusRequestId(null)}
+                      onOpenDetail={openDetail}
+                      onRegisterNeed={openRegisterNeed}
+                      onUpdateSaturation={(siteId) => {
+                        setNeedPresetSiteId(siteId)
+                        openFlow('update-saturation')
+                      }}
+                      onRegisterArrival={(siteId) => {
+                        setNeedPresetSiteId(siteId)
+                        openFlow('register-arrival')
+                      }}
+                      onRegisterDispatch={(siteId) => {
+                        setNeedPresetSiteId(siteId)
+                        openFlow('register-dispatch')
+                      }}
+                      onRequestAuth={openAuth}
+                      onRequestCoordinatorAccess={openCoordinatorRequest}
+                      onBackFromDetail={() => setDetailSite(null)}
+                      onRegisterSite={
+                        canAccessAdminPanel ? () => openFlow('register-site') : undefined
+                      }
+                      onOpenNotificationPreferences={() => setProfileSubview('notification-preferences')}
+                      onBackFromNotificationPrefs={() => setProfileSubview('main')}
+                      onNavigate={setActiveView}
+                      onOpenMapSite={(siteId) => {
+                        const site = sites.find((item) => item.id === siteId) ?? null
+                        setDetailSite(site)
+                        setActiveViewState('map')
+                      }}
+                      onOfferHelp={() => {
+                        setDetailSite(null)
+                        setActiveView('map')
+                        showToast('Elige una necesidad activa en el mapa para ofrecer ayuda.', 'info')
+                      }}
                     />
-                  )}
-                  {tab === 'system' && <SystemAdminScreen onRequestAuth={openAuth} />}
                   </Suspense>
                 </ScreenErrorBoundary>
               </motion.div>
             </AnimatePresence>
           </main>
 
+          <LegalFooter
+            onOpenTerms={() => openFlow('legal-terms')}
+            onOpenPrivacy={() => openFlow('legal-privacy')}
+            onOpenNotice={() => openFlow('legal-notice')}
+            onOpenCookies={() => openFlow('legal-cookies')}
+            onOpenContact={() => openFlow('legal-contact')}
+            onOpenAbout={() => openFlow('legal-about')}
+          />
+
           <BottomNavigation
-            active={tab}
-            onChange={setTab}
+            active={activeView}
+            onChange={setActiveView}
             onCreate={openMenu}
+            mobileTabs={mobileTabs}
             createLabel={
               isCoordinatorOps
                 ? 'Acciones de coordinación'
                 : canAccessAdminPanel
                   ? 'Menú de administración'
-                  : 'Enviar reporte'
+                  : isVolunteer
+                    ? 'Ofrecer ayuda'
+                    : 'Enviar reporte'
             }
           />
         </div>
@@ -446,7 +529,7 @@ export function AppShell() {
               }
               onClose={closeFlow}
               onAction={handleAction}
-              onNavigate={setTab}
+              onNavigate={setActiveView}
               showSystem={canAccessSystemPanel}
             />
           )}
@@ -461,6 +544,48 @@ export function AppShell() {
             <div key="coordinator-request" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <CoordinatorRequestScreen onNeedAuth={openAuth} onClose={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'legal-terms' && (
+            <div key="legal-terms" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <LegalTermsScreen onBack={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'legal-privacy' && (
+            <div key="legal-privacy" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <LegalPrivacyScreen onBack={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'legal-notice' && (
+            <div key="legal-notice" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <LegalNoticeScreen onBack={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'legal-cookies' && (
+            <div key="legal-cookies" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <LegalCookiesScreen onBack={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'legal-contact' && (
+            <div key="legal-contact" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <ContactScreen onBack={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'legal-about' && (
+            <div key="legal-about" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <AboutFaroScreen onBack={closeFlow} />
               </Suspense>
             </div>
           )}
@@ -528,6 +653,163 @@ export function AppShell() {
       </div>
     </div>
   )
+}
+
+/**
+ * Renderizado exclusivo por activeView (sin solapar pantallas).
+ * Navegación manual FARO — no usa react-router.
+ */
+function ShellActiveView({
+  activeView,
+  role,
+  detailSite,
+  profileSubview,
+  canAccessAdminPanel,
+  coordinatorModule,
+  focusReportId,
+  focusRequestId,
+  onModuleChange,
+  onFocusReportClear,
+  onFocusRequestClear,
+  onOpenDetail,
+  onRegisterNeed,
+  onUpdateSaturation,
+  onRegisterArrival,
+  onRegisterDispatch,
+  onRequestAuth,
+  onRequestCoordinatorAccess,
+  onBackFromDetail,
+  onRegisterSite,
+  onOpenNotificationPreferences,
+  onBackFromNotificationPrefs,
+  onNavigate,
+  onOpenMapSite,
+  onOfferHelp,
+}: {
+  activeView: TabId
+  role: FaroRole
+  detailSite: Site | null
+  profileSubview: ProfileSubview
+  canAccessAdminPanel: boolean
+  coordinatorModule: CoordinatorModuleId
+  focusReportId: string | null
+  focusRequestId: string | null
+  onModuleChange: (module: CoordinatorModuleId) => void
+  onFocusReportClear: () => void
+  onFocusRequestClear: () => void
+  onOpenDetail: (site: Site) => void
+  onRegisterNeed: (siteId?: string) => void
+  onUpdateSaturation: (siteId?: string) => void
+  onRegisterArrival: (siteId?: string) => void
+  onRegisterDispatch: (siteId?: string) => void
+  onRequestAuth: () => void
+  onRequestCoordinatorAccess: () => void
+  onBackFromDetail: () => void
+  onRegisterSite?: () => void
+  onOpenNotificationPreferences: () => void
+  onBackFromNotificationPrefs: () => void
+  onNavigate: (view: TabId) => void
+  onOpenMapSite: (siteId: string) => void
+  onOfferHelp: () => void
+}) {
+  const view = normalizeTabId(activeView) ?? activeView
+
+  switch (view) {
+    case 'map':
+      if (role === FARO_ROLES.CASE_MANAGER) {
+        return (
+          <RequireRole allowed={[FARO_ROLES.CASE_MANAGER]} onRequestAuth={onRequestAuth}>
+            <OperationsHub />
+          </RequireRole>
+        )
+      }
+      return detailSite ? (
+        <CenterDetailScreen
+          site={detailSite}
+          onBack={onBackFromDetail}
+          canEdit={canAccessAdminPanel}
+          onReport={() => {
+            onBackFromDetail()
+            onNavigate('reports')
+          }}
+        />
+      ) : (
+        <SituationScreen onOpenDetail={onOpenDetail} onRegisterSite={onRegisterSite} />
+      )
+
+    case 'needs':
+      return (
+        <VolunteerNeedsScreen
+          onViewMap={() => onNavigate('map')}
+          onOfferHelp={onOfferHelp}
+          onMyCollaborations={() => onNavigate('collaborations')}
+          onOpenSite={onOpenMapSite}
+        />
+      )
+
+    case 'collaborations':
+      return (
+        <VolunteerCollaborationsScreen
+          onBrowseNeeds={() => onNavigate('needs')}
+          onOpenMap={() => onNavigate('map')}
+        />
+      )
+
+    case 'reports':
+      return <ReportsScreen />
+
+    case 'activity':
+      return <ActivityScreen />
+
+    case 'profile':
+      return profileSubview === 'notification-preferences' ? (
+        <NotificationPreferencesScreen onBack={onBackFromNotificationPrefs} />
+      ) : (
+        <ProfileScreen
+          onRequestAuth={onRequestAuth}
+          onRequestCoordinatorAccess={onRequestCoordinatorAccess}
+          onOpenNotificationPreferences={onOpenNotificationPreferences}
+        />
+      )
+
+    case 'ops':
+      return (
+        <RequireRole allowed={[FARO_ROLES.COORDINATOR]} onRequestAuth={onRequestAuth}>
+          <CoordinatorOpsRoute
+            activeModule={coordinatorModule}
+            onModuleChange={onModuleChange}
+            focusReportId={focusReportId}
+            onFocusReportClear={onFocusReportClear}
+            onOpenDetail={onOpenDetail}
+            onRegisterNeed={onRegisterNeed}
+            onUpdateSaturation={onUpdateSaturation}
+            onRegisterArrival={onRegisterArrival}
+            onRegisterDispatch={onRegisterDispatch}
+            onRequestAuth={onRequestAuth}
+            onRequestCoordinatorAccess={onRequestCoordinatorAccess}
+          />
+        </RequireRole>
+      )
+
+    case 'admin':
+      return (
+        <AdminScreen
+          onRequestAuth={onRequestAuth}
+          focusRequestId={focusRequestId}
+          onFocusRequestClear={onFocusRequestClear}
+        />
+      )
+
+    case 'system':
+      return <SystemAdminScreen onRequestAuth={onRequestAuth} />
+
+    default:
+      return (
+        <div className="flex h-full items-center justify-center px-6 text-sm text-ink-muted">
+          Vista no disponible.
+        </div>
+      )
+  }
 }
 
 function CoordinatorOpsRoute({

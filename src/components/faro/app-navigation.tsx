@@ -3,6 +3,8 @@ import {
   Building2,
   BookOpen,
   FileText,
+  Handshake,
+  HeartHandshake,
   Map,
   Plus,
   Settings2,
@@ -16,10 +18,25 @@ import {
   canAccessAdminPanel,
   canAccessCoordinatorPanel,
   canAccessSystemPanel,
+  FARO_ROLES,
   type FaroRole,
 } from '@/lib/roles'
 
-export type TabId = 'map' | 'reports' | 'activity' | 'profile' | 'ops' | 'admin' | 'system'
+/**
+ * Vistas del shell (navegación manual, sin react-router).
+ * Voluntario: map | needs | collaborations | profile
+ */
+export type TabId =
+  | 'map'
+  | 'needs'
+  | 'collaborations'
+  | 'home' // alias legacy → needs
+  | 'reports'
+  | 'activity'
+  | 'profile'
+  | 'ops'
+  | 'admin'
+  | 'system'
 
 export interface NavTab {
   id: TabId
@@ -34,8 +51,31 @@ const CITIZEN_BASE: NavTab[] = [
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
+/** Navegación voluntario — una vista distinta por ítem. */
+const VOLUNTEER_TABS: NavTab[] = [
+  { id: 'map', label: 'Mapa', icon: Map },
+  { id: 'needs', label: 'Necesidades', icon: HeartHandshake },
+  { id: 'collaborations', label: 'Colaboraciones', icon: Handshake },
+  { id: 'profile', label: 'Perfil', icon: User },
+]
+
+function isVolunteerRole(role: FaroRole): boolean {
+  return role === FARO_ROLES.VOLUNTEER
+}
+
+/** Normaliza aliases legacy (home → needs). */
+export function normalizeTabId(tab: TabId | string | null | undefined): TabId | null {
+  if (!tab) return null
+  if (tab === 'home') return 'needs'
+  return tab as TabId
+}
+
 /** Tabs completos — rail lateral en desktop */
 export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab[] {
+  if (isVolunteerRole(role)) {
+    return [...VOLUNTEER_TABS]
+  }
+
   const tabs = [...CITIZEN_BASE]
 
   if (canAccessCoordinatorPanel(role)) {
@@ -53,7 +93,17 @@ export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab
   return tabs
 }
 
-/** Barra inferior móvil — siempre 4 tabs para no saturar la UI */
+/** Tabs primarios móviles según rol (máx. 4 + FAB). */
+export function getMobilePrimaryTabs(role: FaroRole, email?: string | null): NavTab[] {
+  const tabs = getNavigationTabs(role, email)
+  if (isVolunteerRole(role)) return tabs.slice(0, 4)
+
+  const baseIds = new Set(CITIZEN_BASE.map((t) => t.id))
+  const primary = tabs.filter((t) => baseIds.has(t.id)).slice(0, 4)
+  return primary.length === 4 ? primary : CITIZEN_BASE
+}
+
+/** @deprecated Usar getMobilePrimaryTabs(role) */
 export const MOBILE_PRIMARY_TABS: NavTab[] = CITIZEN_BASE
 
 /** @deprecated Usar getNavigationTabs(role) */
@@ -73,19 +123,34 @@ interface NavigationProps {
   onCreate?: () => void
   tabs: NavTab[]
   createLabel?: string
+  mobileTabs?: NavTab[]
 }
 
 /** Mobile — barra inferior en zona del pulgar (siempre 4 tabs + botón central) */
-export function BottomNavigation({ active, onChange, onCreate, createLabel = 'Acciones' }: Omit<NavigationProps, 'tabs'>) {
-  const left = MOBILE_PRIMARY_TABS.slice(0, 2)
-  const right = MOBILE_PRIMARY_TABS.slice(2)
+export function BottomNavigation({
+  active,
+  onChange,
+  onCreate,
+  createLabel = 'Acciones',
+  mobileTabs = CITIZEN_BASE,
+}: Omit<NavigationProps, 'tabs'> & { mobileTabs?: NavTab[] }) {
+  const primary = mobileTabs.slice(0, 4)
+  const left = primary.slice(0, 2)
+  const right = primary.slice(2)
+  const activeView = normalizeTabId(active) ?? active
 
   return (
     <nav className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 w-full pb-safe lg:hidden">
       <div className="glass-strong pointer-events-auto mx-4 mb-3 flex items-center justify-between rounded-full px-3 py-2 shadow-glass">
         <div className="flex flex-1 justify-around">
           {left.map((t) => (
-            <NavButton key={t.id} {...t} active={active === t.id} onClick={() => onChange(t.id)} compact />
+            <NavButton
+              key={t.id}
+              {...t}
+              active={activeView === t.id}
+              onClick={() => onChange(t.id)}
+              compact
+            />
           ))}
         </div>
 
@@ -106,7 +171,13 @@ export function BottomNavigation({ active, onChange, onCreate, createLabel = 'Ac
 
         <div className="flex flex-1 justify-around">
           {right.map((t) => (
-            <NavButton key={t.id} {...t} active={active === t.id} onClick={() => onChange(t.id)} compact />
+            <NavButton
+              key={t.id}
+              {...t}
+              active={activeView === t.id}
+              onClick={() => onChange(t.id)}
+              compact
+            />
           ))}
         </div>
       </div>
@@ -114,20 +185,22 @@ export function BottomNavigation({ active, onChange, onCreate, createLabel = 'Ac
   )
 }
 
-/** Desktop — rail lateral, aspecto de consola operativa */
+/** Desktop — rail lateral estático */
 export function DesktopNavigation({ active, onChange, onCreate, tabs, createLabel = 'Acciones' }: NavigationProps) {
+  const activeView = normalizeTabId(active) ?? active
+
   return (
     <aside className="hidden w-[88px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-base-800/50 py-5 lg:flex">
       <div className="mb-6">
         <FaroIcon size={28} title="FARO" />
       </div>
 
-      <nav className="flex flex-1 flex-col items-center gap-1">
+      <nav className="flex flex-1 flex-col items-center gap-1" aria-label="Navegación principal">
         {tabs.map((t) => (
           <NavButton
             key={t.id}
             {...t}
-            active={active === t.id}
+            active={activeView === t.id}
             onClick={() => onChange(t.id)}
             rail
           />
@@ -156,7 +229,6 @@ function NavButton({
   icon: Icon,
   active,
   onClick,
-  compact,
   rail,
 }: {
   label: string
@@ -175,7 +247,9 @@ function NavButton({
         title={label}
         className={cn(
           'flex w-[68px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 transition-colors',
-          active ? 'bg-white/[0.08] text-ink' : 'text-ink-faint hover:bg-white/[0.04] hover:text-ink-muted',
+          active
+            ? 'bg-white/[0.12] text-ink ring-1 ring-white/[0.08]'
+            : 'text-ink-faint hover:bg-white/[0.04] hover:text-ink-muted',
         )}
       >
         <Icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.25 : 1.75} />
@@ -188,11 +262,14 @@ function NavButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-12 min-w-[48px] flex-col items-center justify-center gap-0.5 focus-visible:outline-none"
+      className={cn(
+        'flex h-12 min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-xl focus-visible:outline-none',
+        active && 'bg-white/[0.06]',
+      )}
       aria-current={active ? 'page' : undefined}
     >
       <Icon
-        className={cn(compact ? 'h-[22px] w-[22px]' : 'h-[22px] w-[22px]', active ? 'text-ink' : 'text-ink-faint')}
+        className={cn('h-[22px] w-[22px]', active ? 'text-ink' : 'text-ink-faint')}
         strokeWidth={active ? 2.25 : 1.75}
       />
       <span className={cn('text-[10px] font-medium transition-colors', active ? 'text-ink' : 'text-ink-faint')}>

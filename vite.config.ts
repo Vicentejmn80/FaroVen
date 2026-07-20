@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
@@ -58,6 +59,10 @@ function getLocalCommit(): string {
 
 
 export default defineConfig({
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
   define: {
     __FARO_BUILD_DATE__: JSON.stringify(buildDate),
     __FARO_BUILD_COMMIT__: JSON.stringify(buildCommit),

@@ -14,6 +14,8 @@ interface ImportMetaEnv {
   readonly VITE_PUSH_CIRCUIT_FAILURE_THRESHOLD?: string
   readonly VITE_PUSH_CIRCUIT_COOLDOWN_MS?: string
   readonly VITE_PUSH_DEBUG?: string
+  /** Habilita sync a tabla legal_consents (requiere migración aplicada). Default: desactivado */
+  readonly VITE_LEGAL_CONSENTS_ENABLED?: string
 }
 
 interface ImportMeta {

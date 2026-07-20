@@ -17,6 +17,7 @@ import { formatAuthError } from '@/lib/auth-errors'
 import { countSignupDebug } from '@/lib/signup-debug'
 import { cn } from '@/lib/utils'
 import { InvisibleTurnstile, type InvisibleTurnstileHandle } from '@/components/security/invisible-turnstile'
+import { legalService } from '@/services/legal-service'
 
 export type AuthMode =
   | 'login'
@@ -48,6 +49,8 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +88,10 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     return 'Acceso operativo'
   }, [mode])
 
+  const openLegal = (doc: 'terms' | 'privacy') => {
+    window.dispatchEvent(new CustomEvent('faro:open-legal', { detail: { doc } }))
+  }
+
   async function handleSubmit(e?: FormEvent) {
     e?.preventDefault()
     countSignupDebug('auth-screen.handleSubmit invoked', { mode })
@@ -108,9 +115,14 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
         await signInWithPassword(email.trim(), password, captchaToken)
         onClose?.()
       } else if (mode === 'signup') {
+        if (!termsAccepted || !privacyAccepted) {
+          throw new Error('Debes aceptar los Términos de Servicio y la Política de Privacidad.')
+        }
         countSignupDebug('auth-screen.handleSubmit calling signUp()')
         const captchaToken = await requestCaptchaToken()
         const result = await signUp(email.trim(), password, fullName.trim(), phone.trim(), captchaToken)
+        legalService.setConsentPending()
+        await legalService.syncPendingConsent(result.session?.user?.id)
         if (result.needsEmailConfirmation) {
           setMode('check-email')
         } else {
@@ -167,7 +179,8 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
     !email.trim() ||
     (mode !== 'recover' && mode !== 'check-email' && mode !== 'password-updated' && !password.trim()) ||
     (mode === 'signup' && (!fullName.trim() || !phone.trim())) ||
-    (mode === 'reset-password' && (!password.trim() || !confirmPassword.trim()))
+    (mode === 'reset-password' && (!password.trim() || !confirmPassword.trim())) ||
+    (mode === 'signup' && (!termsAccepted || !privacyAccepted))
 
   return (
     <ScreenScaffold title={title} subtitle="Gestión segura de centros FARO" onBack={onClose}>
@@ -311,6 +324,45 @@ export function AuthScreen({ onClose, initialMode = 'login' }: AuthScreenProps) 
                     placeholder="Mínimo 6 caracteres"
                     disabled={isSubmitting}
                   />
+                )}
+
+                {mode === 'signup' && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-muted">
+                    <label className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={termsAccepted}
+                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                        className="mt-1"
+                      />
+                      <span>
+                        He leído y acepto los{' '}
+                        <button type="button" className="text-info hover:underline" onClick={() => openLegal('terms')}>
+                          Términos de Servicio
+                        </button>
+                        .
+                      </span>
+                    </label>
+                    <label className="mt-2 flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={privacyAccepted}
+                        onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                        className="mt-1"
+                      />
+                      <span>
+                        He leído y acepto la{' '}
+                        <button
+                          type="button"
+                          className="text-info hover:underline"
+                          onClick={() => openLegal('privacy')}
+                        >
+                          Política de Privacidad
+                        </button>
+                        .
+                      </span>
+                    </label>
+                  </div>
                 )}
 
                 {error && <ErrorBanner message={error} />}

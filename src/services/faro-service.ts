@@ -36,10 +36,19 @@ function toSiteNeed(need: Need): SiteNeed {
 }
 
 function statusLabel(center: Center): string {
-  if (center.type === 'hospital' || center.type === 'shelter' || center.type === 'medical_center') {
+  if (center.type === 'shelter') {
     return `Saturación ${Math.round((center.capacity.current / Math.max(center.capacity.total, 1)) * 100)}%`
   }
-  if (center.type === 'supply_center') return center.status === 'operational' ? 'Operativo · recibe' : 'Capacidad media'
+  if (center.type === 'supply_center') {
+    if (center.status === 'critical') return 'Alta demanda de insumos'
+    if (center.status === 'warning') return 'Inventario bajo'
+    return 'Operativo · recibe donaciones'
+  }
+  if (center.type === 'hospital' || center.type === 'medical_center') {
+    if (center.status === 'critical') return 'Atención crítica'
+    if (center.status === 'warning') return 'Presión operativa'
+    return 'Operativo'
+  }
   return 'Monitoreo activo'
 }
 

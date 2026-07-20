@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { latLngBounds } from 'leaflet'
+import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
+import { MapResizeNotifier } from '@/components/faro/map-resize-notifier'
 import { motion } from 'framer-motion'
-import { List, Map as MapIcon, MapPin, PlusCircle } from 'lucide-react'
+import { Flag, List, Map as MapIcon, MapPin, PlusCircle, SlidersHorizontal } from 'lucide-react'
 import { ContextualHelpCard } from '@/components/onboarding/ContextualHelpCard'
 import { GuidedEmptyState } from '@/components/onboarding/GuidedEmptyState'
 import { PriorityCoverageGuide } from '@/components/onboarding/PriorityCoverageGuide'
@@ -12,11 +15,19 @@ import { SidePanel } from '@/components/faro/side-panel'
 import { SituationSummary } from '@/components/faro/situation-summary'
 import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { TimelineItem } from '@/components/faro/timeline-item'
+import { createMissionMarkerIcon } from '@/components/faro/map-marker'
+import {
+  filterMappableMissions,
+  getMissionLatLng,
+  resolveMissionCoordinates,
+} from '@/lib/mission-location'
 import { SITE_TYPE_LABELS, siteToNeedableType } from '@/lib/site-utils'
-import { cn, greeting } from '@/lib/utils'
+import { cn, defaultMapCenter, greeting, isValidCoord } from '@/lib/utils'
 import type { Need } from '@/domain/models'
 import type { Site } from '@/lib/types'
 import { useFaro } from '@/store/faro-context'
+import { useAuth, usePermissions } from '@/store/auth-context'
+import { useMapData, type Mission } from '@/hooks/useMapData'
 
 interface SituationScreenProps {
   onOpenDetail?: (site: Site) => void
@@ -29,6 +40,9 @@ interface SituationScreenProps {
  * - Desktop: panel operativo en 2 columnas (contexto + mapa a altura completa).
  */
 export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScreenProps) {
+  const { role, isVolunteer } = usePermissions()
+  const { user } = useAuth()
+  const mapData = useMapData({ userRole: role, userId: user?.id ?? null, location: null })
   const { sites, latestActivity, isLoading, loadError, state } = useFaro()
   const needs = state.needs
   const [selected, setSelected] = useState<Site | null>(null)
@@ -94,6 +108,19 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
     ).length
     return { active, critical, high, covered, recentCovered }
   }, [listSites])
+
+  if (isVolunteer) {
+    const volunteerMissions = filterMappableMissions(
+      normalizeVolunteerMissions(mapData.missions, mapData.sites, mapData.needs),
+    )
+    return (
+      <VolunteerMapScreen
+        missions={volunteerMissions}
+        isLoading={mapData.isLoading}
+        loadError={mapData.loadError}
+      />
+    )
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -212,6 +239,348 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
       />
     </div>
   )
+}
+
+type VolunteerMission = Mission & {
+  siteName: string
+  zone: string
+  distanceKm: string
+}
+
+function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[] {
+  const siteById = new Map(sites.map((site) => [site.id, site]))
+  const activeNeeds = needs.filter((need) => !isCovered(need))
+  const results: VolunteerMission[] = []
+
+  for (const [index, need] of activeNeeds.entries()) {
+    const site = siteById.get(need.centerId)
+    if (!site) {
+      console.warn('[FARO Mapa Voluntario] Misión omitida por falta de coordenadas', {
+        needId: need.id,
+        title: need.type,
+        reason: 'centro_no_encontrado',
+      })
+      continue
+    }
+
+    const location = resolveMissionCoordinates(site.lat, site.lng, {
+      needId: need.id,
+      missionId: need.id,
+      title: need.type,
+    })
+    if (!location) continue
+
+    const distanceKm = (1.2 + (index % 6) * 0.6 + (need.id.charCodeAt(0) % 7) * 0.12).toFixed(1)
+    results.push({
+      id: need.id,
+      title: need.type,
+      requiredSkill: null,
+      status: 'open',
+      priority: need.priority === 'critical' ? 'critical' : need.priority === 'high' ? 'high' : 'medium',
+      location,
+      createdAt: need.updatedAt,
+      siteName: site.name,
+      zone: site.zone,
+      distanceKm,
+    })
+  }
+
+  return results
+}
+
+function normalizeVolunteerMissions(
+  missions: Mission[],
+  sites: Site[],
+  needs: Need[],
+): VolunteerMission[] {
+  if (!missions.length) return buildVolunteerMissions(sites, needs)
+
+  const fallbackSite = sites.find((site) => resolveMissionCoordinates(site.lat, site.lng) !== null)
+  const results: VolunteerMission[] = []
+
+  for (const [index, mission] of missions.entries()) {
+    const location = resolveMissionCoordinates(mission.location?.lat, mission.location?.lng, {
+      missionId: mission.id,
+      title: mission.title,
+    })
+    if (!location) continue
+
+    const distanceKm = (1.4 + (index % 4) * 0.8).toFixed(1)
+    results.push({
+      ...mission,
+      location,
+      siteName: fallbackSite?.name ?? 'Zona cercana',
+      zone: fallbackSite?.zone ?? 'Zona',
+      distanceKm,
+    })
+  }
+
+  return results
+}
+
+function VolunteerMapScreen({
+  missions,
+  isLoading,
+  loadError,
+}: {
+  missions: VolunteerMission[]
+  isLoading: boolean
+  loadError: string | null
+}) {
+  const [selectedMission, setSelectedMission] = useState<VolunteerMission | null>(null)
+  const [distanceFilter, setDistanceFilter] = useState<'5' | '10' | '25'>('10')
+
+  useEffect(() => {
+    if (selectedMission && !missions.some((m) => m.id === selectedMission.id)) {
+      setSelectedMission(null)
+    }
+  }, [missions, selectedMission])
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain">
+      <div className="flex flex-col px-5 pb-32 pt-2 lg:grid lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(360px,42%)] lg:gap-6 lg:overflow-hidden lg:px-8 lg:pb-6 lg:pt-2">
+        {/* Panel izquierdo: filtros + mapa móvil + lista */}
+        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+          <header className="shrink-0 space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+              {greeting()} · Red de Apoyo
+            </p>
+            <h1 className="text-[26px] font-semibold tracking-tight text-ink">Misiones activas</h1>
+            <p className="text-sm text-ink-subtle">
+              Ve solo lo accionable cerca de ti. Elige una misión y empieza a ayudar.
+            </p>
+          </header>
+
+          <section className="mt-3 shrink-0 space-y-2.5">
+            <GlassCard inset={false} className="space-y-3 p-3">
+              <div className="flex items-center gap-2 text-xs text-ink-subtle">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Filtros rápidos
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['5', '10', '25'] as const).map((radius) => (
+                  <button
+                    key={radius}
+                    type="button"
+                    onClick={() => setDistanceFilter(radius)}
+                    className={
+                      distanceFilter === radius
+                        ? 'rounded-full border border-info/60 bg-info-soft px-3 py-1 text-xs text-ink'
+                        : 'rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-ink-muted'
+                    }
+                  >
+                    {radius} km
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-ink-faint">
+                {missions.length} misión(es) disponibles · radio {distanceFilter} km
+              </p>
+            </GlassCard>
+          </section>
+
+          {loadError && (
+            <GlassCard inset={false} className="mt-3 shrink-0 border-critical/30 bg-critical/10 p-3">
+              <p className="text-sm text-critical">{loadError}</p>
+            </GlassCard>
+          )}
+
+          {/* Móvil: mapa apilado con altura fija */}
+          <section className="mt-4 shrink-0 lg:hidden">
+            <SectionTitle>Mapa de misiones</SectionTitle>
+            <div className="map-container-wrapper mt-2.5 h-[300px] min-h-[300px] w-full sm:h-[340px] sm:min-h-[340px]">
+              <VolunteerMapCanvas
+                missions={missions}
+                activeId={selectedMission?.id}
+                onSelect={setSelectedMission}
+              />
+            </div>
+          </section>
+
+          {/* Lista: scroll de página en móvil; scroll interno en escritorio */}
+          <section className="mt-4 flex flex-col lg:mt-3 lg:min-h-0 lg:flex-1">
+            <SectionTitle className="shrink-0">Misiones abiertas</SectionTitle>
+            {isLoading ? (
+              <GlassCard inset={false} className="mt-3 shrink-0 p-4 text-sm text-ink-subtle">
+                Cargando misiones disponibles…
+              </GlassCard>
+            ) : missions.length === 0 ? (
+              <GuidedEmptyState
+                className="mt-3 shrink-0"
+                icon={Flag}
+                title="No hay misiones abiertas"
+                description="Vuelve en unos minutos para ver nuevas oportunidades cerca de ti."
+              />
+            ) : (
+              <div className="mt-3 space-y-2 pb-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+                {missions.map((mission) => (
+                    <button
+                      key={mission.id}
+                      type="button"
+                      onClick={() => setSelectedMission(mission)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors',
+                        selectedMission?.id === mission.id
+                          ? 'border-info/60 bg-info-soft'
+                          : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06]',
+                      )}
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06]">
+                        <Flag className="h-4 w-4 text-info" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <NeedItemLabel name={mission.title} className="text-sm font-semibold text-ink" />
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-subtle">
+                          <span>{mission.siteName}</span>
+                          <span>·</span>
+                          <span>{mission.zone}</span>
+                          <span>·</span>
+                          <span>{mission.distanceKm} km</span>
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-medium text-ink-subtle">
+                        {mission.priority === 'critical'
+                          ? 'Urgente'
+                          : mission.priority === 'high'
+                            ? 'Alta'
+                            : 'Activa'}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </section>
+
+          {selectedMission && (
+            <div className="mt-4 shrink-0 rounded-2xl border border-white/10 bg-base-900/95 p-4 text-sm text-ink lg:hidden">
+              <p className="font-semibold text-ink">{selectedMission.title}</p>
+              <p className="text-xs text-ink-subtle">
+                {selectedMission.siteName} · {selectedMission.distanceKm} km
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <EmergencyButton variant="glass" size="md" className="w-full">
+                  Ver detalles
+                </EmergencyButton>
+                <EmergencyButton variant="primary" size="md" className="w-full">
+                  Quiero ayudar
+                </EmergencyButton>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Escritorio: mapa en columna derecha, altura completa */}
+        <section className="hidden min-h-0 flex-col lg:flex">
+          <SectionTitle className="shrink-0">Mapa de misiones</SectionTitle>
+          <div className="map-container-wrapper mt-3 min-h-[400px] flex-1">
+            <VolunteerMapCanvas
+              missions={missions}
+              activeId={selectedMission?.id}
+              onSelect={setSelectedMission}
+            />
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function VolunteerMapCanvas({
+  missions,
+  activeId,
+  onSelect,
+}: {
+  missions: VolunteerMission[]
+  activeId?: string | null
+  onSelect: (mission: VolunteerMission) => void
+}) {
+  const mappableMissions = useMemo(() => filterMappableMissions(missions), [missions])
+
+  const center: [number, number] = useMemo(() => {
+    if (!mappableMissions.length) return defaultMapCenter()
+    const lat = mappableMissions.reduce((acc, m) => acc + m.location.lat, 0) / mappableMissions.length
+    const lng = mappableMissions.reduce((acc, m) => acc + m.location.lng, 0) / mappableMissions.length
+    return isValidCoord(lat, lng) ? [lat, lng] : defaultMapCenter()
+  }, [mappableMissions])
+
+  return (
+    <div className="map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-base-800/30">
+      <MapContainer
+        className="faro-map !absolute inset-0 h-full w-full"
+        center={center}
+        zoom={12}
+        zoomControl={false}
+        attributionControl={false}
+        preferCanvas
+      >
+        <MapResizeNotifier />
+        <TileLayer
+          className="faro-map-tiles"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <FitToMissions missions={mappableMissions} />
+        <FocusActiveMission missions={mappableMissions} activeId={activeId} />
+        {mappableMissions.map((mission) => {
+          const position = getMissionLatLng(mission)
+          if (!position) return null
+          return (
+            <Marker
+              key={mission.id}
+              position={position}
+              icon={createMissionMarkerIcon(
+                mission,
+                activeId === mission.id,
+                !!activeId && activeId !== mission.id,
+              )}
+              zIndexOffset={activeId === mission.id ? 1200 : 0}
+              eventHandlers={{ click: () => onSelect(mission) }}
+            />
+          )
+        })}
+      </MapContainer>
+    </div>
+  )
+}
+
+function FitToMissions({ missions }: { missions: VolunteerMission[] }) {
+  const map = useMap()
+
+  useEffect(() => {
+    const coords = missions
+      .map((mission) => getMissionLatLng(mission))
+      .filter((point): point is [number, number] => point !== null)
+
+    if (!coords.length) return
+
+    const bounds = latLngBounds(coords)
+    if (!bounds.isValid()) return
+    map.fitBounds(bounds, { padding: [36, 36], maxZoom: 13 })
+    requestAnimationFrame(() => map.invalidateSize({ animate: false }))
+  }, [map, missions])
+
+  return null
+}
+
+function FocusActiveMission({
+  missions,
+  activeId,
+}: {
+  missions: VolunteerMission[]
+  activeId?: string | null
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!activeId) return
+    const mission = missions.find((m) => m.id === activeId)
+    if (!mission) return
+    const position = getMissionLatLng(mission)
+    if (!position) return
+    const targetZoom = Math.max(map.getZoom(), 13)
+    map.flyTo(position, targetZoom, { duration: 0.24 })
+  }, [activeId, map, missions])
+
+  return null
 }
 
 function ViewToggle({

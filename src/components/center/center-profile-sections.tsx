@@ -254,19 +254,21 @@ export function CenterActions({
 }: {
   onNavigate: () => void
   onShare: () => void
-  onReport: () => void
+  onReport?: () => void
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <div className={onReport ? 'grid grid-cols-1 gap-2 sm:grid-cols-3' : 'grid grid-cols-2 gap-2'}>
       <EmergencyButton variant="primary" size="lg" onClick={onNavigate}>
         Navegar
       </EmergencyButton>
       <EmergencyButton variant="glass" size="lg" onClick={onShare}>
         Compartir
       </EmergencyButton>
-      <EmergencyButton variant="glass" size="lg" onClick={onReport}>
-        Reportar información
-      </EmergencyButton>
+      {onReport && (
+        <EmergencyButton variant="glass" size="lg" onClick={onReport}>
+          Reportar información
+        </EmergencyButton>
+      )}
     </div>
   )
 }

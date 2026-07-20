@@ -139,7 +139,12 @@ export function SidePanel({ site, onClose, onOpenDetail }: SidePanelProps) {
   const priority = priorityScore >= 3 ? 'Alta' : priorityScore >= 2 ? 'Media' : 'Baja'
 
   const onNavigate = () => {
-    openExternalNavigation(site.lat, site.lng)
+    openExternalNavigation({
+      lat: site.lat,
+      lng: site.lng,
+      name: site.name,
+      address,
+    })
   }
   const onShare = async () => {
     const text = `${site.name} · ${address}. Actualizado recientemente en FARO.`

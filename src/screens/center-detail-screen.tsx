@@ -31,10 +31,12 @@ export function CenterDetailScreen({
   site,
   onBack,
   canEdit,
+  onReport,
 }: {
   site: Site
   onBack: () => void
   canEdit?: boolean
+  onReport?: () => void
 }) {
   const { state } = useFaro()
   const [editing, setEditing] = useState(false)
@@ -44,6 +46,7 @@ export function CenterDetailScreen({
     .filter((report) => report.centerId === site.id && report.status !== 'discarded')
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
+  const showPeopleCapacity = site.type === 'shelter'
   const capacityCurrent = center?.capacity.current ?? 0
   const capacityTotal = center?.capacity.total ?? 0
   const capacityPct = capacityTotal ? Math.min(100, Math.round((capacityCurrent / capacityTotal) * 100)) : 0
@@ -90,7 +93,11 @@ export function CenterDetailScreen({
     }
     await navigator.clipboard.writeText(`${text} ${url}`)
   }
-  const onReport = () => {
+  const onReportClick = () => {
+    if (onReport) {
+      onReport()
+      return
+    }
     window.dispatchEvent(new CustomEvent('faro:navigate-tab', { detail: { tab: 'reports' } }))
   }
 
@@ -114,8 +121,10 @@ export function CenterDetailScreen({
           <MapCanvas sites={[{ ...site, mapX: 0.5, mapY: 0.5 }]} />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <HumanCapacityCard pct={capacityPct} current={capacityCurrent} total={capacityTotal} />
+        <div className={showPeopleCapacity ? 'grid grid-cols-1 gap-3 md:grid-cols-2' : 'grid grid-cols-1 gap-3'}>
+          {showPeopleCapacity && (
+            <HumanCapacityCard pct={capacityPct} current={capacityCurrent} total={capacityTotal} />
+          )}
           <InventoryCapacityCard availabilityPct={avgCoverage} />
         </div>
 
@@ -158,9 +167,16 @@ export function CenterDetailScreen({
         ) : null}
 
         <CenterActions
-          onNavigate={() => openExternalNavigation(site.lat, site.lng)}
+          onNavigate={() =>
+            openExternalNavigation({
+              lat: site.lat,
+              lng: site.lng,
+              name: site.name,
+              address: center?.location.address ?? site.zone,
+            })
+          }
           onShare={onShare}
-          onReport={onReport}
+          onReport={onReport ? onReportClick : undefined}
         />
 
         {canEdit && site.type !== 'organization' && (

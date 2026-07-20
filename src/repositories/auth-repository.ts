@@ -21,6 +21,12 @@ function mapProfile(row: Record<string, unknown>): ProfileRow {
     municipality: row.municipality ? String(row.municipality) : null,
     region: row.region ? String(row.region) : null,
     status: (row.status as ProfileRow['status']) ?? 'active',
+    network_role_selected_at: row.network_role_selected_at ? String(row.network_role_selected_at) : null,
+    pending_role: (row.pending_role as ProfileRow['pending_role']) ?? null,
+    role_request_reason: row.role_request_reason ? String(row.role_request_reason) : null,
+    role_request_status: (row.role_request_status as ProfileRow['role_request_status']) ?? null,
+    role_request_reviewed_at: row.role_request_reviewed_at ? String(row.role_request_reviewed_at) : null,
+    participation_intent: (row.participation_intent as ProfileRow['participation_intent']) ?? null,
     last_login_at: row.last_login_at ? String(row.last_login_at) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
@@ -111,6 +117,21 @@ export const profileRepository = {
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map(mapProfile)
+  },
+
+  async selectVolunteerRole(): Promise<ProfileRow> {
+    const { data, error } = await supabase.rpc('select_volunteer_role')
+    if (error) throw error
+    return mapProfile(data as Record<string, unknown>)
+  },
+
+  async requestNetworkRole(role: 'case_manager' | 'coordinator', reason: string): Promise<ProfileRow> {
+    const { data, error } = await supabase.rpc('request_network_role', {
+      p_role: role,
+      p_reason: reason,
+    })
+    if (error) throw error
+    return mapProfile(data as Record<string, unknown>)
   },
 }
 
@@ -216,12 +237,19 @@ export const authAuditRepository = {
     }))
   },
 
-  async log(action: string, targetUserId?: string, metadata?: Record<string, unknown>): Promise<void> {
-    const { error } = await supabase.rpc('log_auth_event', {
-      p_action: action,
-      p_target_user_id: targetUserId ?? null,
-      p_metadata: metadata ?? {},
-    })
-    if (error) throw error
+  async log(action: string, _targetUserId?: string, metadata?: Record<string, unknown>): Promise<void> {
+    // Solo eventos propios vía RPC restringida (P0 revocó log_auth_event a authenticated).
+    // No bloquear login/logout si el audit falla.
+    try {
+      const { error } = await supabase.rpc('log_own_auth_event', {
+        p_action: action,
+        p_metadata: metadata ?? {},
+      })
+      if (error) {
+        console.warn('[FARO] auth audit skipped:', error.message)
+      }
+    } catch (err) {
+      console.warn('[FARO] auth audit skipped:', err)
+    }
   },
 }

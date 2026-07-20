@@ -162,8 +162,8 @@ export function supplyCenterRowToCenter(row: SupplyCenterRow): Center {
     lng: row.longitude,
     contactName: row.contact_name,
     phone: row.contact_phone,
-    capacity: 100,
-    currentOcc: 45,
+    capacity: 0,
+    currentOcc: 0,
     schedule: row.schedule,
     notes: row.notes,
     status: row.status,
@@ -242,6 +242,101 @@ export function eventRowToEvent(row: EventRow): Event {
     reportId: row.report_id ?? undefined,
     status: toOperationalStatus(row.status),
     createdAt: toDate(row.created_at),
+  }
+}
+
+import type { CaseAssignment, CaseDomain, CaseDomainEvent, CasePriority, PipelineStage, CaseEventType } from '@/domain/case-lifecycle.types'
+import type { CaseAssignmentRow, CaseEventRow, CaseRow } from '@/types/supabase'
+
+export function caseRowToDomain(row: CaseRow): CaseDomain {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    priority: row.priority as CasePriority,
+    pipelineStage: row.pipeline_stage as PipelineStage,
+    location: {
+      lat: row.latitude ?? 0,
+      lng: row.longitude ?? 0,
+      address: row.address ?? undefined,
+      zone: row.zone,
+    },
+    zone: row.zone,
+    affectedCount: row.affected_count,
+    reporterInfo: {
+      name: row.reporter_name ?? undefined,
+      phone: row.reporter_phone ?? undefined,
+      email: row.reporter_email ?? undefined,
+      relationship: row.reporter_relationship ?? undefined,
+    },
+    category: row.category ?? undefined,
+    assignedTo: row.assigned_to ?? undefined,
+    assignedCenterId: row.assigned_center_id ?? undefined,
+    assignedAt: row.assigned_at ? new Date(row.assigned_at) : undefined,
+    slaDeadline: row.sla_deadline ? new Date(row.sla_deadline) : undefined,
+    firstResponseAt: row.first_response_at ? new Date(row.first_response_at) : undefined,
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : undefined,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  }
+}
+
+export function caseDomainToRow(domain: Partial<CaseDomain>): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  if (domain.title !== undefined) row.title = domain.title
+  if (domain.description !== undefined) row.description = domain.description
+  if (domain.priority !== undefined) row.priority = domain.priority
+  if (domain.pipelineStage !== undefined) row.pipeline_stage = domain.pipelineStage
+  if (domain.location !== undefined) {
+    row.latitude = domain.location.lat
+    row.longitude = domain.location.lng
+    row.address = domain.location.address ?? null
+    if (domain.location.zone !== undefined) row.zone = domain.location.zone
+  } else {
+    if (domain.zone !== undefined) row.zone = domain.zone
+  }
+  if (domain.affectedCount !== undefined) row.affected_count = domain.affectedCount
+  if (domain.reporterInfo !== undefined) {
+    row.reporter_name = domain.reporterInfo.name ?? null
+    row.reporter_phone = domain.reporterInfo.phone ?? null
+    row.reporter_email = domain.reporterInfo.email ?? null
+    row.reporter_relationship = domain.reporterInfo.relationship ?? null
+  }
+  if (domain.category !== undefined) row.category = domain.category ?? null
+  if (domain.assignedTo !== undefined) row.assigned_to = domain.assignedTo ?? null
+  if (domain.assignedCenterId !== undefined) row.assigned_center_id = domain.assignedCenterId ?? null
+  if (domain.assignedAt !== undefined) row.assigned_at = domain.assignedAt?.toISOString() ?? null
+  if (domain.slaDeadline !== undefined) row.sla_deadline = domain.slaDeadline?.toISOString() ?? null
+  if (domain.firstResponseAt !== undefined) row.first_response_at = domain.firstResponseAt?.toISOString() ?? null
+  if (domain.resolvedAt !== undefined) row.resolved_at = domain.resolvedAt?.toISOString() ?? null
+  return row
+}
+
+export function caseEventRowToDomain(row: CaseEventRow): CaseDomainEvent {
+  return {
+    id: row.id,
+    caseId: row.case_id,
+    eventType: row.event_type as CaseEventType,
+    fromStage: (row.from_stage ?? undefined) as PipelineStage | undefined,
+    toStage: (row.to_stage ?? undefined) as PipelineStage | undefined,
+    actorId: row.actor_id ?? undefined,
+    comment: row.comment ?? undefined,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function caseAssignmentRowToDomain(row: CaseAssignmentRow): CaseAssignment {
+  return {
+    id: row.id,
+    caseId: row.case_id,
+    centerId: row.center_id,
+    assignedBy: row.assigned_by,
+    assignedTo: row.assigned_to ?? undefined,
+    status: row.status,
+    assignedAt: new Date(row.assigned_at),
+    acceptedAt: row.accepted_at ? new Date(row.accepted_at) : undefined,
+    rejectedAt: row.rejected_at ? new Date(row.rejected_at) : undefined,
+    reason: row.reason ?? undefined,
   }
 }
 

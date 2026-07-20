@@ -18,6 +18,10 @@ import type {
 
 export function resolvePublicRole(profile: ProfileRow | null): FaroRole {
   if (!profile?.role || profile.status !== 'active') return FARO_ROLES.PUBLIC
+  // Solicitud pending: permisos efectivos de voluntario (no gestor/coordinador).
+  if (profile.role_request_status === 'pending' && profile.pending_role) {
+    return FARO_ROLES.VOLUNTEER
+  }
   return profile.role
 }
 
@@ -152,6 +156,14 @@ export const authService = {
     const existing = await profileRepository.getByUserId(user.id)
     if (existing) return existing
     return profileRepository.upsertOwn(user.id, user.email ?? '', user.user_metadata?.full_name ?? '')
+  },
+
+  async selectVolunteerRole(): Promise<ProfileRow> {
+    return profileRepository.selectVolunteerRole()
+  },
+
+  async requestNetworkRole(role: 'case_manager' | 'coordinator', reason: string): Promise<ProfileRow> {
+    return profileRepository.requestNetworkRole(role, reason)
   },
 
   async submitCoordinatorRequest(input: SubmitCoordinatorRequestInput, userId: string | null) {

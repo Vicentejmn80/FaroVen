@@ -52,6 +52,7 @@ export type SuperAdminModuleId =
   | 'maintenance'
   | 'operational_settings'
   | 'dev_reset'
+  | 'lab'
 
 export interface AdminUpdateProfileInput {
   userId: string

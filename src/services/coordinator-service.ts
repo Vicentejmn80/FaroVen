@@ -10,6 +10,9 @@ export type CoordinatorModuleId =
   | 'saturation'
   | 'reports'
   | 'history'
+  | 'cases'
+  | 'center-ops'
+  | 'missions'
 
 export type InboxFilter = 'pending' | 'approved' | 'rejected' | 'all'
 

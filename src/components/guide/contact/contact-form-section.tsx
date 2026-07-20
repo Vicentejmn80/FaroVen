@@ -16,8 +16,8 @@ const CATEGORIES: Array<{ id: FeedbackCategory; label: string }> = [
 interface ContactFormSectionProps {
   teamContact: FaroTeamContact
   onSubmit: (input: { category: FeedbackCategory; message: string; email?: string }) => Promise<void>
-  onCall: (phone: string) => void
-  onCopy: (value: string, label: string) => void
+  onCall?: (phone: string) => void
+  onCopy?: (value: string, label: string) => void
   busy?: boolean
 }
 
@@ -54,25 +54,27 @@ export function ContactFormSection({
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-            <div className="min-w-0">
-              <p className="text-xs text-ink-subtle">Teléfono</p>
-              <p className="font-mono text-sm font-medium text-ink">{teamContact.phoneDisplay}</p>
+          {teamContact.phone && teamContact.phoneDisplay && onCall && onCopy && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-xs text-ink-subtle">Teléfono</p>
+                <p className="font-mono text-sm font-medium text-ink">{teamContact.phoneDisplay}</p>
+              </div>
+              <div className="flex gap-2">
+                <EmergencyButton variant="primary" size="sm" onClick={() => onCall(teamContact.phone!)}>
+                  <Phone className="h-4 w-4" />
+                  Llamar
+                </EmergencyButton>
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  onClick={() => onCopy(teamContact.phone!, 'Teléfono')}
+                >
+                  <Copy className="h-4 w-4" />
+                </EmergencyButton>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <EmergencyButton variant="primary" size="sm" onClick={() => onCall(teamContact.phone)}>
-                <Phone className="h-4 w-4" />
-                Llamar
-              </EmergencyButton>
-              <EmergencyButton
-                variant="glass"
-                size="sm"
-                onClick={() => onCopy(teamContact.phone, 'Teléfono')}
-              >
-                <Copy className="h-4 w-4" />
-              </EmergencyButton>
-            </div>
-          </div>
+          )}
 
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
             <div className="min-w-0">
