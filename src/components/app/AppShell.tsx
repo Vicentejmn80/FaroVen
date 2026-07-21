@@ -51,6 +51,7 @@ type FlowId =
   | 'menu'
   | 'auth'
   | 'coordinator-request'
+  | 'role-request'
   | 'legal-terms'
   | 'legal-privacy'
   | 'legal-notice'
@@ -83,6 +84,12 @@ const SystemAdminScreen = lazyWithRetry(() =>
 const AuthScreen = lazyWithRetry(() => import('@/screens/auth-screen').then((m) => ({ default: m.AuthScreen })))
 const CoordinatorRequestScreen = lazyWithRetry(() =>
   import('@/screens/coordinator-request-screen').then((m) => ({ default: m.CoordinatorRequestScreen })),
+)
+const CaseManagerWorkspace = lazyWithRetry(() =>
+  import('@/components/case-manager/case-manager-workspace').then((m) => ({ default: m.CaseManagerWorkspace })),
+)
+const RoleRequestForm = lazyWithRetry(() =>
+  import('@/components/role-request/role-request-form').then((m) => ({ default: m.RoleRequestForm })),
 )
 const LegalTermsScreen = lazyWithRetry(() =>
   import('@/screens/legal-terms-screen').then((m) => ({ default: m.LegalTermsScreen })),
@@ -380,6 +387,7 @@ export function AppShell() {
 
   const openAuth = () => openFlow('auth')
   const openCoordinatorRequest = () => openFlow('coordinator-request')
+  const openRoleRequest = () => openFlow('role-request')
 
   return (
     <div className="faro-canvas min-h-screen w-full bg-[#050A14] lg:p-5">
@@ -470,6 +478,7 @@ export function AppShell() {
                       }}
                       onRequestAuth={openAuth}
                       onRequestCoordinatorAccess={openCoordinatorRequest}
+                      onRequestRoleAccess={openRoleRequest}
                       onBackFromDetail={() => setDetailSite(null)}
                       onRegisterSite={
                         canAccessAdminPanel ? () => openFlow('register-site') : undefined
@@ -544,6 +553,15 @@ export function AppShell() {
             <div key="coordinator-request" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <CoordinatorRequestScreen onNeedAuth={openAuth} onClose={closeFlow} />
+              </Suspense>
+            </div>
+          )}
+          {flow === 'role-request' && (
+            <div key="role-request" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+              <Suspense fallback={<ScreenLoading />}>
+                <div className="mx-auto max-w-lg px-4 py-8">
+                  <RoleRequestForm onDone={closeFlow} />
+                </div>
               </Suspense>
             </div>
           )}
@@ -678,6 +696,7 @@ function ShellActiveView({
   onRegisterDispatch,
   onRequestAuth,
   onRequestCoordinatorAccess,
+  onRequestRoleAccess,
   onBackFromDetail,
   onRegisterSite,
   onOpenNotificationPreferences,
@@ -704,6 +723,7 @@ function ShellActiveView({
   onRegisterDispatch: (siteId?: string) => void
   onRequestAuth: () => void
   onRequestCoordinatorAccess: () => void
+  onRequestRoleAccess: () => void
   onBackFromDetail: () => void
   onRegisterSite?: () => void
   onOpenNotificationPreferences: () => void
@@ -768,6 +788,7 @@ function ShellActiveView({
         <ProfileScreen
           onRequestAuth={onRequestAuth}
           onRequestCoordinatorAccess={onRequestCoordinatorAccess}
+          onRequestRoleAccess={onRequestRoleAccess}
           onOpenNotificationPreferences={onOpenNotificationPreferences}
         />
       )
@@ -788,6 +809,13 @@ function ShellActiveView({
             onRequestAuth={onRequestAuth}
             onRequestCoordinatorAccess={onRequestCoordinatorAccess}
           />
+        </RequireRole>
+      )
+
+    case 'case-manager':
+      return (
+        <RequireRole allowed={[FARO_ROLES.CASE_MANAGER]} onRequestAuth={onRequestAuth}>
+          <CaseManagerWorkspace />
         </RequireRole>
       )
 

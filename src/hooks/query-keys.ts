@@ -26,4 +26,6 @@ export const FARO_QUERY_KEYS = {
   riskAssessment: 'risk-assessment',
   recommendations: 'recommendations',
   simulationState: 'simulation-state',
+  roleRequests: 'role-requests',
+  reportAnalysis: 'report-analysis',
 } as const

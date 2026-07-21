@@ -1,5 +1,4 @@
-import type { FaroRole, NetworkRoleRequestStatus } from '@/lib/roles'
-import type { CoordinatorRequestStatus } from '@/lib/roles'
+import type { FaroRole, NetworkRoleRequestStatus, RoleRequestStatus } from '@/lib/roles'
 import type { RegisterSiteType } from '@/repositories/types'
 
 export interface ProfileRow {
@@ -37,7 +36,7 @@ export interface CoordinatorRequestRow {
   requested_site_id: string | null
   role_title: string | null
   reason: string | null
-  status: CoordinatorRequestStatus
+  status: RoleRequestStatus
   reviewed_by: string | null
   reviewed_at: string | null
   assigned_site_type: RegisterSiteType | null
@@ -48,6 +47,9 @@ export interface CoordinatorRequestRow {
   info_response: string | null
   info_responded_at: string | null
   needs_info_response: boolean
+  requested_role: string | null
+  experience: string | null
+  availability_hours: number | null
   created_at: string
   updated_at: string
 }
@@ -72,9 +74,35 @@ export interface SubmitCoordinatorRequestInput {
   reason?: string
 }
 
+export interface SubmitRoleRequestInput {
+  fullName: string
+  email: string
+  phone?: string
+  organization?: string
+  requestedRole: 'coordinator' | 'case_manager'
+  requestedSiteType?: RegisterSiteType
+  requestedSiteId?: string
+  roleTitle?: string
+  reason?: string
+  experience?: string
+  availabilityHours?: number
+}
+
 export interface ApproveCoordinatorRequestInput {
   requestId: string
   assignedSiteType: RegisterSiteType
   assignedSiteId: string
+  reviewNotes?: string
+}
+
+export interface ApproveRoleRequestInput {
+  requestId: string
+  assignedSiteType?: RegisterSiteType
+  assignedSiteId?: string
+  reviewNotes?: string
+}
+
+export interface RejectRoleRequestInput {
+  requestId: string
   reviewNotes?: string
 }

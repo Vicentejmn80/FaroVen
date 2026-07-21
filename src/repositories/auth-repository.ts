@@ -73,6 +73,9 @@ function mapRequest(row: Record<string, unknown>): CoordinatorRequestRow {
     info_response: row.info_response ? String(row.info_response) : null,
     info_responded_at: row.info_responded_at ? String(row.info_responded_at) : null,
     needs_info_response: Boolean(row.needs_info_response),
+    requested_role: row.requested_role ? String(row.requested_role) : null,
+    experience: row.experience ? String(row.experience) : null,
+    availability_hours: row.availability_hours ? Number(row.availability_hours) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   }

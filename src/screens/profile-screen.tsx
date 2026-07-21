@@ -25,6 +25,7 @@ import { useToast } from '@/store/toast-context'
 
 interface ProfileScreenProps {
   onRequestCoordinatorAccess?: () => void
+  onRequestRoleAccess?: () => void
   onRequestAuth?: () => void
   onOpenNotificationPreferences?: () => void
 }
@@ -32,6 +33,7 @@ interface ProfileScreenProps {
 /** Vista Perfil — sesión, rol y acciones operativas. */
 export function ProfileScreen({
   onRequestCoordinatorAccess,
+  onRequestRoleAccess,
   onRequestAuth,
   onOpenNotificationPreferences,
 }: ProfileScreenProps) {
@@ -156,6 +158,25 @@ export function ProfileScreen({
               <span className="flex-1">
                 <span className="block text-[15px] text-ink">Solicitar acceso como Coordinador</span>
                 <span className="block text-xs text-ink-subtle">Revisión por administrador regional</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-ink-faint" />
+            </button>
+          </GlassCard>
+        )}
+
+        {user && (role === 'public' || role === FARO_ROLES.VOLUNTEER) && (
+          <GlassCard className="space-y-2">
+            <button
+              type="button"
+              onClick={onRequestRoleAccess}
+              className="flex w-full items-center gap-3 text-left"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06]">
+                <ShieldCheck className="h-[18px] w-[18px] text-ink-muted" />
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] text-ink">Solicitar ascenso de rol</span>
+                <span className="block text-xs text-ink-subtle">Gestor de Casos, Coordinador y más</span>
               </span>
               <ChevronRight className="h-4 w-4 text-ink-faint" />
             </button>

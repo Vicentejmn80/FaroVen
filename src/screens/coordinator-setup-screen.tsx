@@ -44,7 +44,7 @@ export function CoordinatorSetupScreen({
           <ShieldCheck className="h-6 w-6 text-info" />
           {pending ? (
             <p className="text-sm text-ink-muted">
-              Tu solicitud está {COORDINATOR_REQUEST_STATUS_LABELS[pending.status].toLowerCase()}. Un
+              Tu solicitud está {COORDINATOR_REQUEST_STATUS_LABELS[pending.status as keyof typeof COORDINATOR_REQUEST_STATUS_LABELS].toLowerCase()}. Un
               administrador regional la revisará pronto.
             </p>
           ) : rejected ? (

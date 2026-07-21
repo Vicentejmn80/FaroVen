@@ -166,7 +166,7 @@ export function CoordinatorRequestScreen({ onNeedAuth, onClose }: CoordinatorReq
         <CoordinatorRequestSuccess />
         {request && (
           <GlassCard className="mt-4 text-center text-xs text-ink-subtle">
-            Estado: {COORDINATOR_REQUEST_STATUS_LABELS[request.status]}
+            Estado: {COORDINATOR_REQUEST_STATUS_LABELS[request.status as keyof typeof COORDINATOR_REQUEST_STATUS_LABELS]}
           </GlassCard>
         )}
       </ScreenScaffold>

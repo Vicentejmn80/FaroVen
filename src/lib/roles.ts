@@ -21,6 +21,22 @@ export const FARO_ROLE_LABELS: Record<FaroRole, string> = {
   [FARO_ROLES.SUPER_ADMIN]: 'Super administrador',
 }
 
+export const ROLE_REQUEST_STATUS = {
+  PENDING: 'pending',
+  UNDER_REVIEW: 'under_review',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const
+
+export type RoleRequestStatus = (typeof ROLE_REQUEST_STATUS)[keyof typeof ROLE_REQUEST_STATUS]
+
+export const ROLE_REQUEST_STATUS_LABELS: Record<RoleRequestStatus, string> = {
+  [ROLE_REQUEST_STATUS.PENDING]: 'Pendiente',
+  [ROLE_REQUEST_STATUS.UNDER_REVIEW]: 'En revisión',
+  [ROLE_REQUEST_STATUS.APPROVED]: 'Aprobada',
+  [ROLE_REQUEST_STATUS.REJECTED]: 'Rechazada',
+}
+
 export const COORDINATOR_REQUEST_STATUS = {
   PENDING: 'pending',
   APPROVED: 'approved',

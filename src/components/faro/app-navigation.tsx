@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion'
 import {
-  Building2,
   BookOpen,
+  Building2,
+  ClipboardCheck,
   FileText,
   Handshake,
   HeartHandshake,
@@ -16,6 +17,7 @@ import { FaroIcon } from '@/components/brand/faro-icon'
 import { cn } from '@/lib/utils'
 import {
   canAccessAdminPanel,
+  canAccessCaseManagerPanel,
   canAccessCoordinatorPanel,
   canAccessSystemPanel,
   FARO_ROLES,
@@ -35,6 +37,7 @@ export type TabId =
   | 'activity'
   | 'profile'
   | 'ops'
+  | 'case-manager'
   | 'admin'
   | 'system'
 
@@ -80,6 +83,10 @@ export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab
 
   if (canAccessCoordinatorPanel(role)) {
     tabs.splice(1, 0, { id: 'ops', label: 'Mi Centro', icon: Building2 })
+  }
+
+  if (canAccessCaseManagerPanel(role)) {
+    tabs.splice(1, 0, { id: 'case-manager', label: 'Gestor', icon: ClipboardCheck })
   }
 
   if (canAccessAdminPanel(role)) {
