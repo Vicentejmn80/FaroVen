@@ -139,7 +139,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
           className="h-full w-full"
         />
 
-        {/* Controles flotantes — sin botón "Mapa" redundante */}
+        {/* Controles flotantes: búsqueda + toggle Mapa | Listado */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-2">
           <div className="pointer-events-auto space-y-2">
             <div className="flex items-start gap-2">
@@ -152,15 +152,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
                   totalSites={filteredSites.length}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className="glass-strong flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium text-ink shadow-glass-sm ring-1 ring-white/10"
-                aria-label="Ver listado de centros"
-              >
-                <List className="h-3.5 w-3.5" />
-                Listado
-              </button>
+              <MobileViewToggle view={viewMode} onChange={setViewMode} />
             </div>
             {loadError && (
               <GlassCard inset={false} className="border-critical/30 bg-critical/10 p-2.5">
@@ -171,7 +163,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
         </div>
       </div>
 
-      {/* ── Móvil: listado como capa (no toggle Mapa) ── */}
+      {/* ── Móvil: listado como capa ── */}
       {viewMode === 'list' && (
         <div className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-900 lg:hidden">
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
@@ -181,13 +173,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
               </p>
               <h2 className="text-sm font-semibold text-ink">Centros y necesidades</h2>
             </div>
-            <button
-              type="button"
-              onClick={() => setViewMode('map')}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-ink-muted"
-            >
-              Cerrar
-            </button>
+            <MobileViewToggle view={viewMode} onChange={setViewMode} />
           </div>
           <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 pt-3">
             <QuickAnswerBar
@@ -500,9 +486,11 @@ function VolunteerMapScreen({
             <button
               type="button"
               onClick={() => setShowList(false)}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ink-muted"
+              className="glass-strong flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-ink shadow-glass-sm ring-1 ring-white/10"
+              aria-label="Volver al mapa"
             >
-              Cerrar
+              <MapIcon className="h-3.5 w-3.5" />
+              Mapa
             </button>
           </div>
           <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 pt-3">
@@ -793,6 +781,46 @@ function DesktopViewToggle({
           {option.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+/** Toggle flotante Mapa | Listado — dispara vista interactiva completa. */
+function MobileViewToggle({
+  view,
+  onChange,
+}: {
+  view: 'map' | 'list'
+  onChange: (next: 'map' | 'list') => void
+}) {
+  return (
+    <div className="glass-strong flex shrink-0 items-center rounded-full p-0.5 shadow-glass-sm ring-1 ring-white/10">
+      <button
+        type="button"
+        onClick={() => onChange('map')}
+        aria-pressed={view === 'map'}
+        aria-label="Vista de mapa"
+        className={cn(
+          'flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+          view === 'map' ? 'bg-info text-white' : 'text-ink-muted',
+        )}
+      >
+        <MapIcon className="h-3.5 w-3.5" />
+        Mapa
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('list')}
+        aria-pressed={view === 'list'}
+        aria-label="Vista de listado"
+        className={cn(
+          'flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+          view === 'list' ? 'bg-info text-white' : 'text-ink-muted',
+        )}
+      >
+        <List className="h-3.5 w-3.5" />
+        Listado
+      </button>
     </div>
   )
 }

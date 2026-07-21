@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
 import { useTransitionCase, useAssignCase } from '@/hooks/useCaseMutations'
 import { useFaro } from '@/store/faro-context'
@@ -10,15 +11,16 @@ import { CommandKpiBar } from './command-kpi-bar'
 import { CaseKanbanBoard } from './case-kanban-board'
 import { CaseDetailDrawer } from './case-detail-drawer'
 import { OpsMapPanel } from './ops-map-panel'
-import { OpsNotificationTray } from './ops-notification-tray'
-import type { OpsNotification } from '@/types/operations-hub.types'
+import { cn } from '@/lib/utils'
+
+type WorkspaceMode = 'pipeline' | 'map'
 
 export function OperationsHub() {
   const { state } = useFaro()
   const { data: opsCases = [] } = useCases()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [notifications, setNotifications] = useState<OpsNotification[]>([])
+  const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const transitionMutation = useTransitionCase()
   const assignMutation = useAssignCase()
 
@@ -118,17 +120,21 @@ export function OperationsHub() {
           </span>
         </div>
 
-        <OpsNotificationTray
-          notifications={notifications}
-          onMarkRead={(id) =>
-            setNotifications((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)))
-          }
-          onMarkAllRead={() => setNotifications((p) => p.map((n) => ({ ...n, read: true })))}
-          onOpenCase={(caseId) => {
-            setSelectedId(caseId)
-            setDrawerOpen(true)
-          }}
-        />
+        {/* Toggle Pipeline ↔ Mapa (disparador de vista interactiva) */}
+        <div className="flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
+          <WorkspaceToggle
+            active={workspace === 'pipeline'}
+            onClick={() => setWorkspace('pipeline')}
+            icon={LayoutGrid}
+            label="Pipeline"
+          />
+          <WorkspaceToggle
+            active={workspace === 'map'}
+            onClick={() => setWorkspace('map')}
+            icon={MapIcon}
+            label="Mapa"
+          />
+        </div>
       </div>
 
       <div className="border-b border-white/[0.06] px-3 py-2.5 lg:px-4">
@@ -136,19 +142,22 @@ export function OperationsHub() {
       </div>
 
       <div className="relative min-h-0 flex-1">
-        <div className="flex h-full min-h-0">
-          <div className="min-w-0 flex-1">
-            <CaseKanbanBoard
-              cases={sortedCases}
-              selectedId={selectedId}
-              onSelect={handleSelect}
-            />
+        {workspace === 'pipeline' ? (
+          <div className="flex h-full min-h-0">
+            <div className="min-w-0 flex-1">
+              <CaseKanbanBoard
+                cases={sortedCases}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+              />
+            </div>
+            <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
+              <OpsMapPanel selectedCase={selectedCase} sites={mapSites} />
+            </div>
           </div>
-          {/* Mapa contextual lateral — sin toggle redundante "Mapa" */}
-          <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
-            <OpsMapPanel selectedCase={selectedCase} sites={mapSites} />
-          </div>
-        </div>
+        ) : (
+          <OpsMapPanel selectedCase={selectedCase} sites={mapSites} className="h-full" />
+        )}
 
         <CaseDetailDrawer
           open={drawerOpen}
@@ -162,5 +171,32 @@ export function OperationsHub() {
         />
       </div>
     </div>
+  )
+}
+
+function WorkspaceToggle({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: typeof LayoutGrid
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors',
+        active ? 'bg-white/[0.1] text-ink' : 'text-ink-muted hover:text-ink-subtle',
+      )}
+      aria-pressed={active}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span>{label}</span>
+    </button>
   )
 }

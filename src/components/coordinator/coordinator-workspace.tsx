@@ -6,7 +6,6 @@ import {
   Boxes,
   Zap,
   Activity,
-  Bell,
   UserCheck,
   Settings2,
   Shield,
@@ -97,9 +96,6 @@ export function CoordinatorWorkspace({
             <span className="h-1.5 w-1.5 rounded-full bg-operational" />
             En línea
           </span>
-          <EmergencyButton variant="glass" size="icon" aria-label="Notificaciones">
-            <Bell className="h-4 w-4" />
-          </EmergencyButton>
         </div>
       </header>
 

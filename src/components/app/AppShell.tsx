@@ -173,13 +173,6 @@ export function AppShell() {
           : ('citizen' as const)
 
   const fabContext = useMemo(() => {
-    const view = normalizeTabId(activeView) ?? activeView
-    if (view === 'profile' || view === 'admin' || view === 'system') {
-      return { show: false as const, label: '' }
-    }
-    if (actionsMode === 'citizen' && view === 'reports') {
-      return { show: false as const, label: '' }
-    }
     const labels = {
       coordinator: 'Acciones de coordinación',
       admin: 'Menú de administración',
@@ -187,8 +180,11 @@ export function AppShell() {
       volunteer: 'Acción rápida',
       citizen: 'Acción rápida',
     } as const
+    // El FAB siempre dispara ActionsScreen con acciones reales por rol.
+    // Nunca se deja como adorno: si la vista no aporta valor extra, el menú
+    // sigue ofreciendo reportar / crear caso / registrar necesidad, etc.
     return { show: true as const, label: labels[actionsMode] }
-  }, [activeView, actionsMode])
+  }, [actionsMode])
 
   /** Navegación manual: una sola vista activa; limpia detalle al salir del mapa. */
   const setActiveView = useCallback((next: TabId) => {
@@ -313,7 +309,6 @@ export function AppShell() {
   }, [openFlow])
 
   const openMenu = () => {
-    if (!fabContext.show) return
     openFlow('menu')
   }
 
@@ -448,9 +443,9 @@ export function AppShell() {
         <DesktopNavigation
           active={activeView}
           onChange={setActiveView}
-          onCreate={fabContext.show ? openMenu : undefined}
+          onCreate={openMenu}
           tabs={tabs}
-          createLabel={fabContext.label || 'Acciones'}
+          createLabel={fabContext.label}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -555,9 +550,9 @@ export function AppShell() {
           <BottomNavigation
             active={activeView}
             onChange={setActiveView}
-            onCreate={fabContext.show ? openMenu : undefined}
+            onCreate={openMenu}
             mobileTabs={mobileTabs}
-            createLabel={fabContext.label || 'Acciones'}
+            createLabel={fabContext.label}
           />
         </div>
 
