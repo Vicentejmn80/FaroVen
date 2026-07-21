@@ -10,6 +10,7 @@ import {
 import { GlassCard } from '@/components/ui/glass-card'
 import { useFaro } from '@/store/faro-context'
 import { usePendingCoordinatorRequests } from '@/hooks/useAuthRequests'
+import { useAdminProfiles } from '@/hooks/useAuthRequests'
 import { useAdminNotifications } from '@/hooks/useAdminNotifications'
 import { timeAgo } from '@/lib/utils'
 
@@ -32,7 +33,13 @@ const TONE_CLASS: Record<OpsMetric['tone'], string> = {
 export function RegionalOpsDashboard() {
   const { sites, state } = useFaro()
   const { data: requests = [] } = usePendingCoordinatorRequests(true)
+  const { data: profiles = [] } = useAdminProfiles(true)
   const adminNotif = useAdminNotifications()
+    const pendingNetworkRoleRequests = profiles.filter(
+      (profile) =>
+        profile.role_request_status === 'pending' &&
+        (profile.pending_role === 'case_manager' || profile.pending_role === 'coordinator'),
+    ).length
 
   const metrics = useMemo(() => {
     const operationalSites = sites.filter((s) => s.type !== 'organization')
@@ -82,11 +89,11 @@ export function RegionalOpsDashboard() {
       },
       {
         id: 'coord-requests',
-        label: 'Solicitudes de coordinador',
-        value: requests.length,
-        hint: 'Pendientes de revisión',
+        label: 'Solicitudes de rol',
+        value: requests.length + pendingNetworkRoleRequests,
+        hint: 'Coordinador y gestor pendientes',
         icon: UserPlus,
-        tone: requests.length > 0 ? 'info' : 'operational',
+        tone: requests.length + pendingNetworkRoleRequests > 0 ? 'info' : 'operational',
       },
       {
         id: 'citizen-reports',
@@ -106,7 +113,7 @@ export function RegionalOpsDashboard() {
       },
     ]
     return items
-  }, [sites, state, requests.length])
+  }, [sites, state, requests.length, profiles])
 
   const unreadNotif = adminNotif.unreadCount
 

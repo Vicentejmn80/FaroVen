@@ -86,7 +86,7 @@ export function SuperAdminConsole() {
   const { sites } = useFaro()
   // Solo disparar RPCs admin si el rol lo requiere y el módulo activo las usa
   const canAdmin = canAccessSystemPanel
-  const loadUsers = canAdmin && (activeModule === 'users' || activeModule === 'coordinators')
+  const loadUsers = canAdmin && (activeModule === 'users' || activeModule === 'coordinators' || activeModule === 'requests')
   const loadRequests = canAdmin && activeModule === 'requests'
   const loadRegistry = canAdmin && (
     activeModule === 'hospitals' ||
@@ -154,6 +154,20 @@ export function SuperAdminConsole() {
     }
   }
 
+  async function promoteCaseManager(userId: string) {
+    setBusyId(userId)
+    setError(null)
+    try {
+      await authService.promoteUserRole(userId, 'case_manager')
+      await refetchProfiles()
+      await refreshProfile()
+    } catch (err) {
+      setError(formatAuthError(err instanceof Error ? err.message : 'No se pudo promover'))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function promoteCoordinator(userId: string, siteId: string) {
     const site = sites.find((s) => s.id === siteId)
     if (!site || site.type === 'organization') {
@@ -204,6 +218,16 @@ export function SuperAdminConsole() {
     }
   }
 
+  const pendingNetworkRequests = useMemo(
+    () =>
+      profiles.filter(
+        (profile) =>
+          profile.role_request_status === 'pending' &&
+          (profile.pending_role === 'case_manager' || profile.pending_role === 'coordinator'),
+      ),
+    [profiles],
+  )
+
   if (activeModule) {
     return (
       <div className="space-y-4">
@@ -227,6 +251,7 @@ export function SuperAdminConsole() {
             currentUserId={user?.id}
             busyId={busyId}
             onPromoteAdmin={promoteAdmin}
+            onPromoteCaseManager={promoteCaseManager}
             onPromoteCoordinator={promoteCoordinator}
             onUserAction={handleUserAction}
           />
@@ -235,6 +260,7 @@ export function SuperAdminConsole() {
         {activeModule === 'requests' && (
           <RequestsModule
             rows={pendingRequests.data ?? []}
+            roleRows={pendingNetworkRequests}
             loading={pendingRequests.isLoading}
             assignments={requestAssignments}
             onAssign={(requestId, siteId) =>
@@ -267,6 +293,38 @@ export function SuperAdminConsole() {
               try {
                 await requestMutations.reject.mutateAsync({ requestId })
                 await pendingRequests.refetch()
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+            onApproveRole={async (userId, reviewNotes) => {
+              setBusyId(userId)
+              try {
+                await authService.reviewNetworkRoleRequest(userId, true, reviewNotes)
+                await refetchProfiles()
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+            onRejectRole={async (userId, reviewNotes) => {
+              setBusyId(userId)
+              try {
+                await authService.reviewNetworkRoleRequest(userId, false, reviewNotes)
+                await refetchProfiles()
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+            onRequestRoleInfo={async (userId, message) => {
+              setBusyId(userId)
+              try {
+                await authService.requestNetworkRoleInfo(userId, message)
               } catch (err) {
                 setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
               } finally {
@@ -911,26 +969,120 @@ function ReportsModule({
 
 function RequestsModule({
   rows,
+  roleRows,
   loading,
   assignments,
   onAssign,
   busyId,
   onApprove,
   onReject,
+  onApproveRole,
+  onRejectRole,
+  onRequestRoleInfo,
 }: {
   rows: CoordinatorRequestRow[]
+  roleRows: ProfileRow[]
   loading: boolean
   assignments: Record<string, string>
   onAssign: (requestId: string, siteId: string) => void
   busyId: string | null
   onApprove: (request: CoordinatorRequestRow) => Promise<void>
   onReject: (requestId: string) => Promise<void>
+  onApproveRole: (userId: string, reviewNotes?: string) => Promise<void>
+  onRejectRole: (userId: string, reviewNotes?: string) => Promise<void>
+  onRequestRoleInfo: (userId: string, message: string) => Promise<void>
 }) {
+  const [notesByUser, setNotesByUser] = useState<Record<string, string>>({})
+  const [infoByUser, setInfoByUser] = useState<Record<string, string>>({})
+
   if (loading) return <p className="text-sm text-ink-subtle">Cargando solicitudes…</p>
-  if (rows.length === 0) return <EmptyState icon={FileQuestion} title="Sin solicitudes pendientes" />
+  if (rows.length === 0 && roleRows.length === 0) {
+    return <EmptyState icon={FileQuestion} title="Sin solicitudes pendientes" />
+  }
 
   return (
     <section className="space-y-3">
+      {roleRows.length > 0 && (
+        <>
+          <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+            Solicitudes de rol (Gestor/Coordinador)
+          </p>
+          {roleRows.map((profile) => {
+            const requestedRole = profile.pending_role
+            const notes = notesByUser[profile.id] ?? ''
+            const infoMessage = infoByUser[profile.id] ?? ''
+            return (
+              <GlassCard key={profile.id} className="space-y-2">
+                <p className="text-sm font-medium text-ink">{profile.full_name || profile.email}</p>
+                <p className="text-xs text-ink-subtle">{profile.email}</p>
+                <p className="text-xs text-info">
+                  Solicita: {requestedRole === 'case_manager' ? 'Gestor de Casos' : 'Coordinador'}
+                </p>
+                {profile.role_request_reason && (
+                  <p className="text-xs text-ink-muted">{profile.role_request_reason}</p>
+                )}
+                <textarea
+                  className={fieldClassName}
+                  placeholder="Notas de revisión (opcional)"
+                  value={notes}
+                  onChange={(e) =>
+                    setNotesByUser((prev) => ({
+                      ...prev,
+                      [profile.id]: e.target.value,
+                    }))
+                  }
+                />
+                <textarea
+                  className={fieldClassName}
+                  placeholder="Pedir más info (mensaje opcional)"
+                  value={infoMessage}
+                  onChange={(e) =>
+                    setInfoByUser((prev) => ({
+                      ...prev,
+                      [profile.id]: e.target.value,
+                    }))
+                  }
+                />
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <EmergencyButton
+                    variant="glass"
+                    size="sm"
+                    className="w-full"
+                    disabled={busyId === profile.id || !infoMessage.trim()}
+                    onClick={() => void onRequestRoleInfo(profile.id, infoMessage.trim())}
+                  >
+                    Pedir más info
+                  </EmergencyButton>
+                  <EmergencyButton
+                    variant="glass"
+                    size="sm"
+                    className="w-full text-critical"
+                    disabled={busyId === profile.id}
+                    onClick={() => void onRejectRole(profile.id, notes || undefined)}
+                  >
+                    Rechazar
+                  </EmergencyButton>
+                  <EmergencyButton
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    disabled={busyId === profile.id}
+                    onClick={() => void onApproveRole(profile.id, notes || undefined)}
+                  >
+                    Aprobar
+                  </EmergencyButton>
+                </div>
+              </GlassCard>
+            )
+          })}
+        </>
+      )}
+
+      {rows.length > 0 && (
+        <p className="px-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+          Solicitudes de coordinador por centro
+        </p>
+      )}
       {rows.map((request) => (
         <CoordinatorRequestReview
           key={request.id}

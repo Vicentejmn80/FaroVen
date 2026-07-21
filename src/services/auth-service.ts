@@ -146,9 +146,9 @@ export const authService = {
   async signOut() {
     const { data } = await supabase.auth.getUser()
     const userId = data.user?.id
+    if (userId) await authAuditRepository.log('logout', userId)
     const { error } = await supabase.auth.signOut()
     if (error) throw new Error(formatAuthError(error.message))
-    if (userId) await authAuditRepository.log('logout', userId)
   },
 
   async loadProfile(user: User | null): Promise<ProfileRow | null> {
@@ -198,7 +198,10 @@ export const authService = {
     return profileRepository.listForAdmin()
   },
 
-  async promoteUserRole(userId: string, role: 'regional_admin' | 'coordinator' | 'super_admin') {
+  async promoteUserRole(
+    userId: string,
+    role: 'regional_admin' | 'coordinator' | 'super_admin' | 'case_manager',
+  ) {
     const { data, error } = await supabase.rpc('promote_user_role', {
       p_user_id: userId,
       p_role: role,
@@ -223,5 +226,23 @@ export const authService = {
 
   async listAuthAudit(limit = 50) {
     return authAuditRepository.listRecent(limit)
+  },
+
+  async reviewNetworkRoleRequest(userId: string, approve: boolean, reviewNotes?: string) {
+    const { data, error } = await supabase.rpc('review_network_role_request', {
+      p_user_id: userId,
+      p_approve: approve,
+      p_review_notes: reviewNotes ?? null,
+    })
+    if (error) throw new Error(formatAuthError(error.message))
+    return data
+  },
+
+  async requestNetworkRoleInfo(userId: string, message: string) {
+    const { error } = await supabase.rpc('request_network_role_info', {
+      p_user_id: userId,
+      p_message: message,
+    })
+    if (error) throw new Error(formatAuthError(error.message))
   },
 }

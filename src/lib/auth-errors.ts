@@ -109,6 +109,14 @@ export function formatAuthError(message: string): string {
     return 'Para coordinador debes asignar un centro desde el módulo Coordinadores.'
   }
 
+  if (normalized.includes('super_admin_required_for_coordinator')) {
+    return 'Solo un Super Administrador puede aprobar solicitudes de Coordinador.'
+  }
+
+  if (normalized.includes('no_pending_request')) {
+    return 'La solicitud ya no está pendiente.'
+  }
+
   if (normalized.includes('site_already_has_coordinator')) {
     return 'Ese centro ya tiene coordinador. Recarga la página e inténtalo de nuevo, o elige otro centro.'
   }

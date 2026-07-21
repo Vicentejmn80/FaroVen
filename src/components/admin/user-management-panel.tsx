@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Building2, Pencil, Shield, Trash2, UserCog, UserMinus, Users, UserX } from 'lucide-react'
+import { Building2, ClipboardList, Pencil, Shield, Trash2, UserCog, UserMinus, Users, UserX } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -22,6 +22,7 @@ interface UserManagementPanelProps {
   currentUserId?: string
   busyId: string | null
   onPromoteAdmin: (userId: string) => Promise<void>
+  onPromoteCaseManager: (userId: string) => Promise<void>
   onPromoteCoordinator: (userId: string, siteId: string) => Promise<void>
   onUserAction?: (action: string, profile: ProfileRow, extra?: boolean) => Promise<void>
 }
@@ -34,6 +35,7 @@ export function UserManagementPanel({
   currentUserId,
   busyId,
   onPromoteAdmin,
+  onPromoteCaseManager,
   onPromoteCoordinator,
   onUserAction,
 }: UserManagementPanelProps) {
@@ -134,7 +136,7 @@ export function UserManagementPanel({
                 )}
 
                 {canPromote && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <EmergencyButton
                       variant="glass"
                       size="sm"
@@ -148,6 +150,18 @@ export function UserManagementPanel({
                       <Building2 className="h-4 w-4" />
                       {profile.role === FARO_ROLES.COORDINATOR ? 'Reasignar centro' : 'Promover a coordinador'}
                     </EmergencyButton>
+                    {profile.role !== FARO_ROLES.CASE_MANAGER && profile.role !== FARO_ROLES.COORDINATOR && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="w-full"
+                        disabled={busyId === profile.id}
+                        onClick={() => void onPromoteCaseManager(profile.id)}
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                        Promover a gestor
+                      </EmergencyButton>
+                    )}
                     {profile.role !== FARO_ROLES.REGIONAL_ADMIN && profile.role !== FARO_ROLES.COORDINATOR && (
                       <EmergencyButton
                         variant="glass"
@@ -186,6 +200,17 @@ export function UserManagementPanel({
                         onClick={() => void onUserAction?.('demote', profile)}
                       >
                         Quitar rol admin
+                      </EmergencyButton>
+                    )}
+                    {profile.role === FARO_ROLES.CASE_MANAGER && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="w-full"
+                        disabled={busyId === profile.id}
+                        onClick={() => void onUserAction?.('demote', profile)}
+                      >
+                        Quitar rol gestor
                       </EmergencyButton>
                     )}
                     {profile.status === 'active' ? (
