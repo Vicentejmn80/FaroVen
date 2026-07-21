@@ -124,11 +124,11 @@ function LocateMeButton({
       onClick={onLocate}
       whileTap={{ scale: 0.94 }}
       transition={{ duration: 0.15, ease: [0.32, 0.72, 0, 1] }}
-      className="glass-strong absolute right-3 top-16 z-10 flex h-11 items-center gap-2 rounded-full px-3 text-sm font-medium text-ink shadow-glass-sm ring-1 ring-white/10"
+      className="glass-strong absolute right-3 top-16 z-10 flex h-11 w-11 items-center justify-center rounded-full text-ink shadow-glass-sm ring-1 ring-white/10 sm:w-auto sm:gap-2 sm:px-3"
       aria-label="Ir a mi zona"
     >
       {locating ? <Navigation className="h-4 w-4 animate-pulse" /> : <LocateFixed className="h-4 w-4" />}
-      Mi zona
+      <span className="hidden text-sm font-medium sm:inline">Mi zona</span>
     </motion.button>
   )
 }

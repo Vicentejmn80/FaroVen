@@ -10,6 +10,10 @@ interface LegalFooterProps {
   onOpenAbout: () => void
 }
 
+/**
+ * Footer legal — solo desktop.
+ * En móvil los documentos viven en el Centro de Ayuda (?) para no restar viewport.
+ */
 export function LegalFooter({
   onOpenTerms,
   onOpenPrivacy,
@@ -21,8 +25,8 @@ export function LegalFooter({
   const version = formatBuildVersion()
 
   return (
-    <footer className="border-t border-white/[0.06] bg-base-900/70 px-4 pb-20 pt-5 text-sm text-ink-muted lg:px-8 lg:pb-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <footer className="hidden border-t border-white/[0.06] bg-base-900/70 px-8 py-4 text-sm text-ink-muted lg:block">
+      <div className="flex flex-row items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <FooterLink label="Términos de Servicio" onClick={onOpenTerms} />
           <FooterLink label="Política de Privacidad" onClick={onOpenPrivacy} />
@@ -31,7 +35,7 @@ export function LegalFooter({
           <FooterLink label="Contacto" onClick={onOpenContact} />
           <FooterLink label="Acerca de FARO" onClick={onOpenAbout} />
         </div>
-        {version && <span className="text-xs text-ink-subtle">Versión {version}</span>}
+        {version && <span className="shrink-0 text-xs text-ink-subtle">Versión {version}</span>}
       </div>
     </footer>
   )

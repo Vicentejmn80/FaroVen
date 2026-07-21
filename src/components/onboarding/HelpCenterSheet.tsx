@@ -1,9 +1,18 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, CircleHelp, X } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleHelp,
+  ExternalLink,
+  FileText,
+  Mail,
+  Shield,
+  X,
+} from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { HELP_CENTER_TOPICS } from '@/lib/onboarding-content'
 import { PriorityCoverageGuide } from '@/components/onboarding/PriorityCoverageGuide'
+import { formatBuildVersion } from '@/lib/build-info'
 import { cn } from '@/lib/utils'
 
 interface HelpCenterSheetProps {
@@ -11,9 +20,27 @@ interface HelpCenterSheetProps {
   onClose: () => void
 }
 
-/** Centro de ayuda permanente — conceptos clave de FARO. */
+const LEGAL_LINKS = [
+  { doc: 'terms' as const, label: 'Términos de Servicio', icon: FileText },
+  { doc: 'privacy' as const, label: 'Política de Privacidad', icon: Shield },
+  { doc: 'cookies' as const, label: 'Política de Cookies', icon: FileText },
+  { doc: 'notice' as const, label: 'Aviso Legal', icon: FileText },
+  { doc: 'contact' as const, label: 'Contacto / Soporte', icon: Mail },
+  { doc: 'about' as const, label: 'Acerca de FARO', icon: CircleHelp },
+]
+
+/** Centro de ayuda permanente — conceptos clave + legales (móvil). */
 export function HelpCenterSheet({ open, onClose }: HelpCenterSheetProps) {
   const [expanded, setExpanded] = useState<string | null>(HELP_CENTER_TOPICS[0]?.id ?? null)
+  const version = formatBuildVersion()
+
+  const openLegal = (doc: (typeof LEGAL_LINKS)[number]['doc']) => {
+    onClose()
+    // Deja cerrar el sheet antes de abrir el documento
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('faro:open-legal', { detail: { doc } }))
+    }, 180)
+  }
 
   return (
     <AnimatePresence>
@@ -96,6 +123,29 @@ export function HelpCenterSheet({ open, onClose }: HelpCenterSheetProps) {
                 <div className="mt-3">
                   <PriorityCoverageGuide compact />
                 </div>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-subtle">
+                  Legal y soporte
+                </p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {LEGAL_LINKS.map(({ doc, label, icon: Icon }) => (
+                    <button
+                      key={doc}
+                      type="button"
+                      onClick={() => openLegal(doc)}
+                      className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
+                    >
+                      <Icon className="h-4 w-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
+                      <span className="flex-1 text-sm font-medium text-ink">{label}</span>
+                      <ExternalLink className="h-3.5 w-3.5 text-ink-faint" />
+                    </button>
+                  ))}
+                </div>
+                {version && (
+                  <p className="pt-1 text-center text-[11px] text-ink-faint">Versión {version}</p>
+                )}
               </div>
 
               <EmergencyButton variant="primary" size="lg" className="mt-5 w-full" onClick={onClose}>

@@ -123,12 +123,112 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Mobile: scroll único | Desktop: grid sin scroll externo */}
-      <div className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-5 pb-32 pt-1 lg:overflow-hidden lg:px-8 lg:pb-6 lg:pt-2">
-        <div className="lg:grid lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(380px,42%)] lg:gap-8">
-          {/* Columna izquierda — contexto y reportes */}
-          <div className="lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:pr-1">
+    <div className="relative flex h-full flex-col overflow-hidden">
+      {/* ── Móvil: mapa a pantalla completa ── */}
+      <div
+        className={cn(
+          'absolute inset-0 lg:hidden',
+          viewMode === 'list' && 'pointer-events-none invisible',
+        )}
+      >
+        <OperationsMap
+          selected={selected}
+          onSelect={setSelected}
+          sites={filteredSites}
+          fullBleed
+          className="h-full w-full"
+        />
+
+        {/* Controles flotantes — sin botón "Mapa" redundante */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-2">
+          <div className="pointer-events-auto space-y-2">
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <MobileMapSearch
+                  query={query}
+                  onQuery={setQuery}
+                  typeFilter={typeFilter}
+                  onTypeFilter={setTypeFilter}
+                  totalSites={filteredSites.length}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className="glass-strong flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium text-ink shadow-glass-sm ring-1 ring-white/10"
+                aria-label="Ver listado de centros"
+              >
+                <List className="h-3.5 w-3.5" />
+                Listado
+              </button>
+            </div>
+            {loadError && (
+              <GlassCard inset={false} className="border-critical/30 bg-critical/10 p-2.5">
+                <p className="text-xs text-critical">{loadError}</p>
+              </GlassCard>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Móvil: listado como capa (no toggle Mapa) ── */}
+      {viewMode === 'list' && (
+        <div className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-900 lg:hidden">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
+                Vista operativa
+              </p>
+              <h2 className="text-sm font-semibold text-ink">Centros y necesidades</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-ink-muted"
+            >
+              Cerrar
+            </button>
+          </div>
+          <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 pt-3">
+            <QuickAnswerBar
+              query={query}
+              onQuery={setQuery}
+              typeFilter={typeFilter}
+              onTypeFilter={setTypeFilter}
+              totalSites={filteredSites.length}
+            />
+            {!isLoading && !loadError && sites.length === 0 ? (
+              <GuidedEmptyState
+                className="mt-4"
+                icon={MapPin}
+                title="Aún no hay centros en el mapa"
+                description="Cuando los coordinadores registren hospitales, refugios o acopios, aparecerán aquí."
+              />
+            ) : (
+              <NeedsByCenterSection
+                className="mt-4"
+                query={query}
+                priorityFilter={priorityFilter}
+                onPriorityFilter={setPriorityFilter}
+                items={listSites}
+                totals={totals}
+                expandedSites={expandedSites}
+                onToggleExpand={(id) =>
+                  setExpandedSites((prev) => ({
+                    ...prev,
+                    [id]: !prev[id],
+                  }))
+                }
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Desktop: panel + mapa ── */}
+      <div className="hidden h-full min-h-0 overflow-hidden px-8 pb-6 pt-2 lg:block">
+        <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(380px,42%)] gap-8">
+          <div className="flex min-h-0 flex-col overflow-y-auto pr-1">
             <PageHeader onRegisterSite={onRegisterSite} />
             <ContextualHelpCard moduleId="map" className="mt-3" />
             <QuickAnswerBar
@@ -162,81 +262,66 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
               />
             )}
 
-            <section className="mt-4 lg:mt-3">
-              <SectionTitle className="lg:hidden">Qué debemos resolver ahora</SectionTitle>
-              <div className="mt-2.5 lg:mt-0">
-                <SituationSummary sites={filteredSites} needs={needs} className="lg:hidden" />
-                <SituationSummary
-                  sites={filteredSites}
-                  needs={needs}
-                  title="Prioridades activas"
-                  compact
-                  className="hidden lg:block"
-                />
-              </div>
+            <section className="mt-3">
+              <SituationSummary
+                sites={filteredSites}
+                needs={needs}
+                title="Prioridades activas"
+                compact
+              />
             </section>
 
-            <section className="mt-5 lg:mt-4">
+            <section className="mt-4">
               <SectionTitle>Vista operativa</SectionTitle>
-              <ViewToggle view={viewMode} onChange={setViewMode} />
+              <DesktopViewToggle view={viewMode} onChange={setViewMode} />
             </section>
-
-            {viewMode === 'map' && (
-              <section className="mt-4 lg:hidden">
-                <SectionTitle>Mapa de operaciones</SectionTitle>
-                <div className="mt-2.5">
-                  <OperationsMap
-                    selected={selected}
-                    onSelect={setSelected}
-                    sites={filteredSites}
-                    className="h-[300px] sm:h-[340px]"
-                  />
-                </div>
-              </section>
-            )}
 
             {viewMode === 'list' && (
-              <NeedsByCenterSection
-                className="mt-4"
-                query={query}
-                priorityFilter={priorityFilter}
-                onPriorityFilter={setPriorityFilter}
-                items={listSites}
-                totals={totals}
-                expandedSites={expandedSites}
-                onToggleExpand={(id) =>
-                  setExpandedSites((prev) => ({
-                    ...prev,
-                    [id]: !prev[id],
-                  }))
-                }
-              />
+              <>
+                <NeedsByCenterSection
+                  className="mt-4"
+                  query={query}
+                  priorityFilter={priorityFilter}
+                  onPriorityFilter={setPriorityFilter}
+                  items={listSites}
+                  totals={totals}
+                  expandedSites={expandedSites}
+                  onToggleExpand={(id) =>
+                    setExpandedSites((prev) => ({
+                      ...prev,
+                      [id]: !prev[id],
+                    }))
+                  }
+                />
+                {listSites.length > 0 && (
+                  <div className="mt-4">
+                    <PriorityCoverageGuide
+                      compact
+                      className="rounded-2xl border border-white/10 bg-white/[0.02] p-3"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
-            {viewMode === 'list' && listSites.length > 0 && (
-              <div className="mt-4 hidden lg:block">
-                <PriorityCoverageGuide compact className="rounded-2xl border border-white/10 bg-white/[0.02] p-3" />
-              </div>
-            )}
-
-            <ReportsSection activity={filteredActivity} className="mt-5 lg:mt-4 lg:min-h-0 lg:flex-1" />
+            <ReportsSection activity={filteredActivity} className="mt-4 min-h-0 flex-1" />
           </div>
 
-          {/* Columna derecha — mapa protagonista en desktop */}
-          <section className="hidden lg:flex lg:min-h-0 lg:flex-col">
+          <section className="flex min-h-0 flex-col">
             <SectionTitle>Mapa de operaciones</SectionTitle>
             <div className="mt-3 min-h-0 flex-1">
-                <OperationsMap selected={selected} onSelect={setSelected} sites={filteredSites} className="h-full min-h-[480px]" />
+              <OperationsMap
+                selected={selected}
+                onSelect={setSelected}
+                sites={filteredSites}
+                className="h-full min-h-[480px]"
+              />
             </div>
           </section>
         </div>
       </div>
 
-      <SidePanel
-        site={selected}
-        onClose={() => setSelected(null)}
-        onOpenDetail={onOpenDetail}
-      />
+      <SidePanel site={selected} onClose={() => setSelected(null)} onOpenDetail={onOpenDetail} />
     </div>
   )
 }
@@ -329,6 +414,7 @@ function VolunteerMapScreen({
 }) {
   const [selectedMission, setSelectedMission] = useState<VolunteerMission | null>(null)
   const [distanceFilter, setDistanceFilter] = useState<'5' | '10' | '25'>('10')
+  const [showList, setShowList] = useState(false)
 
   useEffect(() => {
     if (selectedMission && !missions.some((m) => m.id === selectedMission.id)) {
@@ -337,10 +423,136 @@ function VolunteerMapScreen({
   }, [missions, selectedMission])
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain">
-      <div className="flex flex-col px-5 pb-32 pt-2 lg:grid lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(360px,42%)] lg:gap-6 lg:overflow-hidden lg:px-8 lg:pb-6 lg:pt-2">
-        {/* Panel izquierdo: filtros + mapa móvil + lista */}
-        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Móvil: mapa full-bleed */}
+      <div
+        className={cn(
+          'absolute inset-0 lg:hidden',
+          showList && 'pointer-events-none invisible',
+        )}
+      >
+        <VolunteerMapCanvas
+          missions={missions}
+          activeId={selectedMission?.id}
+          onSelect={setSelectedMission}
+          fullBleed
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-2">
+          <div className="pointer-events-auto flex items-start gap-2">
+            <div className="glass-strong min-w-0 flex-1 space-y-2 rounded-2xl px-3 py-2.5 shadow-glass-sm ring-1 ring-white/10">
+              <p className="text-[11px] font-semibold text-ink">Misiones cercanas</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(['5', '10', '25'] as const).map((radius) => (
+                  <button
+                    key={radius}
+                    type="button"
+                    onClick={() => setDistanceFilter(radius)}
+                    className={
+                      distanceFilter === radius
+                        ? 'rounded-full border border-info/60 bg-info-soft px-2.5 py-1 text-[10px] text-ink'
+                        : 'rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] text-ink-muted'
+                    }
+                  >
+                    {radius} km
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowList(true)}
+              className="glass-strong flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium text-ink shadow-glass-sm ring-1 ring-white/10"
+            >
+              <List className="h-3.5 w-3.5" />
+              Listado
+            </button>
+          </div>
+        </div>
+
+        {selectedMission && (
+          <motion.div
+            initial={{ y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            className="glass-strong absolute inset-x-3 bottom-28 z-20 rounded-2xl border border-white/10 p-4 shadow-2xl"
+          >
+            <p className="font-semibold text-ink">{selectedMission.title}</p>
+            <p className="mt-0.5 text-xs text-ink-subtle">
+              {selectedMission.siteName} · {selectedMission.distanceKm} km
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <EmergencyButton variant="glass" size="md" className="w-full" onClick={() => setShowList(true)}>
+                Ver detalles
+              </EmergencyButton>
+              <EmergencyButton variant="primary" size="md" className="w-full">
+                Quiero ayudar
+              </EmergencyButton>
+            </div>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Móvil: listado */}
+      {showList && (
+        <div className="absolute inset-0 z-30 flex flex-col bg-base-900 lg:hidden">
+          <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3">
+            <h2 className="text-sm font-semibold text-ink">Misiones abiertas</h2>
+            <button
+              type="button"
+              onClick={() => setShowList(false)}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-ink-muted"
+            >
+              Cerrar
+            </button>
+          </div>
+          <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 pt-3">
+            {isLoading ? (
+              <GlassCard inset={false} className="p-4 text-sm text-ink-subtle">
+                Cargando misiones disponibles…
+              </GlassCard>
+            ) : missions.length === 0 ? (
+              <GuidedEmptyState
+                icon={Flag}
+                title="No hay misiones abiertas"
+                description="Vuelve en unos minutos para ver nuevas oportunidades cerca de ti."
+              />
+            ) : (
+              <div className="space-y-2">
+                {missions.map((mission) => (
+                  <button
+                    key={mission.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedMission(mission)
+                      setShowList(false)
+                    }}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors',
+                      selectedMission?.id === mission.id
+                        ? 'border-info/60 bg-info-soft'
+                        : 'border-white/[0.06] bg-white/[0.03]',
+                    )}
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06]">
+                      <Flag className="h-4 w-4 text-info" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <NeedItemLabel name={mission.title} className="text-sm font-semibold text-ink" />
+                      <span className="mt-0.5 block text-xs text-ink-subtle">
+                        {mission.siteName} · {mission.distanceKm} km
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop */}
+      <div className="hidden h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(360px,42%)] gap-6 overflow-hidden px-8 pb-6 pt-2 lg:grid">
+        <div className="flex min-h-0 flex-col overflow-hidden">
           <header className="shrink-0 space-y-1">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
               {greeting()} · Red de Apoyo
@@ -351,7 +563,7 @@ function VolunteerMapScreen({
             </p>
           </header>
 
-          <section className="mt-3 shrink-0 space-y-2.5">
+          <section className="mt-3 shrink-0">
             <GlassCard inset={false} className="space-y-3 p-3">
               <div className="flex items-center gap-2 text-xs text-ink-subtle">
                 <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -374,7 +586,7 @@ function VolunteerMapScreen({
                 ))}
               </div>
               <p className="text-xs text-ink-faint">
-                {missions.length} misión(es) disponibles · radio {distanceFilter} km
+                {missions.length} misión(es) · radio {distanceFilter} km
               </p>
             </GlassCard>
           </section>
@@ -385,92 +597,54 @@ function VolunteerMapScreen({
             </GlassCard>
           )}
 
-          {/* Móvil: mapa apilado con altura fija */}
-          <section className="mt-4 shrink-0 lg:hidden">
-            <SectionTitle>Mapa de misiones</SectionTitle>
-            <div className="map-container-wrapper mt-2.5 h-[300px] min-h-[300px] w-full sm:h-[340px] sm:min-h-[340px]">
-              <VolunteerMapCanvas
-                missions={missions}
-                activeId={selectedMission?.id}
-                onSelect={setSelectedMission}
-              />
-            </div>
-          </section>
-
-          {/* Lista: scroll de página en móvil; scroll interno en escritorio */}
-          <section className="mt-4 flex flex-col lg:mt-3 lg:min-h-0 lg:flex-1">
+          <section className="mt-4 flex min-h-0 flex-1 flex-col">
             <SectionTitle className="shrink-0">Misiones abiertas</SectionTitle>
             {isLoading ? (
-              <GlassCard inset={false} className="mt-3 shrink-0 p-4 text-sm text-ink-subtle">
+              <GlassCard inset={false} className="mt-3 p-4 text-sm text-ink-subtle">
                 Cargando misiones disponibles…
               </GlassCard>
             ) : missions.length === 0 ? (
               <GuidedEmptyState
-                className="mt-3 shrink-0"
+                className="mt-3"
                 icon={Flag}
                 title="No hay misiones abiertas"
                 description="Vuelve en unos minutos para ver nuevas oportunidades cerca de ti."
               />
             ) : (
-              <div className="mt-3 space-y-2 pb-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+              <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
                 {missions.map((mission) => (
-                    <button
-                      key={mission.id}
-                      type="button"
-                      onClick={() => setSelectedMission(mission)}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors',
-                        selectedMission?.id === mission.id
-                          ? 'border-info/60 bg-info-soft'
-                          : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06]',
-                      )}
-                    >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06]">
-                        <Flag className="h-4 w-4 text-info" />
+                  <button
+                    key={mission.id}
+                    type="button"
+                    onClick={() => setSelectedMission(mission)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors',
+                      selectedMission?.id === mission.id
+                        ? 'border-info/60 bg-info-soft'
+                        : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06]',
+                    )}
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.06]">
+                      <Flag className="h-4 w-4 text-info" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <NeedItemLabel name={mission.title} className="text-sm font-semibold text-ink" />
+                      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-subtle">
+                        <span>{mission.siteName}</span>
+                        <span>·</span>
+                        <span>{mission.zone}</span>
+                        <span>·</span>
+                        <span>{mission.distanceKm} km</span>
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <NeedItemLabel name={mission.title} className="text-sm font-semibold text-ink" />
-                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-subtle">
-                          <span>{mission.siteName}</span>
-                          <span>·</span>
-                          <span>{mission.zone}</span>
-                          <span>·</span>
-                          <span>{mission.distanceKm} km</span>
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-[11px] font-medium text-ink-subtle">
-                        {mission.priority === 'critical'
-                          ? 'Urgente'
-                          : mission.priority === 'high'
-                            ? 'Alta'
-                            : 'Activa'}
-                      </span>
-                    </button>
-                  ))}
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
           </section>
-
-          {selectedMission && (
-            <div className="mt-4 shrink-0 rounded-2xl border border-white/10 bg-base-900/95 p-4 text-sm text-ink lg:hidden">
-              <p className="font-semibold text-ink">{selectedMission.title}</p>
-              <p className="text-xs text-ink-subtle">
-                {selectedMission.siteName} · {selectedMission.distanceKm} km
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <EmergencyButton variant="glass" size="md" className="w-full">
-                  Ver detalles
-                </EmergencyButton>
-                <EmergencyButton variant="primary" size="md" className="w-full">
-                  Quiero ayudar
-                </EmergencyButton>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Escritorio: mapa en columna derecha, altura completa */}
-        <section className="hidden min-h-0 flex-col lg:flex">
+        <section className="flex min-h-0 flex-col">
           <SectionTitle className="shrink-0">Mapa de misiones</SectionTitle>
           <div className="map-container-wrapper mt-3 min-h-[400px] flex-1">
             <VolunteerMapCanvas
@@ -489,10 +663,12 @@ function VolunteerMapCanvas({
   missions,
   activeId,
   onSelect,
+  fullBleed = false,
 }: {
   missions: VolunteerMission[]
   activeId?: string | null
   onSelect: (mission: VolunteerMission) => void
+  fullBleed?: boolean
 }) {
   const mappableMissions = useMemo(() => filterMappableMissions(missions), [missions])
 
@@ -504,7 +680,12 @@ function VolunteerMapCanvas({
   }, [mappableMissions])
 
   return (
-    <div className="map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-base-800/30">
+    <div
+      className={cn(
+        'map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden bg-base-800/30',
+        !fullBleed && 'rounded-2xl border border-white/[0.06]',
+      )}
+    >
       <MapContainer
         className="faro-map !absolute inset-0 h-full w-full"
         center={center}
@@ -583,15 +764,16 @@ function FocusActiveMission({
   return null
 }
 
-function ViewToggle({
+function DesktopViewToggle({
   view,
   onChange,
 }: {
   view: 'map' | 'list'
   onChange: (next: 'map' | 'list') => void
 }) {
+  /** En desktop el mapa ya es columna fija; el toggle solo cambia el panel izquierdo. */
   const options = [
-    { id: 'map' as const, label: 'Mapa', icon: MapIcon },
+    { id: 'map' as const, label: 'Resumen', icon: MapIcon },
     { id: 'list' as const, label: 'Listado', icon: List },
   ]
   return (
@@ -611,6 +793,55 @@ function ViewToggle({
           {option.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+function MobileMapSearch({
+  query,
+  onQuery,
+  typeFilter,
+  onTypeFilter,
+  totalSites,
+}: {
+  query: string
+  onQuery: (value: string) => void
+  typeFilter: 'all' | 'hospital' | 'shelter' | 'supply_center'
+  onTypeFilter: (value: 'all' | 'hospital' | 'shelter' | 'supply_center') => void
+  totalSites: number
+}) {
+  const types: Array<{ id: typeof typeFilter; label: string }> = [
+    { id: 'all', label: 'Todos' },
+    { id: 'hospital', label: 'Hospital' },
+    { id: 'shelter', label: 'Refugio' },
+    { id: 'supply_center', label: 'Acopio' },
+  ]
+
+  return (
+    <div className="glass-strong space-y-2 rounded-2xl px-3 py-2.5 shadow-glass-sm ring-1 ring-white/10">
+      <input
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        placeholder="Buscar centro o zona…"
+        className="h-8 w-full rounded-lg border border-white/[0.08] bg-black/20 px-2.5 text-xs text-ink placeholder:text-ink-muted outline-none focus:border-info/40"
+      />
+      <div className="no-scrollbar -mx-0.5 flex gap-1 overflow-x-auto px-0.5">
+        {types.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onTypeFilter(t.id)}
+            className={
+              typeFilter === t.id
+                ? 'shrink-0 rounded-full border border-info/50 bg-info/15 px-2.5 py-1 text-[10px] font-medium text-info'
+                : 'shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] text-ink-muted'
+            }
+          >
+            {t.label}
+          </button>
+        ))}
+        <span className="shrink-0 self-center pl-1 text-[10px] text-ink-faint">{totalSites}</span>
+      </div>
     </div>
   )
 }
@@ -988,19 +1219,22 @@ function OperationsMap({
   onSelect,
   sites,
   className,
+  fullBleed = false,
 }: {
   selected: Site | null
   onSelect: (site: Site | null) => void
   sites: Site[]
   className?: string
+  fullBleed?: boolean
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.99 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
       className={cn(
-        'relative w-full overflow-hidden rounded-3xl shadow-glass ring-1 ring-inset ring-white/10',
+        'relative w-full overflow-hidden',
+        !fullBleed && 'rounded-3xl shadow-glass ring-1 ring-inset ring-white/10',
         selected && 'faro-map-host--panel-open',
         className,
       )}
@@ -1015,7 +1249,10 @@ function OperationsMap({
       <GlassCard
         strong
         inset={false}
-        className="absolute left-3 top-3 flex items-center gap-3 rounded-2xl px-3 py-2"
+        className={cn(
+          'absolute flex items-center gap-3 rounded-2xl px-3 py-2',
+          fullBleed ? 'bottom-28 left-3 lg:bottom-auto lg:left-3 lg:top-3' : 'left-3 top-3',
+        )}
       >
         {[
           { c: '#FF453A', l: 'Crítico' },
