@@ -3,6 +3,7 @@ import {
   Activity,
   Building2,
   ChevronDown,
+  ClipboardPlus,
   PackagePlus,
   PenLine,
   PlusCircle,
@@ -10,6 +11,7 @@ import {
   Shield,
   Truck,
   TruckIcon,
+  UserPlus,
 } from 'lucide-react'
 import { QuickAction } from '@/components/faro/quick-action'
 import { SectionTitle } from '@/components/faro/section-title'
@@ -26,6 +28,10 @@ export type ActionId =
   | 'register-arrival'
   | 'register-dispatch'
   | 'report'
+  | 'create-case'
+  | 'assign-resource'
+
+export type ActionsMode = 'citizen' | 'volunteer' | 'coordinator' | 'admin' | 'case_manager'
 
 interface ActionDef {
   id: ActionId | 'navigate'
@@ -45,7 +51,20 @@ const COORDINATOR_ACTIONS: ActionDef[] = [
 ]
 
 const CITIZEN_ACTIONS: ActionDef[] = [
-  { id: 'report', icon: PenLine, label: 'Reportar información', hint: 'Reporte ciudadano', accent: 'info' },
+  { id: 'report', icon: PenLine, label: 'Reportar emergencia', hint: 'Alerta ciudadana inmediata', accent: 'critical' },
+  { id: 'register-need', icon: PackagePlus, label: 'Registrar nueva necesidad', hint: 'Insumo o apoyo requerido', accent: 'warning' },
+]
+
+const VOLUNTEER_ACTIONS: ActionDef[] = [
+  { id: 'report', icon: PenLine, label: 'Reportar emergencia', hint: 'Alerta en tu zona', accent: 'critical' },
+  { id: 'navigate', icon: PackagePlus, label: 'Registrar nueva necesidad', hint: 'Ver y apoyar necesidades activas', accent: 'warning', tab: 'needs' },
+]
+
+const CASE_MANAGER_ACTIONS: ActionDef[] = [
+  { id: 'create-case', icon: ClipboardPlus, label: 'Crear caso manualmente', hint: 'Ingreso directo al pipeline', accent: 'info' },
+  { id: 'assign-resource', icon: UserPlus, label: 'Asignar recurso', hint: 'Abrir comando y asignar centro', accent: 'operational' },
+  { id: 'navigate', icon: Building2, label: 'Centro de comando', hint: 'Pipeline operativo', accent: 'info', tab: 'map' },
+  { id: 'navigate', icon: ClipboardPlus, label: 'Bandeja gestor', hint: 'Reportes y conversiones', accent: 'warning', tab: 'case-manager' },
 ]
 
 const ADMIN_ACTIONS: ActionDef[] = [
@@ -59,18 +78,47 @@ interface ActionsScreenProps {
   onClose: () => void
   onAction: (action: ActionId) => void
   onNavigate?: (tab: TabId) => void
-  mode: 'citizen' | 'coordinator' | 'admin'
+  mode: ActionsMode
   showSystem?: boolean
 }
 
-export function ActionsScreen({ onClose, onAction, onNavigate, mode, showSystem = true }: ActionsScreenProps) {
+const MODE_TITLE: Record<ActionsMode, string> = {
+  coordinator: '¿Qué vas a actualizar?',
+  admin: 'Acciones de administración',
+  case_manager: 'Acción operativa',
+  volunteer: 'Acción rápida',
+  citizen: '¿Qué necesitas hacer?',
+}
+
+const MODE_SUBTITLE: Record<ActionsMode, string> = {
+  coordinator: 'Operaciones en vivo',
+  admin: 'Control de red',
+  case_manager: 'Centro de comando',
+  volunteer: 'Apoyo en campo',
+  citizen: 'Acceso rápido',
+}
+
+function actionsForMode(mode: ActionsMode, showSystem: boolean): ActionDef[] {
+  if (mode === 'coordinator') return COORDINATOR_ACTIONS
+  if (mode === 'admin') return ADMIN_ACTIONS.filter((a) => showSystem || a.tab !== 'system')
+  if (mode === 'case_manager') return CASE_MANAGER_ACTIONS
+  if (mode === 'volunteer') return VOLUNTEER_ACTIONS
+  return CITIZEN_ACTIONS
+}
+
+export function ActionsScreen({
+  onClose,
+  onAction,
+  onNavigate,
+  mode,
+  showSystem = true,
+}: ActionsScreenProps) {
   const { latestActivity } = useFaro()
-  const actions =
-    mode === 'coordinator'
-      ? COORDINATOR_ACTIONS
-      : mode === 'admin'
-        ? ADMIN_ACTIONS.filter((a) => showSystem || a.tab !== 'system')
-        : CITIZEN_ACTIONS
+  const actions = actionsForMode(mode, showSystem)
+  const gridCols =
+    mode === 'coordinator' || mode === 'case_manager' || mode === 'admin'
+      ? 'grid-cols-2'
+      : 'grid-cols-1'
 
   const handleClick = (action: ActionDef) => {
     if (action.id === 'navigate' && action.tab) {
@@ -94,19 +142,15 @@ export function ActionsScreen({ onClose, onAction, onNavigate, mode, showSystem 
           <ChevronDown className="h-6 w-6" />
         </EmergencyButton>
         <div className="w-full px-1 pb-2">
-          <p className="text-sm text-ink-muted">Operaciones en vivo</p>
+          <p className="text-sm text-ink-muted">{MODE_SUBTITLE[mode]}</p>
           <h1 className="mt-0.5 text-[26px] font-semibold leading-tight tracking-tight text-ink">
-            {mode === 'coordinator'
-              ? '¿Qué vas a actualizar?'
-              : mode === 'admin'
-                ? 'Acciones de administración'
-                : '¿Qué quieres reportar?'}
+            {MODE_TITLE[mode]}
           </h1>
         </div>
       </div>
 
       <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-32">
-        <div className={mode === 'coordinator' ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1 gap-2.5'}>
+        <div className={`grid gap-2.5 ${gridCols}`}>
           {actions.map((a, i) => (
             <QuickAction
               key={`${a.id}-${a.tab ?? i}`}
@@ -120,18 +164,22 @@ export function ActionsScreen({ onClose, onAction, onNavigate, mode, showSystem 
           ))}
         </div>
 
-        <section className="mt-7 space-y-3">
-          <SectionTitle>Actividad reciente</SectionTitle>
-          <div>
-            {latestActivity.length ? (
-              latestActivity.map((e, i) => (
-                <TimelineItem key={e.id} event={e} index={i} last={i === latestActivity.length - 1} />
-              ))
-            ) : (
-              <p className="text-sm text-ink-subtle">Sin actividad aún. Registra el primer sitio para empezar.</p>
-            )}
-          </div>
-        </section>
+        {(mode === 'coordinator' || mode === 'admin') && (
+          <section className="mt-7 space-y-3">
+            <SectionTitle>Actividad reciente</SectionTitle>
+            <div>
+              {latestActivity.length ? (
+                latestActivity.map((e, i) => (
+                  <TimelineItem key={e.id} event={e} index={i} last={i === latestActivity.length - 1} />
+                ))
+              ) : (
+                <p className="text-sm text-ink-subtle">
+                  Sin actividad aún. Registra el primer sitio para empezar.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
       </div>
     </motion.div>
   )

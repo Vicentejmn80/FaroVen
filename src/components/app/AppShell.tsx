@@ -52,6 +52,7 @@ type FlowId =
   | 'auth'
   | 'coordinator-request'
   | 'role-request'
+  | 'create-case'
   | 'legal-terms'
   | 'legal-privacy'
   | 'legal-notice'
@@ -84,6 +85,9 @@ const SystemAdminScreen = lazyWithRetry(() =>
 const AuthScreen = lazyWithRetry(() => import('@/screens/auth-screen').then((m) => ({ default: m.AuthScreen })))
 const CoordinatorRequestScreen = lazyWithRetry(() =>
   import('@/screens/coordinator-request-screen').then((m) => ({ default: m.CoordinatorRequestScreen })),
+)
+const CreateCaseForm = lazyWithRetry(() =>
+  import('@/components/case-manager/create-case-form').then((m) => ({ default: m.CreateCaseForm })),
 )
 const CaseManagerWorkspace = lazyWithRetry(() =>
   import('@/components/case-manager/case-manager-workspace').then((m) => ({ default: m.CaseManagerWorkspace })),
@@ -155,7 +159,36 @@ export function AppShell() {
   const tabs = useMemo(() => getNavigationTabs(role, user?.email), [role, user?.email])
   const mobileTabs = useMemo(() => getMobilePrimaryTabs(role, user?.email), [role, user?.email])
   const isCoordinatorOps = canAccessCoordinatorPanel
+  const isCaseManager = role === FARO_ROLES.CASE_MANAGER
   const defaultTab: TabId = isVolunteer ? 'needs' : 'map'
+
+  const actionsMode = isCoordinatorOps
+    ? ('coordinator' as const)
+    : canAccessAdminPanel
+      ? ('admin' as const)
+      : isCaseManager
+        ? ('case_manager' as const)
+        : isVolunteer
+          ? ('volunteer' as const)
+          : ('citizen' as const)
+
+  const fabContext = useMemo(() => {
+    const view = normalizeTabId(activeView) ?? activeView
+    if (view === 'profile' || view === 'admin' || view === 'system') {
+      return { show: false as const, label: '' }
+    }
+    if (actionsMode === 'citizen' && view === 'reports') {
+      return { show: false as const, label: '' }
+    }
+    const labels = {
+      coordinator: 'Acciones de coordinación',
+      admin: 'Menú de administración',
+      case_manager: 'Acción operativa',
+      volunteer: 'Acción rápida',
+      citizen: 'Acción rápida',
+    } as const
+    return { show: true as const, label: labels[actionsMode] }
+  }, [activeView, actionsMode])
 
   /** Navegación manual: una sola vista activa; limpia detalle al salir del mapa. */
   const setActiveView = useCallback((next: TabId) => {
@@ -280,22 +313,37 @@ export function AppShell() {
   }, [openFlow])
 
   const openMenu = () => {
-    if (isCoordinatorOps || canAccessAdminPanel) {
-      openFlow('menu')
-      return
-    }
-    closeFlow()
-    // Voluntario: FAB → necesidades; ciudadano → reportar
-    setActiveView(isVolunteer ? 'needs' : 'reports')
+    if (!fabContext.show) return
+    openFlow('menu')
   }
 
   const handleAction = (action: ActionId) => {
     if (action === 'report') {
       closeFlow()
-      setActiveView(isVolunteer ? 'needs' : 'reports')
+      setActiveView('reports')
       return
     }
-    if (action === 'register-need') setNeedPresetSiteId(undefined)
+    if (action === 'create-case') {
+      openFlow('create-case')
+      return
+    }
+    if (action === 'assign-resource') {
+      closeFlow()
+      setActiveView('map')
+      showToast('Selecciona un caso en el pipeline para asignar un centro o recurso.', 'info')
+      return
+    }
+    if (action === 'register-need') {
+      if (isCoordinatorOps) {
+        setNeedPresetSiteId(undefined)
+        openFlow('register-need')
+        return
+      }
+      closeFlow()
+      setActiveView('reports')
+      showToast('Describe la necesidad en tu reporte. El gestor la convertirá en caso.', 'info')
+      return
+    }
     openFlow(action)
   }
 
@@ -400,17 +448,9 @@ export function AppShell() {
         <DesktopNavigation
           active={activeView}
           onChange={setActiveView}
-          onCreate={openMenu}
+          onCreate={fabContext.show ? openMenu : undefined}
           tabs={tabs}
-          createLabel={
-            isCoordinatorOps
-              ? 'Acciones de coordinación'
-              : canAccessAdminPanel
-                ? 'Menú de administración'
-                : isVolunteer
-                  ? 'Ofrecer ayuda'
-                  : 'Enviar reporte'
-          }
+          createLabel={fabContext.label || 'Acciones'}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -515,17 +555,9 @@ export function AppShell() {
           <BottomNavigation
             active={activeView}
             onChange={setActiveView}
-            onCreate={openMenu}
+            onCreate={fabContext.show ? openMenu : undefined}
             mobileTabs={mobileTabs}
-            createLabel={
-              isCoordinatorOps
-                ? 'Acciones de coordinación'
-                : canAccessAdminPanel
-                  ? 'Menú de administración'
-                  : isVolunteer
-                    ? 'Ofrecer ayuda'
-                    : 'Enviar reporte'
-            }
+            createLabel={fabContext.label || 'Acciones'}
           />
         </div>
 
@@ -533,14 +565,17 @@ export function AppShell() {
           {flow === 'menu' && (
             <ActionsScreen
               key="menu"
-              mode={
-                isCoordinatorOps ? 'coordinator' : canAccessAdminPanel ? 'admin' : 'citizen'
-              }
+              mode={actionsMode}
               onClose={closeFlow}
               onAction={handleAction}
               onNavigate={setActiveView}
               showSystem={canAccessSystemPanel}
             />
+          )}
+          {flow === 'create-case' && isCaseManager && (
+            <Suspense key="create-case" fallback={<ScreenLoading />}>
+              <CreateCaseForm onClose={closeFlow} />
+            </Suspense>
           )}
           {flow === 'auth' && (
             <div key="auth" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">

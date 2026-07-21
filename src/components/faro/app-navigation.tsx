@@ -168,9 +168,11 @@ export function BottomNavigation({
           whileTap={{ scale: 0.92 }}
           transition={{ duration: 0.15, ease: [0.32, 0.72, 0, 1] }}
           aria-label={createLabel}
+          aria-hidden={!onCreate}
+          tabIndex={onCreate ? 0 : -1}
           className={cn(
             'mx-2 flex h-14 w-14 shrink-0 -translate-y-3 items-center justify-center rounded-full bg-info text-white shadow-focal ring-4 ring-base-900',
-            !onCreate && 'opacity-40',
+            !onCreate && 'pointer-events-none invisible',
           )}
         >
           <Plus className="h-6 w-6" strokeWidth={2.25} />
@@ -214,19 +216,19 @@ export function DesktopNavigation({ active, onChange, onCreate, tabs, createLabe
         ))}
       </nav>
 
-      <motion.button
-        type="button"
-        onClick={onCreate}
-        disabled={!onCreate}
-        whileTap={{ scale: 0.94 }}
-        aria-label={createLabel}
-        className={cn(
-          'mt-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-info text-white shadow-focal',
-          !onCreate && 'opacity-40',
-        )}
-      >
-        <Plus className="h-5 w-5" strokeWidth={2.25} />
-      </motion.button>
+      {onCreate ? (
+        <motion.button
+          type="button"
+          onClick={onCreate}
+          whileTap={{ scale: 0.94 }}
+          aria-label={createLabel}
+          className="mt-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-info text-white shadow-focal"
+        >
+          <Plus className="h-5 w-5" strokeWidth={2.25} />
+        </motion.button>
+      ) : (
+        <div className="mt-4 h-12 w-12" aria-hidden />
+      )}
     </aside>
   )
 }

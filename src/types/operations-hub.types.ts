@@ -53,6 +53,9 @@ export type OpsSummaryMetric =
   | 'avg_response'
   | 'centers_saturated'
   | 'centers_available'
+  | 'resolved'
+  | 'active'
+  | 'unassigned'
 
 export interface OpsSummaryItem {
   id: OpsSummaryMetric

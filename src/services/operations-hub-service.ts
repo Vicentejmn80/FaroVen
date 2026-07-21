@@ -244,21 +244,59 @@ export function computeCaseSummary(
   cases: CaseDomain[],
   centers: Center[],
 ): OpsSummaryItem[] {
-  const critical = cases.filter((c) => (c.priority === 'critical' || c.priority === 'high') && c.pipelineStage !== 'resolved' && c.pipelineStage !== 'archived').length
-  const newCases = cases.filter((c) => c.pipelineStage === 'nuevo' || c.pipelineStage === 'pending_review').length
-  const inReview = cases.filter((c) => c.pipelineStage === 'validating' || c.pipelineStage === 'awaiting_info').length
-  const inAttention = cases.filter((c) => c.pipelineStage === 'assigned' || c.pipelineStage === 'accepted' || c.pipelineStage === 'in_attention').length
-  const resolved = cases.filter((c) => c.pipelineStage === 'resolved').length
-  const saturated = centers.filter((c) => c.status === 'critical').length
-  const available = centers.filter((c) => c.status === 'operational').length
+  const active = cases.filter(
+    (c) => c.pipelineStage !== 'resolved' && c.pipelineStage !== 'archived',
+  )
+  const critical = active.filter(
+    (c) => c.priority === 'critical' || c.priority === 'high',
+  ).length
+  const unassigned = active.filter(
+    (c) =>
+      !c.assignedCenterId &&
+      !c.assignedTo &&
+      c.pipelineStage !== 'in_attention',
+  ).length
+
+  const responseSamples = cases
+    .map((c) => {
+      if (c.firstResponseAt) {
+        return c.firstResponseAt.getTime() - c.createdAt.getTime()
+      }
+      if (c.assignedAt) {
+        return c.assignedAt.getTime() - c.createdAt.getTime()
+      }
+      return null
+    })
+    .filter((v): v is number => v !== null && v >= 0)
+
+  const avgMs =
+    responseSamples.length > 0
+      ? responseSamples.reduce((a, b) => a + b, 0) / responseSamples.length
+      : 0
+  const avgMin = Math.round(avgMs / 60000)
+  const avgLabel =
+    avgMin <= 0
+      ? '—'
+      : avgMin < 60
+        ? `${avgMin} min`
+        : `${(avgMin / 60).toFixed(1)} h`
+
+  void centers
 
   return [
-    { id: 'critical', label: 'Críticos', value: critical, tone: 'critical' },
-    { id: 'new', label: 'Nuevos', value: newCases, tone: 'info' },
-    { id: 'in_review', label: 'En revisión', value: inReview, tone: 'warning' },
-    { id: 'in_attention', label: 'En atención', value: inAttention, tone: 'operational' },
-    { id: 'resolved', label: 'Resueltos', value: resolved, tone: 'operational' },
-    { id: 'centers_saturated', label: 'Centros saturados', value: saturated, tone: 'critical' },
-    { id: 'centers_available', label: 'Centros disponibles', value: available, tone: 'operational' },
-  ] as OpsSummaryItem[]
+    { id: 'active', label: 'Casos activos', value: active.length, tone: 'info' },
+    {
+      id: 'critical',
+      label: 'Casos críticos',
+      value: critical,
+      tone: critical > 0 ? 'critical' : 'neutral',
+    },
+    { id: 'avg_response', label: 'Tiempo resp. promedio', value: avgLabel, tone: 'neutral' },
+    {
+      id: 'unassigned',
+      label: 'Sin asignar',
+      value: unassigned,
+      tone: unassigned > 0 ? 'warning' : 'operational',
+    },
+  ]
 }

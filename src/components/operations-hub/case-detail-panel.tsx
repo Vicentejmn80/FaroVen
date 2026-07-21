@@ -18,6 +18,8 @@ interface CaseDetailPanelProps {
   onAssign?: (centerId: string) => void
   isTransitioning?: boolean
   className?: string
+  /** Compactación visual para drawer / glass denser. */
+  dense?: boolean
 }
 
 export function CaseDetailPanel({
@@ -28,6 +30,7 @@ export function CaseDetailPanel({
   onAssign,
   isTransitioning,
   className,
+  dense = false,
 }: CaseDetailPanelProps) {
   if (!caseItem) {
     return (
@@ -44,8 +47,8 @@ export function CaseDetailPanel({
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      <ScrollArea className="flex-1 px-4 py-4">
-        <div className="space-y-4">
+      <ScrollArea className={cn('flex-1', dense ? 'px-3 py-3' : 'px-4 py-4')}>
+        <div className={cn(dense ? 'space-y-3' : 'space-y-4')}>
           {/* Header */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -54,10 +57,13 @@ export function CaseDetailPanel({
               </p>
               <CaseStatusBadge stage={caseItem.pipelineStage} />
             </div>
-            <h2 className="text-lg font-semibold leading-tight text-ink">{caseItem.title}</h2>
+            <h2 className={cn('font-semibold leading-tight text-ink', dense ? 'text-base' : 'text-lg')}>
+              {caseItem.title}
+            </h2>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
               <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> {caseItem.location.address ?? caseItem.location.zone ?? caseItem.zone}
+                <MapPin className="h-3 w-3" />{' '}
+                {caseItem.location.address ?? caseItem.location.zone ?? caseItem.zone}
               </span>
               <span className="flex items-center gap-1">
                 <User className="h-3 w-3" /> {caseItem.reporterInfo.name ?? 'Ciudadano'}
@@ -69,7 +75,7 @@ export function CaseDetailPanel({
           </div>
 
           {/* Priority + SLA */}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <PriorityBar priority={caseItem.priority} />
             {caseItem.slaDeadline && (
               <SlaIndicator
@@ -79,6 +85,25 @@ export function CaseDetailPanel({
               />
             )}
           </div>
+
+          {/* Ciudadano / contacto */}
+          <GlassCard className="!rounded-xl !border-white/[0.08] !p-3 !shadow-none !bg-white/[0.03]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Ciudadano
+            </p>
+            <p className="mt-1 text-sm font-medium text-ink">
+              {caseItem.reporterInfo.name ?? 'Sin nombre registrado'}
+            </p>
+            {caseItem.reporterInfo.phone && (
+              <p className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
+                <Phone className="h-3.5 w-3.5" />
+                {caseItem.reporterInfo.phone}
+              </p>
+            )}
+            {caseItem.reporterInfo.relationship && (
+              <p className="mt-0.5 text-xs text-ink-muted">{caseItem.reporterInfo.relationship}</p>
+            )}
+          </GlassCard>
 
           {/* Asignación */}
           {caseItem.assignedTo && (
@@ -96,18 +121,10 @@ export function CaseDetailPanel({
           {/* Description */}
           {caseItem.description && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-ink-muted">Descripción</p>
-              <p className="text-sm leading-relaxed text-ink">{caseItem.description}</p>
-            </div>
-          )}
-
-          {/* Contacto */}
-          {caseItem.reporterInfo.phone && (
-            <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-              <span className="flex items-center gap-2 text-sm text-ink">
-                <Phone className="h-4 w-4 text-ink-muted" />
-                {caseItem.reporterInfo.phone}
-              </span>
+              <p className="text-xs font-medium text-ink-muted">Necesidades / descripción</p>
+              <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-sm leading-relaxed text-ink">
+                {caseItem.description}
+              </p>
             </div>
           )}
 
@@ -122,7 +139,7 @@ export function CaseDetailPanel({
           {/* Acciones operativas */}
           {availableActions.length > 0 && onTransition && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-ink-muted">Acciones</p>
+              <p className="text-xs font-medium text-ink-muted">Acciones directas</p>
               <div className="flex flex-wrap gap-1.5">
                 {availableActions.map((action) => (
                   <EmergencyButton
@@ -142,7 +159,7 @@ export function CaseDetailPanel({
           {/* Centros sugeridos */}
           {suggestions.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-ink-muted">Centros sugeridos</p>
+              <p className="text-xs font-medium text-ink-muted">Asignar recurso / centro</p>
               <div className="space-y-1">
                 {suggestions.slice(0, 3).map((s) => (
                   <SuggestedCenterCard
