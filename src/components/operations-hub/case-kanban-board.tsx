@@ -118,7 +118,7 @@ export function CaseKanbanBoard({ cases, selectedId, onSelect, className }: Case
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar en el pipeline…"
+            placeholder="Buscar en el flujo…"
             className="h-8 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] pl-8 pr-2 text-xs text-ink placeholder:text-ink-muted outline-none focus:border-info/40"
           />
         </div>

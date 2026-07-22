@@ -172,6 +172,55 @@ export const INTEREST_STATUS_LABELS: Record<string, string> = {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Map-lite mission statuses (voluntario)                            */
+/* ------------------------------------------------------------------ */
+export const MAP_MISSION_STATUS_LABELS: Record<string, string> = {
+  open: 'Buscando apoyo',
+  assigned: 'Ayuda asignada',
+  in_progress: 'Ayuda en proceso',
+  completed: 'Finalizada',
+}
+
+export const NEED_STATUS_LABELS: Record<string, string> = {
+  active: 'Necesidad activa',
+  pending_closure: 'Esperando cierre',
+  resolved: 'Resuelta',
+  reopened: 'Reabierta',
+  pending: 'En verificación',
+  reserved: 'Ayuda reservada',
+  in_progress: 'Ayuda en proceso',
+  completed: 'Cobertura completa',
+  expired: 'Expirada',
+  closed: 'Cerrada',
+  archived: 'Archivada',
+}
+
+export const SKILL_LABELS: Record<string, string> = {
+  paramedic: 'Paramédico',
+  nurse: 'Enfermería',
+  doctor: 'Médico',
+  driver: 'Conductor',
+  logistics: 'Logística',
+  psychologist: 'Apoyo psicológico',
+  construction: 'Construcción',
+  cooking: 'Alimentación',
+  general: 'Apoyo general',
+}
+
+export const CONFIDENCE_BAND_LABELS: Record<string, string> = {
+  high: 'Confianza alta',
+  medium: 'Confianza media',
+  low: 'Confianza baja',
+}
+
+/** Convierte score 0-100 a banda natural. */
+export function confidenceBand(score: number): string {
+  if (score >= 80) return CONFIDENCE_BAND_LABELS.high
+  if (score >= 50) return CONFIDENCE_BAND_LABELS.medium
+  return CONFIDENCE_BAND_LABELS.low
+}
+
+/* ------------------------------------------------------------------ */
 /*  Public Needs workflow labels (ÉPICA 08)                            */
 /* ------------------------------------------------------------------ */
 export const PUBLIC_NEED_STATUS_LABELS: Record<string, string> = {

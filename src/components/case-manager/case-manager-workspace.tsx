@@ -12,7 +12,7 @@ import { AvailabilityCalendarCard } from '@/components/availability/availability
 import { cn } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
-import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS } from '@/lib/labels'
+import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
 import { useAuth } from '@/store/auth-context'
 import { useOperationalPublicNeeds, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
 
@@ -200,7 +200,7 @@ export function CaseManagerWorkspace() {
                   <div className="flex items-center gap-2 text-xs text-ink-subtle">
                     <span>{c.zone}</span>
                     <span>&middot;</span>
-                    <span>Etapa: {label({}, c.pipelineStage, c.pipelineStage)}</span>
+                    <span>Etapa: {label(PIPELINE_LABELS, c.pipelineStage)}</span>
                   </div>
                 </GlassCard>
               ))
@@ -247,7 +247,7 @@ export function CaseManagerWorkspace() {
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink-muted">
                       <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
-                      <span>{need.status}</span>
+                      <span>{label(PUBLIC_NEED_STATUS_LABELS, need.status, label(NEED_STATUS_LABELS, need.status))}</span>
                     </div>
                     <div className="mt-2 flex gap-2">
                       <EmergencyButton
@@ -300,7 +300,7 @@ export function CaseManagerWorkspace() {
                   <GlassCard key={m.id} className="p-3">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className="text-sm font-medium text-ink">{m.title}</p>
-                      <span className="text-xs text-ink-muted">{label({}, m.status, m.status)}</span>
+                      <span className="text-xs text-ink-muted">{label(MISSION_STAGE_LABELS, m.status)}</span>
                     </div>
                     <p className="text-xs text-ink-subtle line-clamp-1">{m.description}</p>
                   </GlassCard>

@@ -324,7 +324,7 @@ export function AppShell() {
     if (action === 'assign-resource') {
       closeFlow()
       setActiveView('map')
-      showToast('Selecciona un caso en el pipeline para asignar un centro o recurso.', 'info')
+      showToast('Selecciona un caso en el flujo operativo para asignar un centro o recurso.', 'info')
       return
     }
     if (action === 'register-need') {

@@ -7,6 +7,7 @@ import { PORTAL_CATEGORIES, PORTAL_DEMO_NEEDS, PORTAL_DEMO_SITES, type PortalCat
 import { SITE_META } from '@/lib/status-config'
 import type { SiteType, Center } from '@/lib/types'
 import { cn, isValidCoord, openExternalNavigation } from '@/lib/utils'
+import { label, PRIORITY_SHORT_LABELS } from '@/lib/labels'
 import { useFaro } from '@/store/faro-context'
 import type { Site } from '@/lib/types'
 import { generatePublicSummary, type PublicSummaryMessage } from '@/services/public-summary-engine'
@@ -88,7 +89,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
         },
         {
           id: 'need-priority',
-          text: `Prioridad ${selectedPublicNeed.priority}.`,
+          text: `Prioridad ${label(PRIORITY_SHORT_LABELS, selectedPublicNeed.priority)}.`,
           tone: 'neutral',
         },
         {

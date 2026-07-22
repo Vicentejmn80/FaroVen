@@ -16,6 +16,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { useExecutiveDashboard } from '@/hooks/useExecutiveDashboard'
 import { useOperationalTimeline } from '@/hooks/useOperationalTimeline'
 import { cn, timeAgo } from '@/lib/utils'
+import { confidenceBand } from '@/lib/labels'
 import type { ExecutiveDashboardData } from '@/domain/operational-intelligence.types'
 
 type Tab = 'overview' | 'risk' | 'recommendations' | 'timeline' | 'heatmap' | 'trends'
@@ -73,7 +74,7 @@ export function ExecutiveDashboard() {
             {t === 'overview' && 'Resumen'}
             {t === 'risk' && 'Riesgo'}
             {t === 'recommendations' && 'Recomendaciones'}
-            {t === 'timeline' && 'Timeline'}
+            {t === 'timeline' && 'Línea de tiempo'}
             {t === 'heatmap' && 'Mapa de calor'}
             {t === 'trends' && 'Tendencias'}
           </button>
@@ -108,7 +109,7 @@ function RiskBadge({ score, level }: { score: number; level: string }) {
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold', colors[level])}>
       <Shield className="h-3.5 w-3.5" />
-      {labels[level]} ({score})
+      {labels[level] ?? 'Riesgo'} · {confidenceBand(score)}
     </span>
   )
 }
@@ -134,7 +135,7 @@ function OverviewTab({ data, timeline }: { data: ExecutiveDashboardData; timelin
         <MetricCard icon={Activity} label="Casos activos" value={m.totalCases} sub={`${m.criticalCases} críticos`} tone={m.criticalCases > 0 ? 'text-critical' : undefined} />
         <MetricCard icon={Users} label="Voluntarios" value={m.activeVolunteers} sub={`${m.availableVolunteers} disponibles`} tone={m.availableVolunteers === 0 ? 'text-critical' : undefined} />
         <MetricCard icon={Shield} label="Misiones activas" value={m.activeMissions} sub={`${m.criticalMissions} críticas`} tone={m.criticalMissions > 0 ? 'text-critical' : undefined} />
-        <MetricCard icon={AlertTriangle} label="SLAs incumplidos" value={m.breachedSlaCount} tone={m.breachedSlaCount > 0 ? 'text-critical' : undefined} />
+        <MetricCard icon={AlertTriangle} label="Plazos vencidos" value={m.breachedSlaCount} tone={m.breachedSlaCount > 0 ? 'text-critical' : undefined} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -220,7 +221,7 @@ function RiskTab({ data }: { data: ExecutiveDashboardData }) {
               <span className={cn(
                 f.status === 'critical' ? 'text-critical' : f.status === 'elevated' ? 'text-warning' : 'text-ink-muted',
               )}>
-                {f.contribution} pts · {f.score}/100
+                Aporte alto · {confidenceBand(f.score)}
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -269,7 +270,7 @@ function RecommendationsTab({ data }: { data: ExecutiveDashboardData }) {
             )}>
               {r.priority === 'critical' ? 'Crítica' : r.priority === 'high' ? 'Alta' : r.priority === 'medium' ? 'Media' : 'Baja'}
             </span>
-            <span className="text-[10px] text-ink-faint">{r.confidence}% confianza</span>
+            <span className="text-[10px] text-ink-faint">{confidenceBand(r.confidence)}</span>
           </div>
           <h4 className="text-sm font-semibold text-ink">{r.action}</h4>
           <p className="text-xs text-ink-subtle">{r.description}</p>
@@ -347,7 +348,7 @@ function HeatMapTab({ data }: { data: ExecutiveDashboardData }) {
               'rounded-full px-2 py-0.5 text-[10px] font-semibold',
               zone.classification === 'critical' ? 'bg-critical/20 text-critical' : zone.classification === 'hot' ? 'bg-warning/20 text-warning' : zone.classification === 'no_coverage' ? 'bg-white/10 text-ink-faint' : 'bg-operational/20 text-operational',
             )}>
-              {zone.classification === 'critical' ? 'Crítica' : zone.classification === 'hot' ? 'Caliente' : zone.classification === 'no_coverage' ? 'Sin cobertura' : 'Estable'}
+              {zone.classification === 'critical' ? 'Crítica' : zone.classification === 'hot' ? 'Alta presión' : zone.classification === 'no_coverage' ? 'Sin cobertura' : 'Estable'}
             </span>
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs">

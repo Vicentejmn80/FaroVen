@@ -44,7 +44,7 @@ export function MapCanvas({
   )
 
   return (
-    <div className={cn('relative h-full w-full overflow-hidden touch-pan-y', className)}>
+    <div className={cn('relative h-full w-full overflow-hidden touch-none', className)}>
       <MapContainer
         className="faro-map h-full w-full"
         center={center}

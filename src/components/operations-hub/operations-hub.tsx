@@ -126,7 +126,7 @@ export function OperationsHub() {
             active={workspace === 'pipeline'}
             onClick={() => setWorkspace('pipeline')}
             icon={LayoutGrid}
-            label="Pipeline"
+            label="Flujo"
           />
           <WorkspaceToggle
             active={workspace === 'map'}

@@ -147,6 +147,13 @@
 /* React Leaflet / OSM skin — minimal, calm, mobile-first */
 .faro-map {
   background: #dfe8f5;
+  touch-action: none;
+}
+
+.faro-map .leaflet-container {
+  touch-action: none;
+  width: 100%;
+  height: 100%;
 }
 
 .faro-map .leaflet-control-container {

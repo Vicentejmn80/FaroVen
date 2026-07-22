@@ -58,7 +58,7 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
   }
 
   return (
-    <FlowSheet title="Crear caso manualmente" subtitle="Registro directo en el pipeline operativo" onClose={onClose}>
+    <FlowSheet title="Crear caso manualmente" subtitle="Registro directo en el flujo operativo" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 px-1 pb-8">
         <FormField label="Título del caso">
           <input

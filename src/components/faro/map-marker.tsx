@@ -15,13 +15,22 @@ const MISSION_COLORS: Record<MissionPriority, string> = {
  * Crea un ícono HTML para Leaflet manteniendo el mismo lenguaje visual
  * de FARO (glass + semántica por estado + realce activo).
  */
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 export function createSiteMarkerIcon(site: Site, active = false, dimmed = false): DivIcon {
   const s = STATUS[site.status]
   const meta = SITE_META[site.type]
+  const title = escapeAttr(`${meta.label}: ${site.name}`)
 
   const html = `
     <div class="faro-site-marker ${active ? 'is-active' : ''} ${dimmed ? 'is-dimmed' : ''} ${site.status === 'critical' ? 'is-critical' : ''}" style="--marker-color:${s.hex}">
-      <div class="faro-site-marker__bubble" title="${meta.label}: ${site.name}">
+      <div class="faro-site-marker__bubble" title="${title}">
         <span class="faro-site-marker__emoji" aria-hidden="true">${meta.emoji}</span>
       </div>
       <span class="faro-site-marker__tip"></span>
@@ -58,9 +67,10 @@ export function createMissionMarkerIcon(
   dimmed = false,
 ): DivIcon {
   const color = MISSION_COLORS[mission.priority] ?? MISSION_COLORS.medium
+  const title = escapeAttr(mission.title)
   const html = `
     <div class="faro-mission-marker ${active ? 'is-active' : ''} ${dimmed ? 'is-dimmed' : ''}" style="--marker-color:${color}">
-      <div class="faro-mission-marker__bubble" title="${mission.title}">
+      <div class="faro-mission-marker__bubble" title="${title}">
         <span class="faro-mission-marker__dot" aria-hidden="true"></span>
       </div>
       <span class="faro-mission-marker__tip"></span>

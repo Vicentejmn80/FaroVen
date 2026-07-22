@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { MapPin } from 'lucide-react'
 import { MapCanvas } from '@/components/faro/map-canvas'
 import { cn } from '@/lib/utils'
+import { label, PIPELINE_LABELS } from '@/lib/labels'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import type { Site } from '@/lib/types'
 
@@ -28,7 +29,7 @@ function caseToSite(caseItem: CaseDomain): Site | null {
         : caseItem.priority === 'medium'
           ? 'warning'
           : 'info',
-    statusLabel: caseItem.pipelineStage,
+    statusLabel: label(PIPELINE_LABELS, caseItem.pipelineStage),
     zone: caseItem.location.zone || caseItem.zone,
     lat,
     lng,

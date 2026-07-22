@@ -28,6 +28,8 @@ import type { Need } from '@/domain/models'
 import type { Site } from '@/lib/types'
 import { useFaro } from '@/store/faro-context'
 import { useAuth, usePermissions } from '@/store/auth-context'
+import { MissionDetailSheet } from '@/components/volunteer/mission-detail-sheet'
+import { INCIDENT_TYPE_LABELS, label, PRIORITY_SHORT_LABELS } from '@/lib/labels'
 import { useMapData, type Mission } from '@/hooks/useMapData'
 
 interface SituationScreenProps {
@@ -317,6 +319,15 @@ type VolunteerMission = Mission & {
   siteName: string
   zone: string
   distanceKm: string
+  description?: string
+  affectedPeople?: number | null
+  expiresAt?: Date | null
+  required?: number | null
+  available?: number | null
+}
+
+function humanizeMissionTitle(raw: string): string {
+  return label(INCIDENT_TYPE_LABELS, raw.trim().toLowerCase(), raw)
 }
 
 function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[] {
@@ -326,14 +337,7 @@ function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[
 
   for (const [index, need] of activeNeeds.entries()) {
     const site = siteById.get(need.centerId)
-    if (!site) {
-      console.warn('[FARO Mapa Voluntario] Misión omitida por falta de coordenadas', {
-        needId: need.id,
-        title: need.type,
-        reason: 'centro_no_encontrado',
-      })
-      continue
-    }
+    if (!site) continue
 
     const location = resolveMissionCoordinates(site.lat, site.lng, {
       needId: need.id,
@@ -345,7 +349,7 @@ function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[
     const distanceKm = (1.2 + (index % 6) * 0.6 + (need.id.charCodeAt(0) % 7) * 0.12).toFixed(1)
     results.push({
       id: need.id,
-      title: need.type,
+      title: humanizeMissionTitle(need.type),
       requiredSkill: null,
       status: 'open',
       priority: need.priority === 'critical' ? 'critical' : need.priority === 'high' ? 'high' : 'medium',
@@ -354,6 +358,11 @@ function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[
       siteName: site.name,
       zone: site.zone,
       distanceKm,
+      description: `Se necesita ${humanizeMissionTitle(need.type).toLowerCase()} en ${site.name}.`,
+      affectedPeople: null,
+      expiresAt: need.expiresAt ?? null,
+      required: need.required,
+      available: need.available,
     })
   }
 
@@ -380,6 +389,7 @@ function normalizeVolunteerMissions(
     const distanceKm = (1.4 + (index % 4) * 0.8).toFixed(1)
     results.push({
       ...mission,
+      title: humanizeMissionTitle(mission.title),
       location,
       siteName: fallbackSite?.name ?? 'Zona cercana',
       zone: fallbackSite?.zone ?? 'Zona',
@@ -403,11 +413,21 @@ function VolunteerMapScreen({
   const [distanceFilter, setDistanceFilter] = useState<'5' | '10' | '25'>('10')
   const [showList, setShowList] = useState(false)
 
+  const visibleMissions = useMemo(() => {
+    const maxKm = Number.parseFloat(distanceFilter)
+    return missions.filter((m) => {
+      const km = Number.parseFloat(m.distanceKm)
+      return Number.isFinite(km) ? km <= maxKm : true
+    })
+  }, [missions, distanceFilter])
+
   useEffect(() => {
-    if (selectedMission && !missions.some((m) => m.id === selectedMission.id)) {
+    if (selectedMission && !visibleMissions.some((m) => m.id === selectedMission.id)) {
       setSelectedMission(null)
     }
-  }, [missions, selectedMission])
+  }, [visibleMissions, selectedMission])
+
+  const closeDetail = () => setSelectedMission(null)
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
@@ -419,7 +439,7 @@ function VolunteerMapScreen({
         )}
       >
         <VolunteerMapCanvas
-          missions={missions}
+          missions={visibleMissions}
           activeId={selectedMission?.id}
           onSelect={setSelectedMission}
           fullBleed
@@ -427,7 +447,7 @@ function VolunteerMapScreen({
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-2">
           <div className="pointer-events-auto flex items-start gap-2">
             <div className="glass-strong min-w-0 flex-1 space-y-2 rounded-2xl px-3 py-2.5 shadow-glass-sm ring-1 ring-white/10">
-              <p className="text-[11px] font-semibold text-ink">Misiones cercanas</p>
+              <p className="text-[11px] font-semibold text-ink">Necesidades cercanas</p>
               <div className="flex flex-wrap gap-1.5">
                 {(['5', '10', '25'] as const).map((radius) => (
                   <button
@@ -455,35 +475,13 @@ function VolunteerMapScreen({
             </button>
           </div>
         </div>
-
-        {selectedMission && (
-          <motion.div
-            initial={{ y: 24, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-            className="glass-strong absolute inset-x-3 bottom-28 z-20 rounded-2xl border border-white/10 p-4 shadow-2xl"
-          >
-            <p className="font-semibold text-ink">{selectedMission.title}</p>
-            <p className="mt-0.5 text-xs text-ink-subtle">
-              {selectedMission.siteName} · {selectedMission.distanceKm} km
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <EmergencyButton variant="glass" size="md" className="w-full" onClick={() => setShowList(true)}>
-                Ver detalles
-              </EmergencyButton>
-              <EmergencyButton variant="primary" size="md" className="w-full">
-                Quiero ayudar
-              </EmergencyButton>
-            </div>
-          </motion.div>
-        )}
       </div>
 
       {/* Móvil: listado */}
       {showList && (
         <div className="absolute inset-0 z-30 flex flex-col bg-base-900 lg:hidden">
           <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3">
-            <h2 className="text-sm font-semibold text-ink">Misiones abiertas</h2>
+            <h2 className="text-sm font-semibold text-ink">Necesidades abiertas</h2>
             <button
               type="button"
               onClick={() => setShowList(false)}
@@ -496,18 +494,20 @@ function VolunteerMapScreen({
           </div>
           <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-nav pt-3">
             {isLoading ? (
-              <GlassCard inset={false} className="p-4 text-sm text-ink-subtle">
-                Cargando misiones disponibles…
-              </GlassCard>
-            ) : missions.length === 0 ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <GlassCard key={i} inset={false} className="h-16 animate-pulse" />
+                ))}
+              </div>
+            ) : visibleMissions.length === 0 ? (
               <GuidedEmptyState
                 icon={Flag}
-                title="No hay misiones abiertas"
-                description="Vuelve en unos minutos para ver nuevas oportunidades cerca de ti."
+                title="No hay necesidades abiertas cerca"
+                description="Amplía el radio o vuelve en unos minutos para ver nuevas oportunidades."
               />
             ) : (
               <div className="space-y-2">
-                {missions.map((mission) => (
+                {visibleMissions.map((mission) => (
                   <button
                     key={mission.id}
                     type="button"
@@ -528,7 +528,8 @@ function VolunteerMapScreen({
                     <span className="min-w-0 flex-1">
                       <NeedItemLabel name={mission.title} className="text-sm font-semibold text-ink" />
                       <span className="mt-0.5 block text-xs text-ink-subtle">
-                        {mission.siteName} · {mission.distanceKm} km
+                        {mission.siteName} · {mission.distanceKm} km ·{' '}
+                        {label(PRIORITY_SHORT_LABELS, mission.priority)}
                       </span>
                     </span>
                   </button>
@@ -546,9 +547,9 @@ function VolunteerMapScreen({
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
               {greeting()} · Red de Apoyo
             </p>
-            <h1 className="text-[26px] font-semibold tracking-tight text-ink">Misiones activas</h1>
+            <h1 className="text-[26px] font-semibold tracking-tight text-ink">Radar de necesidades</h1>
             <p className="text-sm text-ink-subtle">
-              Ve solo lo accionable cerca de ti. Elige una misión y empieza a ayudar.
+              Elige una necesidad cercana, revisa el detalle y ofrece tu ayuda.
             </p>
           </header>
 
@@ -575,7 +576,7 @@ function VolunteerMapScreen({
                 ))}
               </div>
               <p className="text-xs text-ink-faint">
-                {missions.length} misión(es) · radio {distanceFilter} km
+                {visibleMissions.length} necesidad(es) · radio {distanceFilter} km
               </p>
             </GlassCard>
           </section>
@@ -587,21 +588,23 @@ function VolunteerMapScreen({
           )}
 
           <section className="mt-4 flex min-h-0 flex-1 flex-col">
-            <SectionTitle className="shrink-0">Misiones abiertas</SectionTitle>
+            <SectionTitle className="shrink-0">Abiertas ahora</SectionTitle>
             {isLoading ? (
-              <GlassCard inset={false} className="mt-3 p-4 text-sm text-ink-subtle">
-                Cargando misiones disponibles…
-              </GlassCard>
-            ) : missions.length === 0 ? (
+              <div className="mt-3 space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <GlassCard key={i} inset={false} className="h-16 animate-pulse" />
+                ))}
+              </div>
+            ) : visibleMissions.length === 0 ? (
               <GuidedEmptyState
                 className="mt-3"
                 icon={Flag}
-                title="No hay misiones abiertas"
-                description="Vuelve en unos minutos para ver nuevas oportunidades cerca de ti."
+                title="No hay necesidades abiertas"
+                description="Amplía el radio o vuelve en unos minutos."
               />
             ) : (
               <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
-                {missions.map((mission) => (
+                {visibleMissions.map((mission) => (
                   <button
                     key={mission.id}
                     type="button"
@@ -633,16 +636,41 @@ function VolunteerMapScreen({
           </section>
         </div>
 
-        <section className="flex min-h-0 flex-col">
-          <SectionTitle className="shrink-0">Mapa de misiones</SectionTitle>
-          <div className="map-container-wrapper mt-3 min-h-[400px] flex-1">
-            <VolunteerMapCanvas
-              missions={missions}
-              activeId={selectedMission?.id}
-              onSelect={setSelectedMission}
-            />
+        <section className="flex min-h-0 flex-col gap-3">
+          <div className="map-container-wrapper min-h-0 flex-[1.1]">
+            <SectionTitle className="mb-3 shrink-0">Mapa operativo</SectionTitle>
+            <div className="h-[calc(100%-1.75rem)] min-h-[280px] overflow-hidden rounded-2xl border border-white/[0.06]">
+              <VolunteerMapCanvas
+                missions={visibleMissions}
+                activeId={selectedMission?.id}
+                onSelect={setSelectedMission}
+              />
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/[0.06]">
+            {selectedMission ? (
+              <MissionDetailSheet
+                mission={selectedMission}
+                onClose={closeDetail}
+                variant="panel"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-6 text-center">
+                <div>
+                  <p className="text-sm text-ink-subtle">Selecciona una necesidad</p>
+                  <p className="mt-1 text-xs text-ink-faint">
+                    El detalle operacional aparecerá aquí
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
+      </div>
+
+      {/* Móvil: bottom sheet de detalle */}
+      <div className="lg:hidden">
+        <MissionDetailSheet mission={selectedMission} onClose={closeDetail} variant="sheet" />
       </div>
     </div>
   )
@@ -676,7 +704,7 @@ function VolunteerMapCanvas({
   return (
     <div
       className={cn(
-        'map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden bg-base-800/30 touch-pan-y',
+        'map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden bg-base-800/30 touch-none',
         !fullBleed && 'rounded-2xl border border-white/[0.06]',
       )}
     >

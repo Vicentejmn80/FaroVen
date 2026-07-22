@@ -167,7 +167,7 @@ function MissionCard({ mission }: { mission: Mission }) {
             onClick={() => startMatching.mutate({ missionId: mission.id })}
             disabled={startMatching.isPending}
           >
-            Iniciar matching
+            Iniciar búsqueda de voluntarios
           </EmergencyButton>
         )}
         {canVerify && (

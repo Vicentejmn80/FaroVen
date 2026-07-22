@@ -1,7 +1,9 @@
+import { Sparkles, AlertTriangle, Building2, ShieldCheck } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useReportAnalysis } from '@/hooks/useCaseManager'
 import { cn } from '@/lib/utils'
+import { SITE_TYPE_LABELS, confidenceBand, label, REPORT_STATUS_LABELS } from '@/lib/labels'
 
 interface ReportDetailPanelProps {
   reportId: string | null
@@ -9,14 +11,24 @@ interface ReportDetailPanelProps {
   onConvertToCase: (reportId: string) => void
 }
 
-function centerTypeLabel(type: string): string {
-  const labels: Record<string, string> = { hospital: 'Hospital', shelter: 'Refugio', supply_center: 'Centro de suministro' }
-  return labels[type] ?? type
+function centerTypeColor(type: string): string {
+  const colors: Record<string, string> = {
+    hospital: 'bg-blue-500/20 text-blue-400',
+    shelter: 'bg-amber-500/20 text-amber-400',
+    supply_center: 'bg-emerald-500/20 text-emerald-400',
+  }
+  return colors[type] ?? 'bg-white/10 text-ink-subtle'
 }
 
-function centerTypeColor(type: string): string {
-  const colors: Record<string, string> = { hospital: 'bg-blue-500/20 text-blue-400', shelter: 'bg-amber-500/20 text-amber-400', supply_center: 'bg-emerald-500/20 text-emerald-400' }
-  return colors[type] ?? 'bg-white/10 text-ink-subtle'
+function sourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    citizen: 'Ciudadano',
+    volunteer: 'Voluntario',
+    coordinator: 'Coordinador',
+    system: 'Sistema',
+    web: 'Portal web',
+  }
+  return map[source] ?? 'Reporte ciudadano'
 }
 
 export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: ReportDetailPanelProps) {
@@ -26,63 +38,120 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-        <h2 className="text-sm font-semibold text-ink">Detalle del reporte</h2>
-        <button onClick={onClose} className="text-xs text-ink-subtle hover:text-ink">Cerrar</button>
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+        <h2 className="text-sm font-semibold text-ink">Detalle de la solicitud</h2>
+        <button type="button" onClick={onClose} className="text-xs text-ink-subtle hover:text-ink">
+          Cerrar
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-3 p-4">
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {isLoading ? (
           <div className="space-y-3">
-            {[1, 2, 3].map((i) => <GlassCard key={i} className="h-20 animate-pulse" />)}
+            {[1, 2, 3].map((i) => (
+              <GlassCard key={i} className="h-20 animate-pulse" />
+            ))}
           </div>
         ) : !analysis ? (
-          <GlassCard className="p-4 text-sm text-ink-subtle text-center">Reporte no encontrado</GlassCard>
+          <GlassCard className="p-4 text-center text-sm text-ink-subtle">
+            No encontramos esta solicitud
+          </GlassCard>
         ) : (
           <>
             <GlassCard className="p-3">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div>
-                  <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', analysis.report.status === 'verified' ? 'bg-operational/20 text-operational' : analysis.report.status === 'discarded' ? 'bg-critical/20 text-critical' : 'bg-warning/20 text-warning')}>
-                    {analysis.report.status === 'verified' ? 'Verificado' : analysis.report.status === 'discarded' ? 'Descartado' : 'Nuevo'}
-                  </span>
-                </div>
-                <span className="text-xs text-ink-muted">{analysis.report.createdAt.toLocaleDateString()}</span>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <span
+                  className={cn(
+                    'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                    analysis.report.status === 'verified'
+                      ? 'bg-operational/20 text-operational'
+                      : analysis.report.status === 'discarded'
+                        ? 'bg-critical/20 text-critical'
+                        : 'bg-warning/20 text-warning',
+                  )}
+                >
+                  {label(REPORT_STATUS_LABELS, analysis.report.status, 'Solicitud pendiente')}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {analysis.report.createdAt.toLocaleDateString('es-VE')}
+                </span>
               </div>
-              <p className="text-sm text-ink mb-2">{analysis.report.description}</p>
+              <p className="mb-2 text-sm text-ink">{analysis.report.description}</p>
               <p className="text-xs text-ink-subtle">Ubicación: {analysis.report.location.address}</p>
-              <p className="text-xs text-ink-subtle">Fuente: {analysis.report.source}</p>
+              <p className="text-xs text-ink-subtle">Origen: {sourceLabel(analysis.report.source)}</p>
             </GlassCard>
 
             {analysis.duplicates.length > 0 && (
-              <GlassCard className="p-3 border-warning/20">
-                <p className="text-xs font-semibold text-warning mb-2">Posibles duplicados ({analysis.duplicates.length})</p>
+              <GlassCard className="border-warning/25 bg-warning/[0.04] p-3.5">
+                <div className="mb-2.5 flex items-start gap-2">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                  <div>
+                    <p className="text-sm font-semibold text-ink">
+                      Información similar cerca de esta zona
+                    </p>
+                    <p className="mt-0.5 text-xs text-ink-muted">
+                      La inteligencia operacional detectó {analysis.duplicates.length} reporte
+                      {analysis.duplicates.length === 1 ? '' : 's'} relacionado
+                      {analysis.duplicates.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {analysis.duplicates.slice(0, 5).map((dup) => (
-                    <div key={dup.id} className="flex items-start justify-between gap-2 text-xs">
-                      <p className="text-ink-subtle line-clamp-1 flex-1">{dup.description}</p>
-                      <span className="shrink-0 text-ink-muted">{dup.score}%</span>
+                    <div
+                      key={dup.id}
+                      className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2"
+                    >
+                      <p className="line-clamp-2 text-xs text-ink-subtle">{dup.description}</p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">
+                          {confidenceBand(dup.score)}
+                        </span>
+                        <span className="text-[10px] text-ink-faint">Posible coincidencia</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </GlassCard>
             )}
 
-            <GlassCard className="p-3">
-              <p className="text-xs font-semibold text-ink mb-2">Centros cercanos</p>
+            <GlassCard className="p-3.5">
+              <div className="mb-2.5 flex items-center gap-2">
+                <Building2 className="h-3.5 w-3.5 text-info" />
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-subtle">
+                  Centros recomendados
+                </p>
+              </div>
               <div className="space-y-2">
-                {analysis.nearbyCenters.length === 0 && <p className="text-xs text-ink-muted">No se encontraron centros cercanos</p>}
-                {analysis.nearbyCenters.map((center) => (
+                {analysis.nearbyCenters.length === 0 && (
+                  <p className="text-xs text-ink-muted">No hay centros cercanos disponibles</p>
+                )}
+                {analysis.nearbyCenters.map((center, idx) => (
                   <div key={center.id} className="flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-ink truncate">{center.name}</p>
-                      <div className="flex items-center gap-2 text-xs text-ink-muted">
-                        <span className={cn('inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium', centerTypeColor(center.type))}>
-                          {centerTypeLabel(center.type)}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {idx === 0 && (
+                          <span className="rounded-full bg-info/15 px-1.5 py-0.5 text-[9px] font-semibold text-info">
+                            Recomendado
+                          </span>
+                        )}
+                        <p className="truncate text-xs font-medium text-ink">{center.name}</p>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-muted">
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium',
+                            centerTypeColor(center.type),
+                          )}
+                        >
+                          {label(SITE_TYPE_LABELS, center.type, center.type)}
                         </span>
                         <span>{center.distance} km</span>
                         {center.capacity !== undefined && (
-                          <span>Ocupación: {Math.round(((center.currentOcc ?? 0) / Math.max(center.capacity, 1)) * 100)}%</span>
+                          <span>
+                            Ocupación:{' '}
+                            {Math.round(((center.currentOcc ?? 0) / Math.max(center.capacity, 1)) * 100)}%
+                          </span>
                         )}
                       </div>
                     </div>
@@ -91,23 +160,44 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
               </div>
             </GlassCard>
 
-            <GlassCard className="p-3">
-              <p className="text-xs font-semibold text-ink mb-2">Contexto operacional</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-white/[0.04] rounded-lg p-2">
-                  <p className="text-ink-muted">Reportes similares</p>
-                  <p className="text-lg font-semibold text-ink">{analysis.duplicates.length}</p>
+            <GlassCard className="p-3.5">
+              <div className="mb-2.5 flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-operational" />
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-subtle">
+                  Contexto operacional
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-white/[0.04] p-2.5">
+                  <p className="text-[10px] uppercase tracking-wide text-ink-muted">Reportes relacionados</p>
+                  <p className="mt-1 text-lg font-semibold text-ink">{analysis.duplicates.length}</p>
                 </div>
-                <div className="bg-white/[0.04] rounded-lg p-2">
-                  <p className="text-ink-muted">Centros cercanos</p>
-                  <p className="text-lg font-semibold text-ink">{analysis.nearbyCenters.length}</p>
+                <div className="rounded-xl bg-white/[0.04] p-2.5">
+                  <p className="text-[10px] uppercase tracking-wide text-ink-muted">Centros cercanos</p>
+                  <p className="mt-1 text-lg font-semibold text-ink">{analysis.nearbyCenters.length}</p>
+                </div>
+                <div className="col-span-2 rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                    <p className="text-xs text-ink-muted">
+                      Nivel de prioridad sugerido:{' '}
+                      <strong className="text-ink">
+                        {analysis.duplicates.length >= 3 ? 'Alta' : analysis.duplicates.length >= 1 ? 'Media' : 'Normal'}
+                      </strong>
+                    </p>
+                  </div>
                 </div>
               </div>
             </GlassCard>
 
             <div className="flex gap-2 pt-2">
-              <EmergencyButton variant="primary" size="sm" className="flex-1" onClick={() => onConvertToCase(analysis.report.id)}>
-                Convertir a caso
+              <EmergencyButton
+                variant="primary"
+                size="sm"
+                className="flex-1"
+                onClick={() => onConvertToCase(analysis.report.id)}
+              >
+                Abrir caso operativo
               </EmergencyButton>
             </div>
           </>
