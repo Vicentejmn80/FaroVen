@@ -1,4 +1,5 @@
 import { Bell, CircleHelp } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ConnectivityIndicator } from './live-indicator'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { FaroIcon } from '@/components/brand/faro-icon'
@@ -60,11 +61,24 @@ export function EmergencyHeader({
           className="relative"
         >
           <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          {notifications > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-critical px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-base-900">
-              {notifications > 9 ? '9+' : notifications}
-            </span>
-          )}
+          <AnimatePresence>
+            {notifications > 0 && (
+              <motion.span
+                key="badge"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="absolute -right-0.5 -top-0.5 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-critical px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-base-900"
+              >
+                {notifications > 9 ? '9+' : notifications}
+                <motion.span
+                  className="absolute inset-0 rounded-full bg-critical"
+                  animate={{ opacity: [0.4, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                />
+              </motion.span>
+            )}
+          </AnimatePresence>
         </EmergencyButton>
       </div>
     </header>

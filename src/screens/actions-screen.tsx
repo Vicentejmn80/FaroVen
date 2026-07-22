@@ -149,7 +149,7 @@ export function ActionsScreen({
         </div>
       </div>
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-32">
+      <div className="no-scrollbar flex-1 overflow-y-auto px-5 pb-nav">
         <div className={`grid gap-2.5 ${gridCols}`}>
           {actions.map((a, i) => (
             <QuickAction

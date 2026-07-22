@@ -147,8 +147,9 @@ export function BottomNavigation({
   const activeView = normalizeTabId(active) ?? active
 
   return (
-    <nav className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 w-full pb-safe lg:hidden">
-      <div className="glass-strong pointer-events-auto mx-4 mb-3 flex items-center justify-between rounded-full px-3 py-2 shadow-glass">
+    <nav className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 w-full lg:hidden"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="glass-strong pointer-events-auto flex items-center justify-between border-t border-white/[0.06] px-2 py-2 pb-safe shadow-glass">
         <div className="flex flex-1 justify-around">
           {left.map((t) => (
             <NavButton

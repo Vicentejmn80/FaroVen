@@ -28,4 +28,10 @@ export const FARO_QUERY_KEYS = {
   simulationState: 'simulation-state',
   roleRequests: 'role-requests',
   reportAnalysis: 'report-analysis',
+  publicNeeds: 'public-needs',
+  needTimeline: 'public-need-timeline',
+  needVerifications: 'public-need-verifications',
+  successCases: 'success-cases',
+  availability: 'availability',
+  coverage: 'coverage',
 } as const

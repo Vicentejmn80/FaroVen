@@ -1,5 +1,7 @@
 import type { RoleRequestStatus } from '@/lib/roles'
 
+export type { RoleRequestStatus }
+
 export const REQUESTED_ROLES = ['coordinator', 'case_manager'] as const
 export type RequestedRole = (typeof REQUESTED_ROLES)[number]
 

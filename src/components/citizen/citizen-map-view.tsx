@@ -9,8 +9,10 @@ import type { SiteType, Center } from '@/lib/types'
 import { cn, isValidCoord, openExternalNavigation } from '@/lib/utils'
 import { useFaro } from '@/store/faro-context'
 import type { Site } from '@/lib/types'
-import { generatePublicSummary } from '@/services/public-summary-engine'
+import { generatePublicSummary, type PublicSummaryMessage } from '@/services/public-summary-engine'
 import { CenterPublicSummary } from '@/components/citizen/center-public-summary'
+import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
+import type { PublicNeed } from '@/domain/public-need.types'
 
 /** Superficie sólida sobre el mapa — legible, blur mínimo */
 const MAP_SEARCH_SURFACE =
@@ -27,14 +29,20 @@ interface CitizenMapViewProps {
 
 export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProps) {
   const { sites: liveSites, state } = useFaro()
+  const { data: publicNeeds = [] } = usePublicNeeds()
+  const reserveCoverage = useCreateCoverageReservation()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<PortalCategoryId | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showList, setShowList] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
+  const [helpNotice, setHelpNotice] = useState<string | null>(null)
+
+  const publicNeedSites = useMemo(() => publicNeeds.map(publicNeedToSite), [publicNeeds])
+  const usingPublicNeeds = publicNeedSites.length > 0
 
   const usingDemo = liveSites.length === 0
-  const sites: Site[] = usingDemo ? PORTAL_DEMO_SITES : liveSites
+  const sites: Site[] = usingPublicNeeds ? publicNeedSites : (usingDemo ? PORTAL_DEMO_SITES : liveSites)
 
   const filteredSites = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -57,13 +65,42 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
   }, [filteredSites, selectedId])
 
   const nearestAddress = useMemo(() => {
+    if (usingPublicNeeds) return null
     if (!nearest) return null
     const center = state.centers.find((c) => c.id === nearest.id)
     return center?.location.address ?? null
-  }, [nearest, state.centers])
+  }, [nearest, state.centers, usingPublicNeeds])
+
+  const selectedPublicNeed = useMemo(() => {
+    if (!usingPublicNeeds || !selectedId) return null
+    return publicNeeds.find((item) => item.id === selectedId) ?? null
+  }, [publicNeeds, selectedId, usingPublicNeeds])
 
   const summaryMessages = useMemo(() => {
     if (!nearest) return []
+    if (usingPublicNeeds && selectedPublicNeed) {
+      const hoursLeft = Math.max(0, Math.round((selectedPublicNeed.expiresAt.getTime() - Date.now()) / 3600000))
+      const messages: PublicSummaryMessage[] = [
+        {
+          id: 'need-remaining',
+          text: `Falta ${selectedPublicNeed.remainingQuantity} ${selectedPublicNeed.unit} por cubrir.`,
+          tone: selectedPublicNeed.priority === 'critical' ? 'critical' : 'warning',
+        },
+        {
+          id: 'need-priority',
+          text: `Prioridad ${selectedPublicNeed.priority}.`,
+          tone: 'neutral',
+        },
+        {
+          id: 'need-expiry',
+          text: hoursLeft > 0
+            ? `Tiempo restante estimado: ${hoursLeft}h.`
+            : 'La necesidad requiere renovación o cierre por el gestor.',
+          tone: hoursLeft > 0 ? 'neutral' : 'critical',
+        },
+      ]
+      return messages
+    }
     const center: Center | undefined = state.centers.find((c) => c.id === nearest.id)
     const needs = usingDemo
       ? (PORTAL_DEMO_NEEDS[nearest.id] ?? []).map((name) => ({ name }))
@@ -75,7 +112,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
       capacity: center?.capacity,
       schedule: center?.schedule,
     })
-  }, [nearest, usingDemo, state.centers])
+  }, [nearest, selectedPublicNeed, usingDemo, state.centers, usingPublicNeeds])
 
   const canNavigate = Boolean(nearest && isValidCoord(nearest.lat, nearest.lng))
 
@@ -96,6 +133,23 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
   const handleClosePanel = () => {
     setSelectedId(null)
     setShowList(false)
+    setHelpNotice(null)
+  }
+
+  const handleHelpIntent = async () => {
+    if (!selectedPublicNeed) return
+    setHelpNotice(null)
+    try {
+      await reserveCoverage.mutateAsync({
+        publicNeedId: selectedPublicNeed.id,
+        collaboratorType: 'citizen',
+        collaboratorName: 'Colaborador web',
+        quantity: Math.min(Math.max(selectedPublicNeed.remainingQuantity, 1), 10),
+      })
+      setHelpNotice('Tu intención de ayuda fue registrada. Un gestor confirmará el apoyo.')
+    } catch {
+      setHelpNotice('No se pudo registrar tu ayuda ahora. Intenta de nuevo en unos segundos.')
+    }
   }
 
   const showCategory = category !== 'soup_kitchen'
@@ -112,7 +166,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar hospital, refugio o centro..."
+            placeholder={usingPublicNeeds ? 'Buscar necesidad o zona...' : 'Buscar hospital, refugio o centro...'}
             className={cn(
               'h-[52px] w-full rounded-2xl py-3.5 pl-12 text-[15px] leading-snug text-ink',
               'placeholder:text-ink-muted outline-none transition-[border-color,box-shadow]',
@@ -252,13 +306,13 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-                    Centro más cercano
+                    {usingPublicNeeds ? 'Necesidad activa' : 'Centro más cercano'}
                   </p>
                   <h2 className="mt-1 truncate text-lg font-semibold leading-tight text-ink">{nearest.name}</h2>
                   <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-muted">
                     <MapPin className="h-3.5 w-3.5 shrink-0 text-ink-subtle" />
                     <span className="truncate">
-                      {nearest.zone} · {SITE_META[nearest.type].label}
+                      {nearest.zone} · {usingPublicNeeds ? 'Necesidad pública' : SITE_META[nearest.type].label}
                     </span>
                   </p>
                 </div>
@@ -285,14 +339,22 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
                   variant="glass"
                   size="sm"
                   className="flex-1"
-                  onClick={onReport}
+                  onClick={usingPublicNeeds ? handleHelpIntent : onReport}
+                  disabled={usingPublicNeeds && reserveCoverage.isPending}
                 >
-                  Reportar situación
+                  {usingPublicNeeds
+                    ? (reserveCoverage.isPending ? 'Registrando…' : 'Quiero ayudar')
+                    : 'Reportar situación'}
                 </EmergencyButton>
               </div>
+              {usingPublicNeeds && helpNotice && (
+                <p className="mt-2 text-center text-[11px] text-operational">{helpNotice}</p>
+              )}
               {!canNavigate && (
                 <p className="mt-2 text-center text-[11px] text-warning">
-                  Este centro aún no tiene coordenadas registradas.
+                  {usingPublicNeeds
+                    ? 'Esta necesidad aún no tiene coordenadas públicas verificadas.'
+                    : 'Este centro aún no tiene coordenadas registradas.'}
                 </p>
               )}
             </div>
@@ -346,4 +408,41 @@ function StatusPill({ status }: { status: Site['status'] }) {
       {open ? 'Abierto' : saturated ? 'Saturado' : 'Atención'}
     </span>
   )
+}
+
+function publicNeedToSite(need: PublicNeed): Site {
+  const lat = Number(need.locationPublic.lat)
+  const lng = Number(need.locationPublic.lng)
+  const priorityToStatus: Record<PublicNeed['priority'], Site['status']> = {
+    critical: 'critical',
+    high: 'warning',
+    medium: 'operational',
+    low: 'info',
+  }
+
+  const required = Math.max(need.requiredQuantity, 1)
+  const coverage = Math.max(0, Math.min(100, Math.round((need.coveredQuantity / required) * 100)))
+
+  return {
+    id: need.id,
+    name: need.title,
+    type: 'organization',
+    status: priorityToStatus[need.priority] ?? 'info',
+    statusLabel: need.status,
+    zone: need.locationPublic.zone ?? 'Zona por confirmar',
+    lat: Number.isFinite(lat) ? lat : 0,
+    lng: Number.isFinite(lng) ? lng : 0,
+    mapX: 0,
+    mapY: 0,
+    needs: [
+      {
+        id: need.id,
+        item: need.summary || need.category,
+        priority: need.priority,
+        coverage,
+      },
+    ],
+    updatedAt: need.updatedAt,
+    verified: need.verificationStatus === 'approved_entry' || need.verificationStatus === 'approved_exit',
+  }
 }

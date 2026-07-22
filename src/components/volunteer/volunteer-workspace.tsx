@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { useVolunteerProfile, useVolunteerMissions, useUpdateVolunteerAvailability } from '@/hooks/useVolunteerProfile'
 import { useMissions } from '@/hooks/useMissions'
 import { useRespondMission, useUpdateMissionAssignment } from '@/hooks/useMissionMutations'
+import { useRealtimeSync } from '@/supabase/use-realtime-sync'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { VolunteerMissionCard } from './volunteer-mission-card'
 import { GlassCard } from '@/components/ui/glass-card'
 import { VOLUNTEER_AVAILABILITY, VOLUNTEER_AVAILABILITY_LABELS, VOLUNTEER_AVAILABILITY_TONES, VERIFICATION_LEVEL_LABELS, SKILL_LABELS } from '@/domain/volunteer.types'
@@ -260,6 +262,18 @@ const TABS: Array<{ id: VolunteerTab; label: string }> = [
 
 export function VolunteerWorkspace() {
   const [tab, setTab] = useState<VolunteerTab>('available')
+
+  useRealtimeSync({
+    channelName: 'volunteer-missions',
+    tables: ['missions', 'mission_assignments', 'mission_events'],
+    invalidateKeys: [
+      FARO_QUERY_KEYS.missions,
+      FARO_QUERY_KEYS.mission,
+      FARO_QUERY_KEYS.missionAssignments,
+      FARO_QUERY_KEYS.missionEvents,
+      FARO_QUERY_KEYS.volunteerMissions,
+    ],
+  })
 
   return (
     <div className="flex h-full flex-col">

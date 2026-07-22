@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useRealtimeSync } from '@/supabase/use-realtime-sync'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import {
   PackagePlus,
   ClipboardList,
@@ -75,6 +77,18 @@ export function CoordinatorWorkspace({
   const [internalModule, setInternalModule] = useState<CoordinatorModuleId>('dashboard')
   const module = activeModule ?? internalModule
   const pendingClosures = coordinatorNeeds.filter((n) => n.status === 'pending_closure').length
+
+  useRealtimeSync({
+    channelName: 'coordinator-live',
+    tables: ['missions', 'mission_assignments', 'reports', 'needs', 'cases'],
+    invalidateKeys: [
+      FARO_QUERY_KEYS.missions,
+      FARO_QUERY_KEYS.missionAssignments,
+      FARO_QUERY_KEYS.reports,
+      FARO_QUERY_KEYS.needs,
+      FARO_QUERY_KEYS.cases,
+    ],
+  })
 
   const setModule = (next: CoordinatorModuleId) => {
     if (onModuleChange) onModuleChange(next)

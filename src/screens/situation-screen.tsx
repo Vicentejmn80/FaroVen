@@ -175,7 +175,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
             </div>
             <MobileViewToggle view={viewMode} onChange={setViewMode} />
           </div>
-          <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 pt-3">
+          <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-nav pt-3">
             <QuickAnswerBar
               query={query}
               onQuery={setQuery}
@@ -493,7 +493,7 @@ function VolunteerMapScreen({
               Mapa
             </button>
           </div>
-          <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 pt-3">
+          <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-nav pt-3">
             {isLoading ? (
               <GlassCard inset={false} className="p-4 text-sm text-ink-subtle">
                 Cargando misiones disponibles…

@@ -1,27 +1,79 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useReports } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases } from '@/hooks/useCases'
 import { useRoleRequests } from '@/hooks/useRoleRequests'
+import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
+import { EmergencyButton } from '@/components/ui/emergency-button'
 import { ReportDetailPanel } from '@/components/case-manager/report-detail-panel'
-import { ConvertReportWizard } from '@/components/case-manager/convert-report-wizard'
 import { RoleRequestAdminPanel } from '@/components/role-request/role-request-admin-panel'
+import { AvailabilityCalendarCard } from '@/components/availability/availability-calendar-card'
 import { cn } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
+import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS } from '@/lib/labels'
+import { useAuth } from '@/store/auth-context'
+import { useOperationalPublicNeeds, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
 
-type ManagerTab = 'inbox' | 'cases' | 'missions' | 'solicitudes'
+type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'solicitudes'
+
+function InterestsPanel() {
+  const { data: interests, isLoading } = useVolunteerInterests()
+  const pending = useMemo(() => interests?.filter((i) => i.status === 'pending') ?? [], [interests])
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2].map((i) => <GlassCard key={i} className="h-14 animate-pulse" />)}
+      </div>
+    )
+  }
+
+  if (pending.length === 0) {
+    return <GlassCard className="p-4 text-center text-sm text-ink-subtle">{OP_LABELS.noData}</GlassCard>
+  }
+
+  return (
+    <div className="space-y-2">
+      {pending.map((interest) => (
+        <GlassCard key={interest.volunteerId} className="p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium text-ink">{interest.volunteerName}</p>
+              <p className="text-xs text-ink-subtle mt-0.5">{interest.message ?? 'Quiere ayudar'}</p>
+              <span className="mt-1 inline-flex items-center rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning">
+                {label(INTEREST_STATUS_LABELS, interest.status)}
+              </span>
+            </div>
+            <div className="flex gap-1.5">
+              <EmergencyButton variant="glass" size="sm">Contactar</EmergencyButton>
+              <EmergencyButton variant="glass" size="sm" className="text-operational">Aceptar</EmergencyButton>
+            </div>
+          </div>
+        </GlassCard>
+      ))}
+    </div>
+  )
+}
 
 export function CaseManagerWorkspace() {
   const [tab, setTab] = useState<ManagerTab>('inbox')
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
-  const [showWizard, setShowWizard] = useState<string | null>(null)
+  const { user } = useAuth()
+  const { data: publicNeeds = [], isLoading: publicNeedsLoading } = useOperationalPublicNeeds()
+  const verifyPublicNeed = useVerifyPublicNeedEntry()
 
   useRealtimeSync({
     channelName: 'cm-reports',
-    tables: ['reports', 'cases', 'case_events'],
-    invalidateKeys: [FARO_QUERY_KEYS.reports, FARO_QUERY_KEYS.cases],
+    tables: ['reports', 'cases', 'case_events', 'missions', 'public_needs', 'coverage_reservations', 'success_cases'],
+    invalidateKeys: [
+      FARO_QUERY_KEYS.reports,
+      FARO_QUERY_KEYS.cases,
+      FARO_QUERY_KEYS.missions,
+      FARO_QUERY_KEYS.publicNeeds,
+      FARO_QUERY_KEYS.successCases,
+    ],
   })
 
   const { data: reports, isLoading: reportsLoading } = useReports()
@@ -32,9 +84,18 @@ export function CaseManagerWorkspace() {
   const pendingRequests = useMemo(() => requests?.filter((r) => r.status === 'pending' || r.status === 'under_review') ?? [], [requests])
   const pendingReports = useMemo(() => reports?.filter((r) => r.status === 'new') ?? [], [reports])
   const activeCases = useMemo(() => allCases?.filter((c) => c.pipelineStage !== 'archived') ?? [], [allCases])
+  const pendingPublicNeeds = useMemo(
+    () => publicNeeds.filter((n) => n.verificationStatus === 'pending_entry' || n.status === 'pending'),
+    [publicNeeds],
+  )
+
+  const selectReport = useCallback((id: string) => {
+    setSelectedReportId((prev) => prev === id ? null : id)
+  }, [])
 
   const tabs: Array<{ id: ManagerTab; label: string; badge?: number }> = [
     { id: 'inbox', label: 'Bandeja', badge: pendingReports.length },
+    { id: 'public-needs', label: 'Necesidades', badge: pendingPublicNeeds.length },
     { id: 'cases', label: 'Casos', badge: activeCases.length },
     { id: 'missions', label: 'Misiones' },
     { id: 'solicitudes', label: 'Solicitudes', badge: pendingRequests.length },
@@ -52,7 +113,7 @@ export function CaseManagerWorkspace() {
       <div className="px-4 pb-2">
         <div className="flex gap-2 overflow-x-auto">
           {tabs.map((t) => (
-            <button key={t.id} onClick={() => { setTab(t.id); setSelectedReportId(null); setShowWizard(null) }}
+            <button key={t.id} onClick={() => { setTab(t.id); setSelectedReportId(null) }}
               className={cn('shrink-0 relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors', tab === t.id ? 'border-info/50 bg-info/15 text-ink' : 'border border-white/10 text-ink-subtle hover:bg-white/[0.04]')}
             >
               {t.label}
@@ -64,54 +125,65 @@ export function CaseManagerWorkspace() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden">
         {tab === 'inbox' && (
           <div className="flex h-full">
-            <div className={cn('flex-1 overflow-y-auto px-4 pb-32 space-y-3', selectedReportId ? 'hidden lg:block' : '')}>
-              <h2 className="text-sm font-semibold text-ink pt-2">Reportes entrantes</h2>
+            <div className={cn('flex flex-col overflow-y-auto', selectedReportId ? 'hidden lg:flex lg:w-72 xl:w-80' : 'flex-1')}>
+              <div className="shrink-0 px-4 pt-1 pb-3">
+                <AvailabilityCalendarCard />
+              </div>
+              <div className="px-4 pb-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                  Reportes entrantes
+                  {pendingReports.length > 0 && <span className="ml-1 text-critical">({pendingReports.length})</span>}
+                </p>
+              </div>
               {reportsLoading ? (
-                [1, 2, 3].map((i) => <GlassCard key={i} className="h-20 animate-pulse" />)
+                <div className="space-y-2 px-4">
+                  {[1, 2, 3].map((i) => <GlassCard key={i} className="h-16 animate-pulse" />)}
+                </div>
               ) : pendingReports.length === 0 ? (
-                <GlassCard className="p-4 text-center text-sm text-ink-subtle">No hay reportes pendientes</GlassCard>
+                <div className="flex flex-1 items-center justify-center px-4">
+                  <p className="text-sm text-ink-subtle">No hay reportes entrantes</p>
+                </div>
               ) : (
-                pendingReports.map((report) => (
-                  <GlassCard key={report.id} className={cn('p-3 cursor-pointer transition-all hover:bg-white/[0.06]', selectedReportId === report.id ? 'ring-1 ring-info/40' : '')} onClick={() => setSelectedReportId(report.id)}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="text-sm font-medium text-ink line-clamp-1">{report.description}</p>
-                      <span className="shrink-0 text-xs text-ink-muted">{report.createdAt.toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-ink-subtle">
-                      <span>{report.location.zone}</span>
-                      <span>&middot;</span>
-                      <span>{report.source}</span>
-                    </div>
-                  </GlassCard>
-                ))
+                <div className="space-y-1 px-2">
+                  {pendingReports.map((report) => (
+                    <button key={report.id} onClick={() => selectReport(report.id)}
+                      className={cn('w-full rounded-2xl p-3 text-left transition-all hover:bg-white/[0.04]', selectedReportId === report.id ? 'bg-info/10 ring-1 ring-info/30' : '')}>
+                      <p className="text-sm font-medium text-ink line-clamp-1 leading-snug">{report.description}</p>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-ink-subtle">
+                        <span>{report.location?.zone ?? '—'}</span>
+                        <span>&middot;</span>
+                        <span>{new Date(report.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            {selectedReportId && (
-              <div className="w-full lg:w-96 border-l border-white/[0.06]">
-                {showWizard === selectedReportId ? (
-                  <ConvertReportWizard
-                    reportId={selectedReportId}
-                    onDone={() => { setShowWizard(null); setSelectedReportId(null) }}
-                    onCancel={() => setShowWizard(null)}
-                  />
-                ) : (
-                  <ReportDetailPanel
-                    reportId={selectedReportId}
-                    onClose={() => setSelectedReportId(null)}
-                    onConvertToCase={(id) => setShowWizard(id)}
-                  />
-                )}
+            {selectedReportId ? (
+              <div className="flex-1 border-l border-white/[0.06]">
+                <ReportDetailPanel
+                  reportId={selectedReportId}
+                  onClose={() => setSelectedReportId(null)}
+                  onConvertToCase={() => {}}
+                />
+              </div>
+            ) : (
+              <div className="hidden flex-1 items-center justify-center border-l border-white/[0.06] lg:flex">
+                <div className="text-center">
+                  <p className="text-sm text-ink-subtle">Selecciona un reporte para comenzar</p>
+                  <p className="mt-1 text-xs text-ink-faint">El panel de despacho aparecerá aquí</p>
+                </div>
               </div>
             )}
           </div>
         )}
 
         {tab === 'cases' && (
-          <div className="px-4 pb-32 space-y-3">
-            <h2 className="text-sm font-semibold text-ink pt-2">Casos activos</h2>
+          <div className="h-full overflow-y-auto px-4 pb-nav space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle pt-2">Casos activos</p>
             {casesLoading ? (
               [1, 2].map((i) => <GlassCard key={i} className="h-20 animate-pulse" />)
             ) : activeCases.length === 0 ? (
@@ -122,44 +194,125 @@ export function CaseManagerWorkspace() {
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <p className="text-sm font-medium text-ink">{c.title}</p>
                     <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
-                      {c.priority}
+                      {label(PRIORITY_LABELS, c.priority, c.priority)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-ink-subtle">
                     <span>{c.zone}</span>
                     <span>&middot;</span>
-                    <span>Etapa: {c.pipelineStage}</span>
-                    {c.slaDeadline && <span>&middot;</span>}
-                    {c.slaDeadline && <span className={cn(c.slaDeadline < new Date() ? 'text-critical' : '')}>SLA: {c.slaDeadline.toLocaleDateString()}</span>}
+                    <span>Etapa: {label({}, c.pipelineStage, c.pipelineStage)}</span>
                   </div>
                 </GlassCard>
               ))
+            )}
+          </div>
+        )}
+
+        {tab === 'public-needs' && (
+          <div className="h-full overflow-y-auto px-4 pb-nav space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle pt-2">
+              Necesidades públicas verificables
+            </p>
+            {publicNeedsLoading ? (
+              [1, 2, 3].map((i) => <GlassCard key={i} className="h-24 animate-pulse" />)
+            ) : publicNeeds.length === 0 ? (
+              <GlassCard className="p-4 text-center text-sm text-ink-subtle">
+                No hay necesidades públicas registradas
+              </GlassCard>
+            ) : (
+              publicNeeds.map((need) => {
+                const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
+                return (
+                  <GlassCard key={need.id} className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink line-clamp-1">{need.title}</p>
+                        <p className="mt-0.5 text-xs text-ink-subtle line-clamp-2">{need.summary}</p>
+                        <p className="mt-1 text-[11px] text-ink-faint">
+                          {need.locationPublic.zone ?? 'Zona por confirmar'} · {need.remainingQuantity} {need.unit} por cubrir
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                          need.priority === 'critical'
+                            ? 'bg-critical/20 text-critical'
+                            : need.priority === 'high'
+                              ? 'bg-warning/20 text-warning'
+                              : 'bg-info/20 text-info',
+                        )}
+                      >
+                        {label(PRIORITY_LABELS, need.priority, need.priority)}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+                      <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
+                      <span>{need.status}</span>
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        disabled={verifyPublicNeed.isPending || !user?.id}
+                        onClick={() => {
+                          if (!user?.id) return
+                          verifyPublicNeed.mutate({
+                            publicNeedId: need.id,
+                            actorId: user.id,
+                            decision: 'approved',
+                            checklist: [
+                              'Contacto realizado',
+                              'Cantidad definida',
+                              'Ubicación confirmada',
+                              'Consentimiento registrado',
+                            ],
+                            notes: 'Verificación de entrada aprobada desde panel gestor',
+                          })
+                        }}
+                      >
+                        Publicar necesidad
+                      </EmergencyButton>
+                      <EmergencyButton variant="glass" size="sm">
+                        Revisar cobertura
+                      </EmergencyButton>
+                    </div>
+                  </GlassCard>
+                )
+              })
             )}
           </div>
         )}
 
         {tab === 'missions' && (
-          <div className="px-4 pb-32 space-y-3">
-            <h2 className="text-sm font-semibold text-ink pt-2">Misiones activas</h2>
-            {!missions || missions.length === 0 ? (
-              <GlassCard className="p-4 text-center text-sm text-ink-subtle">No hay misiones activas</GlassCard>
-            ) : (
-              missions.map((m) => (
-                <GlassCard key={m.id} className="p-3">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="text-sm font-medium text-ink">{m.title}</p>
-                    <span className="text-xs text-ink-muted">{m.status}</span>
-                  </div>
-                  <p className="text-xs text-ink-subtle line-clamp-1">{m.description}</p>
-                </GlassCard>
-              ))
-            )}
+          <div className="h-full overflow-y-auto px-4 pb-nav space-y-4">
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle pt-2 mb-3">
+                Voluntarios interesados
+              </p>
+              <InterestsPanel />
+            </section>
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Misiones activas</p>
+              {!missions || missions.length === 0 ? (
+                <GlassCard className="p-4 text-center text-sm text-ink-subtle">No hay misiones activas</GlassCard>
+              ) : (
+                missions.map((m) => (
+                  <GlassCard key={m.id} className="p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-sm font-medium text-ink">{m.title}</p>
+                      <span className="text-xs text-ink-muted">{label({}, m.status, m.status)}</span>
+                    </div>
+                    <p className="text-xs text-ink-subtle line-clamp-1">{m.description}</p>
+                  </GlassCard>
+                ))
+              )}
+            </section>
           </div>
         )}
 
         {tab === 'solicitudes' && (
-          <div className="px-4 pb-32">
-            <h2 className="text-sm font-semibold text-ink pt-2 mb-3">Solicitudes de rol</h2>
+          <div className="h-full overflow-y-auto px-4 pb-nav">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle pt-2 mb-3">Solicitudes de rol</p>
             <RoleRequestAdminPanel />
           </div>
         )}
