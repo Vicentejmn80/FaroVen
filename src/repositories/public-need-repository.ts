@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { isMissingTableError } from '@/lib/supabase-errors'
 import type {
   CoverageReservation,
   NeedTimeline,
@@ -105,7 +106,10 @@ export class PublicNeedRepository {
       .eq('visibility_status', 'public')
       .in('status', ['active', 'reserved', 'in_progress', 'completed'])
       .order('created_at', { ascending: false })
-    if (error) throw error
+    if (error) {
+      if (isMissingTableError(error)) return []
+      throw error
+    }
     return ((data ?? []) as AnyRow[]).map(toPublicNeed)
   }
 
@@ -114,7 +118,10 @@ export class PublicNeedRepository {
       .from('public_needs')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error) throw error
+    if (error) {
+      if (isMissingTableError(error)) return []
+      throw error
+    }
     return ((data ?? []) as AnyRow[]).map(toPublicNeed)
   }
 
@@ -263,7 +270,10 @@ export class PublicNeedRepository {
       .select('*')
       .order('verified_at', { ascending: false })
       .limit(limit)
-    if (error) throw error
+    if (error) {
+      if (isMissingTableError(error)) return []
+      throw error
+    }
     return ((data ?? []) as AnyRow[]).map(toSuccessCase)
   }
 }

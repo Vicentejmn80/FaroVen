@@ -1,5 +1,22 @@
 import type { PostgrestError } from '@supabase/supabase-js'
 
+export function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const pg = error as PostgrestError
+  const message = pg.message ?? ''
+  const code = pg.code ?? ''
+  const details = pg.details ?? ''
+
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    message.includes('schema cache') ||
+    message.includes('does not exist') ||
+    details.includes('404')
+  )
+}
+
 const MIGRATION_HINT =
   'Las tablas FARO no existen en tu proyecto Supabase. Abre SQL Editor y ejecuta las migraciones en supabase/migrations/ (primero 20260628151600_core_schema_reconcile.sql, luego el resto en orden).'
 
@@ -9,15 +26,8 @@ export function humanizeSupabaseError(error: unknown): string {
   const pg = error as PostgrestError
   const message = pg.message ?? ''
   const code = pg.code ?? ''
-  const details = pg.details ?? ''
 
-  if (
-    code === 'PGRST205' ||
-    code === '42P01' ||
-    message.includes('schema cache') ||
-    message.includes('does not exist') ||
-    details.includes('404')
-  ) {
+  if (isMissingTableError(error)) {
     return MIGRATION_HINT
   }
 

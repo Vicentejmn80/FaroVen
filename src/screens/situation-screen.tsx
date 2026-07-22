@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { latLngBounds } from 'leaflet'
 import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
+import { MapGoogleLinkButton, MapLocateControl, MapZoomControls } from '@/components/faro/map-controls'
 import { MapResizeNotifier } from '@/components/faro/map-resize-notifier'
 import { motion } from 'framer-motion'
 import { Flag, List, Map as MapIcon, MapPin, PlusCircle, SlidersHorizontal } from 'lucide-react'
@@ -667,10 +668,15 @@ function VolunteerMapCanvas({
     return isValidCoord(lat, lng) ? [lat, lng] : defaultMapCenter()
   }, [mappableMissions])
 
+  const activeMission = useMemo(
+    () => mappableMissions.find((m) => m.id === activeId) ?? null,
+    [mappableMissions, activeId],
+  )
+
   return (
     <div
       className={cn(
-        'map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden bg-base-800/30',
+        'map-container-wrapper relative h-full min-h-[inherit] w-full overflow-hidden bg-base-800/30 touch-pan-y',
         !fullBleed && 'rounded-2xl border border-white/[0.06]',
       )}
     >
@@ -678,8 +684,14 @@ function VolunteerMapCanvas({
         className="faro-map !absolute inset-0 h-full w-full"
         center={center}
         zoom={12}
+        minZoom={5}
+        maxZoom={18}
         zoomControl={false}
         attributionControl={false}
+        scrollWheelZoom
+        touchZoom
+        doubleClickZoom
+        dragging
         preferCanvas
       >
         <MapResizeNotifier />
@@ -687,8 +699,10 @@ function VolunteerMapCanvas({
           className="faro-map-tiles"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FitToMissions missions={mappableMissions} />
+        <FitToMissionsOnce missions={mappableMissions} />
         <FocusActiveMission missions={mappableMissions} activeId={activeId} />
+        <MapZoomControls />
+        <MapLocateControl />
         {mappableMissions.map((mission) => {
           const position = getMissionLatLng(mission)
           if (!position) return null
@@ -707,14 +721,25 @@ function VolunteerMapCanvas({
           )
         })}
       </MapContainer>
+
+      {activeMission && (
+        <MapGoogleLinkButton
+          lat={activeMission.location.lat}
+          lng={activeMission.location.lng}
+          label={activeMission.title}
+          className="bottom-4"
+        />
+      )}
     </div>
   )
 }
 
-function FitToMissions({ missions }: { missions: VolunteerMission[] }) {
+function FitToMissionsOnce({ missions }: { missions: VolunteerMission[] }) {
   const map = useMap()
+  const fittedRef = useRef(false)
 
   useEffect(() => {
+    if (fittedRef.current) return
     const coords = missions
       .map((mission) => getMissionLatLng(mission))
       .filter((point): point is [number, number] => point !== null)
@@ -724,6 +749,7 @@ function FitToMissions({ missions }: { missions: VolunteerMission[] }) {
     const bounds = latLngBounds(coords)
     if (!bounds.isValid()) return
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 13 })
+    fittedRef.current = true
     requestAnimationFrame(() => map.invalidateSize({ animate: false }))
   }, [map, missions])
 
@@ -1279,7 +1305,7 @@ function OperationsMap({
         inset={false}
         className={cn(
           'absolute flex items-center gap-3 rounded-2xl px-3 py-2',
-          fullBleed ? 'bottom-28 left-3 lg:bottom-auto lg:left-3 lg:top-3' : 'left-3 top-3',
+          fullBleed ? 'bottom-20 left-3 lg:bottom-auto lg:left-3 lg:top-3' : 'left-3 top-3',
         )}
       >
         {[

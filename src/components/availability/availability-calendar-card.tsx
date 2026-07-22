@@ -5,7 +5,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { useAuth } from '@/store/auth-context'
 import { useWeeklyAvailability, useCoverageSummary, useToggleSlot } from '@/hooks/useAvailability'
 import { cn } from '@/lib/utils'
-import { HOURS } from '@/domain/availability.types'
+import { HOURS, buildWeekFromSlots } from '@/domain/availability.types'
 import type { AvailabilityDay, AvailabilitySlot } from '@/domain/availability.types'
 
 function DayCard({
@@ -181,10 +181,14 @@ export function AvailabilityCalendarCard() {
   const { data: coverage } = useCoverageSummary(userId, userName)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
+  const fallbackWeek = useMemo(() => buildWeekFromSlots([], new Date()), [])
+  const displayWeek = week ?? fallbackWeek
   const selectedDay = useMemo(
-    () => week?.days.find((d) => d.date === selectedDate) ?? null,
-    [week, selectedDate],
+    () => displayWeek.days.find((d) => d.date === selectedDate) ?? null,
+    [displayWeek, selectedDate],
   )
+
+  if (!userId) return null
 
   if (isLoading) {
     return (
@@ -200,9 +204,7 @@ export function AvailabilityCalendarCard() {
     )
   }
 
-  if (!week) return null
-
-  const today = week.days.find((d) => d.isToday)
+  const today = displayWeek.days.find((d) => d.isToday)
   const nextAvailability = coverage?.nextAvailability
 
   return (
@@ -217,13 +219,13 @@ export function AvailabilityCalendarCard() {
             <p className="text-xs text-ink-subtle">Esta semana</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold tabular-nums text-info">{week.totalHours}</p>
+            <p className="text-2xl font-bold tabular-nums text-info">{displayWeek.totalHours}</p>
             <p className="text-[10px] uppercase tracking-wide text-ink-subtle">horas disponibles</p>
           </div>
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {week.days.map((day) => (
+          {displayWeek.days.map((day) => (
             <DayCard
               key={day.date}
               day={day}

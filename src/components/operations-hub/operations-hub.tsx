@@ -152,11 +152,22 @@ export function OperationsHub() {
               />
             </div>
             <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
-              <OpsMapPanel selectedCase={selectedCase} sites={mapSites} />
+              <OpsMapPanel
+                selectedCase={selectedCase}
+                cases={sortedCases}
+                sites={mapSites}
+                onSelectCase={handleSelect}
+              />
             </div>
           </div>
         ) : (
-          <OpsMapPanel selectedCase={selectedCase} sites={mapSites} className="h-full" />
+          <OpsMapPanel
+            selectedCase={selectedCase}
+            cases={sortedCases}
+            sites={mapSites}
+            onSelectCase={handleSelect}
+            className="h-full"
+          />
         )}
 
         <CaseDetailDrawer

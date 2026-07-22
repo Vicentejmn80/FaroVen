@@ -42,6 +42,17 @@ export function defaultMapCenter(): [number, number] {
   return [CARACAS_LAT, CARACAS_LNG]
 }
 
+/** Enlace para ver el punto en Google Maps (sin iniciar navegación). */
+export function buildGoogleMapsViewLink(
+  lat: number,
+  lng: number,
+  label?: string | null,
+): string | null {
+  if (!isValidCoord(lat, lng)) return null
+  const query = label?.trim() ? `${label}@${lat},${lng}` : `${lat},${lng}`
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+}
+
 /** Enlace externo al punto en OpenStreetMap (gratuito). */
 export function buildMapLink(lat: number, lng: number): string | null {
   if (!isValidCoord(lat, lng)) return null

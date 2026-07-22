@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { isMissingTableError } from '@/lib/supabase-errors'
 import type { AvailabilitySlot } from '@/domain/availability.types'
 
 interface AvailabilityRow {
@@ -28,7 +29,10 @@ export const availabilityRepository = {
       .gte('date', startDate)
       .lte('date', endDate)
 
-    if (error) throw error
+    if (error) {
+      if (isMissingTableError(error)) return []
+      throw error
+    }
     return (data ?? []).map(mapRow)
   },
 

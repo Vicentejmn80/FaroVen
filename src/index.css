@@ -92,7 +92,7 @@
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
   .pb-nav {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4.75rem);
   }
   .pt-safe {
     padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);

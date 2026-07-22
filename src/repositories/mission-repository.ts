@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { isMissingTableError } from '@/lib/supabase-errors'
 import type { Mission, MissionAssignment, MissionEvent, MissionStage, MissionEventType } from '@/domain/mission.types'
 import type { MissionRow, MissionAssignmentRow, MissionEventRow } from '@/types/supabase'
 
@@ -112,7 +113,10 @@ export class MissionRepository {
     }
 
     const { data, error } = await query.order('created_at', { ascending: false })
-    if (error) throw error
+    if (error) {
+      if (isMissingTableError(error)) return []
+      throw error
+    }
     return ((data ?? []) as MissionRow[]).map(mapMissionRow)
   }
 

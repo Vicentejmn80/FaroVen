@@ -43,7 +43,6 @@ import { refreshNeedCycles } from '@/services/repository-service'
 import { NeedCycleClosureModal } from '@/components/coordinator/need-cycle-closure-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { NotificationRow } from '@/domain/notification-models'
-import { LegalFooter } from '@/components/legal/legal-footer'
 import { PendingRoleBanner } from '@/components/auth/pending-role-banner'
 
 type FlowId =
@@ -537,15 +536,6 @@ export function AppShell() {
               </motion.div>
             </AnimatePresence>
           </main>
-
-          <LegalFooter
-            onOpenTerms={() => openFlow('legal-terms')}
-            onOpenPrivacy={() => openFlow('legal-privacy')}
-            onOpenNotice={() => openFlow('legal-notice')}
-            onOpenCookies={() => openFlow('legal-cookies')}
-            onOpenContact={() => openFlow('legal-contact')}
-            onOpenAbout={() => openFlow('legal-about')}
-          />
 
           <BottomNavigation
             active={activeView}

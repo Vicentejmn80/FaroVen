@@ -133,7 +133,7 @@ interface NavigationProps {
   mobileTabs?: NavTab[]
 }
 
-/** Mobile — barra inferior en zona del pulgar (siempre 4 tabs + botón central) */
+/** Mobile — barra inferior pegada al borde, safe-area integrada */
 export function BottomNavigation({
   active,
   onChange,
@@ -147,48 +147,54 @@ export function BottomNavigation({
   const activeView = normalizeTabId(active) ?? active
 
   return (
-    <nav className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 w-full lg:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-      <div className="glass-strong pointer-events-auto flex items-center justify-between border-t border-white/[0.06] px-2 py-2 pb-safe shadow-glass">
-        <div className="flex flex-1 justify-around">
-          {left.map((t) => (
-            <NavButton
-              key={t.id}
-              {...t}
-              active={activeView === t.id}
-              onClick={() => onChange(t.id)}
-              compact
-            />
-          ))}
-        </div>
+    <nav
+      className="fixed inset-x-0 bottom-0 z-50 lg:hidden"
+      aria-label="Navegación principal"
+    >
+      <div className="border-t border-white/[0.1] bg-[#060b16]/98 backdrop-blur-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]">
+        <div className="flex items-end justify-between px-1 pt-1 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+          <div className="flex flex-1 justify-around">
+            {left.map((t) => (
+              <NavButton
+                key={t.id}
+                {...t}
+                active={activeView === t.id}
+                onClick={() => onChange(t.id)}
+                compact
+              />
+            ))}
+          </div>
 
-        <motion.button
-          type="button"
-          onClick={onCreate}
-          disabled={!onCreate}
-          whileTap={{ scale: 0.92 }}
-          transition={{ duration: 0.15, ease: [0.32, 0.72, 0, 1] }}
-          aria-label={createLabel}
-          aria-hidden={!onCreate}
-          tabIndex={onCreate ? 0 : -1}
-          className={cn(
-            'mx-2 flex h-14 w-14 shrink-0 -translate-y-3 items-center justify-center rounded-full bg-info text-white shadow-focal ring-4 ring-base-900',
-            !onCreate && 'pointer-events-none invisible',
-          )}
-        >
-          <Plus className="h-6 w-6" strokeWidth={2.25} />
-        </motion.button>
+          <motion.button
+            type="button"
+            onClick={onCreate}
+            disabled={!onCreate}
+            whileTap={{ scale: 0.92 }}
+            transition={{ duration: 0.15, ease: [0.32, 0.72, 0, 1] }}
+            aria-label={createLabel}
+            aria-hidden={!onCreate}
+            tabIndex={onCreate ? 0 : -1}
+            className={cn(
+              'relative mx-1.5 mb-0.5 flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full',
+              'bg-gradient-to-b from-[#3d9bff] to-[#0a84ff] text-white',
+              'shadow-[0_4px_20px_rgba(10,132,255,0.45)] ring-2 ring-[#060b16]',
+              !onCreate && 'pointer-events-none invisible',
+            )}
+          >
+            <Plus className="h-6 w-6" strokeWidth={2.25} />
+          </motion.button>
 
-        <div className="flex flex-1 justify-around">
-          {right.map((t) => (
-            <NavButton
-              key={t.id}
-              {...t}
-              active={activeView === t.id}
-              onClick={() => onChange(t.id)}
-              compact
-            />
-          ))}
+          <div className="flex flex-1 justify-around">
+            {right.map((t) => (
+              <NavButton
+                key={t.id}
+                {...t}
+                active={activeView === t.id}
+                onClick={() => onChange(t.id)}
+                compact
+              />
+            ))}
+          </div>
         </div>
       </div>
     </nav>
@@ -273,16 +279,16 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-12 min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-xl focus-visible:outline-none',
-        active && 'bg-white/[0.06]',
+        'flex h-[52px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40',
+        active && 'bg-white/[0.08]',
       )}
       aria-current={active ? 'page' : undefined}
     >
       <Icon
-        className={cn('h-[22px] w-[22px]', active ? 'text-ink' : 'text-ink-faint')}
+        className={cn('h-[21px] w-[21px]', active ? 'text-info' : 'text-ink-muted')}
         strokeWidth={active ? 2.25 : 1.75}
       />
-      <span className={cn('text-[10px] font-medium transition-colors', active ? 'text-ink' : 'text-ink-faint')}>
+      <span className={cn('text-[10px] font-medium transition-colors', active ? 'text-info' : 'text-ink-muted')}>
         {label}
       </span>
     </button>

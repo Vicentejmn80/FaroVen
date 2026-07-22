@@ -30,7 +30,7 @@ export function ScreenScaffold({ title, subtitle, onBack, action, children }: Sc
         </div>
         {action}
       </header>
-      <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 lg:px-8 lg:pb-8">{children}</div>
+      <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-nav pt-3 lg:px-8 lg:pb-8">{children}</div>
     </div>
   )
 }
