@@ -92,11 +92,15 @@ export interface VolunteerProfile {
   verificationLevel: VerificationLevel
   trustScore: number
   avgResponseMinutes: number
+  avgMissionDurationMinutes: number
   totalMissions: number
   completedMissions: number
   serviceHours: number
   skills: string[]
+  specialties: string[]
+  centersCollaborated: string[]
   lastLocationUpdate: Date
+  lastActivityAt?: Date
   createdAt: Date
   updatedAt: Date
 }

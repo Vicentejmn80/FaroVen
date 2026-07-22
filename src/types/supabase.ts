@@ -211,6 +211,10 @@ export interface VolunteerRow {
   total_missions: number
   completed_missions: number
   service_hours: number
+  avg_mission_duration_minutes: number
+  specialties: string[]
+  centers_collaborated: string[]
+  last_activity_at: string | null
   last_location_update: string
   created_at: string
   updated_at: string
@@ -261,11 +265,14 @@ export interface MissionAssignmentRow {
   id: string
   mission_id: string
   volunteer_id: string
-  status: 'assigned' | 'accepted' | 'rejected' | 'en_route' | 'on_site' | 'completed' | 'cancelled'
+  status: 'assigned' | 'accepted' | 'rejected' | 'preparing' | 'en_route' | 'on_site' | 'in_progress' | 'completed' | 'verified' | 'cancelled' | 'archived'
   assigned_at: string
   responded_at: string | null
+  preparing_at: string | null
   arrived_at: string | null
   completed_at: string | null
+  verified_at: string | null
+  evidence_urls: string[]
   rating: number | null
   feedback: string | null
 }

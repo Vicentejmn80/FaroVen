@@ -58,10 +58,14 @@ export const ASSIGNMENT_STATUS_LABELS: Record<MissionAssignmentStatus, string> =
   assigned: 'Asignado',
   accepted: 'Confirmado',
   rejected: 'Rechazado',
+  preparing: 'Preparándose',
   en_route: 'En camino',
   on_site: 'En sitio',
+  in_progress: 'En progreso',
   completed: 'Finalizado',
+  verified: 'Verificado',
   cancelled: 'Cancelado',
+  archived: 'Archivado',
 }
 
 /* ------------------------------------------------------------------ */
@@ -307,6 +311,15 @@ export const OP_LABELS = {
   syncing: 'Sincronizando…',
   lastUpdate: 'Última actualización',
   updatedJustNow: 'Actualizado ahora mismo',
+}
+
+export const APPLICATION_STATUS_LABELS: Record<string, string> = {
+  pending: 'Postulado',
+  under_review: 'En revisión',
+  approved: 'Aprobado',
+  rejected: 'Rechazado',
+  withdrawn: 'Retirado',
+  expired: 'Expirado',
 }
 
 /* ------------------------------------------------------------------ */

@@ -237,7 +237,7 @@ export interface SimulationMetrics {
 export interface OperationalTimelineEntry {
   id: string
   timestamp: Date
-  type: 'case' | 'mission' | 'center' | 'volunteer' | 'event' | 'alert' | 'resource' | 'saturation'
+  type: 'case' | 'mission' | 'center' | 'volunteer' | 'event' | 'alert' | 'resource' | 'saturation' | 'volunteer_dispatch'
   title: string
   description: string
   severity: 'info' | 'warning' | 'critical'

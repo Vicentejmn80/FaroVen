@@ -9,12 +9,17 @@ import { EmergencyButton } from '@/components/ui/emergency-button'
 import { ReportDetailPanel } from '@/components/case-manager/report-detail-panel'
 import { RoleRequestAdminPanel } from '@/components/role-request/role-request-admin-panel'
 import { AvailabilityCalendarCard } from '@/components/availability/availability-calendar-card'
+import { PostulationPanel } from '@/components/dispatch/postulation-panel'
+import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
+import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { cn } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
 import { useAuth } from '@/store/auth-context'
 import { useOperationalPublicNeeds, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
+import { useMissionTimeline } from '@/hooks/useMissions'
+import type { Mission } from '@/domain/mission.types'
 
 type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'solicitudes'
 
@@ -57,20 +62,87 @@ function InterestsPanel() {
   )
 }
 
+function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: () => void }) {
+  const { data: missionEvents } = useMissionTimeline(mission.id)
+
+  const timelineSteps: TimelineStep[] = [
+    { id: 'created', label: 'Misión creada', timestamp: new Date(mission.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }), completed: true, active: false },
+    { id: 'assigned', label: 'Voluntarios asignados', completed: ['assigned', 'accepted', 'en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(mission.status), active: mission.status === 'assigned' },
+    { id: 'accepted', label: 'Voluntarios en camino', completed: ['accepted', 'en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(mission.status), active: mission.status === 'accepted' },
+    { id: 'en_route', label: 'En ruta al sitio', completed: ['en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(mission.status), active: mission.status === 'en_route' },
+    { id: 'on_site', label: 'En el sitio', completed: ['on_site', 'in_progress', 'completed', 'verified'].includes(mission.status), active: mission.status === 'on_site' },
+    { id: 'in_progress', label: 'Asistencia en progreso', completed: ['in_progress', 'completed', 'verified'].includes(mission.status), active: mission.status === 'in_progress' },
+    { id: 'completed', label: 'Misión completada', completed: ['completed', 'verified'].includes(mission.status), active: mission.status === 'completed' },
+    { id: 'verified', label: 'Verificada', completed: mission.status === 'verified', active: mission.status === 'verified' },
+  ]
+
+  return (
+    <div className="space-y-3 px-2 pb-4">
+      <div className="flex items-center gap-2">
+        <button onClick={onClose} className="text-xs text-info underline">Volver a lista</button>
+      </div>
+
+      {mission.status !== 'cancelled' && mission.status !== 'archived' && (
+        <PostulationPanel missionId={mission.id} />
+      )}
+
+      <div className="bg-white/[0.03] rounded-2xl p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Progreso de la misión</p>
+        <OperationalTimeline steps={timelineSteps} />
+      </div>
+
+      {missionEvents && missionEvents.length > 0 && (
+        <div className="bg-white/[0.03] rounded-2xl p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Registro de eventos</p>
+          <div className="space-y-1.5">
+            {missionEvents.map((ev) => (
+              <div key={ev.id} className="flex items-center gap-2 text-xs text-ink-muted">
+                <span className="h-1.5 w-1.5 rounded-full bg-info shrink-0" />
+                <span className="text-ink-subtle">{ev.eventType}</span>
+                {ev.description && <span className="text-ink-faint">&middot; {ev.description}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <LiveTrackingCard
+        missionLat={mission.location.lat}
+        missionLng={mission.location.lng}
+        missionAddress={mission.location.zone ?? `${mission.location.lat.toFixed(4)}, ${mission.location.lng.toFixed(4)}`}
+        volunteerUserId={undefined}
+      />
+    </div>
+  )
+}
+
 export function CaseManagerWorkspace() {
   const [tab, setTab] = useState<ManagerTab>('inbox')
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
+  const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
   const { user } = useAuth()
   const { data: publicNeeds = [], isLoading: publicNeedsLoading } = useOperationalPublicNeeds()
   const verifyPublicNeed = useVerifyPublicNeedEntry()
 
   useRealtimeSync({
     channelName: 'cm-reports',
-    tables: ['reports', 'cases', 'case_events', 'missions', 'public_needs', 'coverage_reservations', 'success_cases'],
+    tables: [
+      'reports',
+      'cases',
+      'case_events',
+      'missions',
+      'mission_applications',
+      'mission_assignments',
+      'public_needs',
+      'coverage_reservations',
+      'success_cases',
+    ],
     invalidateKeys: [
       FARO_QUERY_KEYS.reports,
       FARO_QUERY_KEYS.cases,
       FARO_QUERY_KEYS.missions,
+      FARO_QUERY_KEYS.missionApplications,
+      FARO_QUERY_KEYS.missionAssignments,
       FARO_QUERY_KEYS.publicNeeds,
       FARO_QUERY_KEYS.successCases,
     ],
@@ -297,13 +369,25 @@ export function CaseManagerWorkspace() {
                 <GlassCard className="p-4 text-center text-sm text-ink-subtle">No hay misiones activas</GlassCard>
               ) : (
                 missions.map((m) => (
-                  <GlassCard key={m.id} className="p-3">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="text-sm font-medium text-ink">{m.title}</p>
-                      <span className="text-xs text-ink-muted">{label(MISSION_STAGE_LABELS, m.status)}</span>
-                    </div>
-                    <p className="text-xs text-ink-subtle line-clamp-1">{m.description}</p>
-                  </GlassCard>
+                  <div key={m.id}>
+                    <button onClick={() => setExpandedMissionId(expandedMissionId === m.id ? null : m.id)} className="w-full text-left">
+                      <GlassCard className={cn('p-3 transition-all', expandedMissionId === m.id ? 'ring-1 ring-info/30' : '')}>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-sm font-medium text-ink">{m.title}</p>
+                          <span className={cn(
+                            'shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
+                            m.status === 'completed' || m.status === 'verified' ? 'bg-operational/20 text-operational' :
+                            m.status === 'cancelled' || m.status === 'archived' ? 'bg-critical/20 text-critical' :
+                            'bg-info/20 text-info',
+                          )}>{label(MISSION_STAGE_LABELS, m.status)}</span>
+                        </div>
+                        <p className="text-xs text-ink-subtle line-clamp-1">{m.description}</p>
+                      </GlassCard>
+                    </button>
+                    {expandedMissionId === m.id && (
+                      <MissionDetailCard mission={m} onClose={() => setExpandedMissionId(null)} />
+                    )}
+                  </div>
                 ))
               )}
             </section>

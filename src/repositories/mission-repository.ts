@@ -56,8 +56,11 @@ function mapMissionAssignmentRow(row: MissionAssignmentRow): MissionAssignment {
     status: row.status as MissionAssignment['status'],
     assignedAt: new Date(row.assigned_at),
     respondedAt: row.responded_at ? new Date(row.responded_at) : undefined,
+    preparingAt: row.preparing_at ? new Date(row.preparing_at) : undefined,
     arrivedAt: row.arrived_at ? new Date(row.arrived_at) : undefined,
     completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
+    verifiedAt: row.verified_at ? new Date(row.verified_at) : undefined,
+    evidenceUrls: row.evidence_urls ?? [],
     rating: row.rating ?? undefined,
     feedback: row.feedback ?? undefined,
   }
@@ -234,8 +237,11 @@ export class MissionRepository {
     const row: Record<string, unknown> = {}
     if (input.status) row.status = input.status
     if (input.respondedAt) row.responded_at = input.respondedAt.toISOString()
+    if (input.preparingAt) row.preparing_at = input.preparingAt.toISOString()
     if (input.arrivedAt) row.arrived_at = input.arrivedAt.toISOString()
     if (input.completedAt) row.completed_at = input.completedAt.toISOString()
+    if (input.verifiedAt) row.verified_at = input.verifiedAt.toISOString()
+    if (input.evidenceUrls !== undefined) row.evidence_urls = input.evidenceUrls
     if (input.rating !== undefined) row.rating = input.rating
     if (input.feedback !== undefined) row.feedback = input.feedback
 

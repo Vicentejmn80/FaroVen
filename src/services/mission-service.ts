@@ -2,6 +2,23 @@ import { missionRepository, type MissionFilters } from '@/repositories/mission-r
 import { transitionMission, canTransitionMission } from '@/domain/mission.service'
 import type { Mission, MissionAssignment, MissionEvent, MissionStage, TransitionResult } from '@/domain/mission.types'
 import { MISSION_STAGES } from '@/domain/mission.types'
+import {
+  operationalIntelligenceService,
+  type VolunteerDispatchAction,
+} from '@/services/operational-intelligence-service'
+
+async function emitAssignmentStatus(
+  assignment: MissionAssignment,
+  action: VolunteerDispatchAction,
+  detail: string,
+) {
+  await operationalIntelligenceService.emitVolunteerDispatchEvent({
+    action,
+    missionId: assignment.missionId,
+    volunteerId: assignment.volunteerId,
+    detail,
+  })
+}
 
 export interface CreateMissionParams {
   centerId: string
@@ -116,36 +133,89 @@ export const missionService = {
   },
 
   async acceptAssignment(assignmentId: string, _volunteerId: string): Promise<MissionAssignment> {
-    return missionRepository.updateAssignment(assignmentId, {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'accepted',
       respondedAt: new Date(),
     })
+    await emitAssignmentStatus(updated, 'accepted', 'El voluntario aceptó la asignación')
+    return updated
   },
 
   async rejectAssignment(assignmentId: string, _volunteerId: string): Promise<MissionAssignment> {
-    return missionRepository.updateAssignment(assignmentId, {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'rejected',
       respondedAt: new Date(),
     })
+    await emitAssignmentStatus(updated, 'assignment_rejected', 'El voluntario rechazó la asignación')
+    return updated
   },
 
   async markEnRoute(assignmentId: string): Promise<MissionAssignment> {
-    return missionRepository.updateAssignment(assignmentId, {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'en_route',
     })
+    await emitAssignmentStatus(updated, 'en_route', 'El voluntario está en camino')
+    return updated
   },
 
   async markOnSite(assignmentId: string): Promise<MissionAssignment> {
-    return missionRepository.updateAssignment(assignmentId, {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'on_site',
       arrivedAt: new Date(),
     })
+    await emitAssignmentStatus(updated, 'on_site', 'El voluntario llegó al sitio')
+    return updated
   },
 
   async markCompleted(assignmentId: string): Promise<MissionAssignment> {
-    return missionRepository.updateAssignment(assignmentId, {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'completed',
       completedAt: new Date(),
+    })
+    await emitAssignmentStatus(updated, 'completed', 'El voluntario finalizó la operación')
+    return updated
+  },
+
+  async markPreparing(assignmentId: string): Promise<MissionAssignment> {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
+      status: 'preparing',
+      preparingAt: new Date(),
+    })
+    await emitAssignmentStatus(updated, 'preparing', 'El voluntario se está preparando')
+    return updated
+  },
+
+  async markInProgress(assignmentId: string): Promise<MissionAssignment> {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
+      status: 'in_progress',
+    })
+    await emitAssignmentStatus(updated, 'in_progress', 'La operación está en progreso')
+    return updated
+  },
+
+  async submitEvidence(
+    assignmentId: string,
+    missionId: string,
+    volunteerId: string,
+    evidenceUrls: string[],
+  ): Promise<MissionAssignment> {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
+      evidenceUrls,
+    })
+    await missionRepository.addEvent({
+      missionId,
+      eventType: 'evidence_submitted',
+      actorId: volunteerId,
+      description: `Evidencia adjunta (${evidenceUrls.length} archivo(s))`,
+      metadata: { evidenceUrls, assignmentId },
+    })
+    return updated
+  },
+
+  async verifyAssignment(assignmentId: string): Promise<MissionAssignment> {
+    return missionRepository.updateAssignment(assignmentId, {
+      status: 'verified',
+      verifiedAt: new Date(),
     })
   },
 }

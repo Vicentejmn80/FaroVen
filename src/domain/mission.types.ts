@@ -25,13 +25,18 @@ export type MissionPriority = typeof MISSION_PRIORITIES[keyof typeof MISSION_PRI
 
 export const MISSION_EVENT_TYPES = {
   MISSION_CREATED: 'mission_created',
+  APPLICATION_SUBMITTED: 'application_submitted',
+  APPLICATION_APPROVED: 'application_approved',
+  APPLICATION_REJECTED: 'application_rejected',
   MATCHING_COMPLETED: 'matching_completed',
   VOLUNTEER_ASSIGNED: 'volunteer_assigned',
   VOLUNTEER_ACCEPTED: 'volunteer_accepted',
+  VOLUNTEER_PREPARING: 'volunteer_preparing',
   VOLUNTEER_REJECTED: 'volunteer_rejected',
   VOLUNTEER_EN_ROUTE: 'volunteer_en_route',
   VOLUNTEER_ON_SITE: 'volunteer_on_site',
   MISSION_IN_PROGRESS: 'mission_in_progress',
+  EVIDENCE_SUBMITTED: 'evidence_submitted',
   MISSION_COMPLETED: 'mission_completed',
   MISSION_VERIFIED: 'mission_verified',
   MISSION_CANCELLED: 'mission_cancelled',
@@ -46,10 +51,14 @@ export const MISSION_ASSIGNMENT_STATUSES = {
   ASSIGNED: 'assigned',
   ACCEPTED: 'accepted',
   REJECTED: 'rejected',
+  PREPARING: 'preparing',
   EN_ROUTE: 'en_route',
   ON_SITE: 'on_site',
+  IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
+  VERIFIED: 'verified',
   CANCELLED: 'cancelled',
+  ARCHIVED: 'archived',
 } as const
 
 export type MissionAssignmentStatus = typeof MISSION_ASSIGNMENT_STATUSES[keyof typeof MISSION_ASSIGNMENT_STATUSES]
@@ -178,8 +187,11 @@ export interface MissionAssignment {
   status: MissionAssignmentStatus
   assignedAt: Date
   respondedAt?: Date
+  preparingAt?: Date
   arrivedAt?: Date
   completedAt?: Date
+  verifiedAt?: Date
+  evidenceUrls: string[]
   rating?: number
   feedback?: string
 }

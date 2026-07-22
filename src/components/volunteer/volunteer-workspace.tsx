@@ -1,16 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useVolunteerProfile, useVolunteerMissions, useUpdateVolunteerAvailability } from '@/hooks/useVolunteerProfile'
 import { useMissions } from '@/hooks/useMissions'
 import { useRespondMission, useUpdateMissionAssignment } from '@/hooks/useMissionMutations'
+import { useApplyToMission } from '@/hooks/useMissionApplications'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { VolunteerMissionCard } from './volunteer-mission-card'
 import { GlassCard } from '@/components/ui/glass-card'
+import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
+import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { VOLUNTEER_AVAILABILITY, VOLUNTEER_AVAILABILITY_LABELS, VOLUNTEER_AVAILABILITY_TONES, VERIFICATION_LEVEL_LABELS, SKILL_LABELS } from '@/domain/volunteer.types'
 import { MISSION_STAGES } from '@/domain/mission.types'
 import type { Mission, MissionAssignment } from '@/domain/mission.types'
-import { useAuth } from '@/store/auth-context'
+import { useAuth, usePermissions } from '@/store/auth-context'
 import { cn } from '@/lib/utils'
+import { animate } from 'framer-motion'
+import { Flag } from 'lucide-react'
 
 type VolunteerTab = 'available' | 'my-missions' | 'history' | 'profile'
 
@@ -43,12 +48,31 @@ function AvailabilitySelector({
   )
 }
 
+function AnimatedMetric({ value, suffix = '' }: { value: number; suffix?: string }) {
+  const [display, setDisplay] = useState(0)
+
+  useEffect(() => {
+    const controls = animate(0, value, {
+      duration: 0.9,
+      ease: [0.32, 0.72, 0, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    })
+    return controls.stop
+  }, [value])
+
+  return <p className="text-lg font-semibold tabular-nums text-ink">{display}{suffix}</p>
+}
+
 function AvailableMissions() {
-  const { data: missions, isLoading, error } = useMissions({ status: MISSION_STAGES.ASSIGNED })
+  const { data: allMissions, isLoading, error } = useMissions()
+  const missions = useMemo(() => allMissions?.filter((m) => m.status === MISSION_STAGES.MATCHING || m.status === MISSION_STAGES.ASSIGNED) ?? [], [allMissions])
   const { user } = useAuth()
+  const { isVolunteer } = usePermissions()
   const { data: profile } = useVolunteerProfile()
   const { data: myAssignments } = useVolunteerMissions(profile?.id ?? '')
   const respond = useRespondMission()
+  const applyToMission = useApplyToMission()
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
 
   const assignmentMap = useMemo(() => {
     const map = new Map<string, MissionAssignment>()
@@ -74,8 +98,12 @@ function AvailableMissions() {
 
   if (!missions || missions.length === 0) {
     return (
-      <GlassCard className="p-6 text-center">
-        <p className="text-sm text-ink-subtle">No hay misiones disponibles en este momento</p>
+      <GlassCard className="flex flex-col items-center gap-2 p-6 text-center">
+        <Flag className="h-8 w-8 text-ink-faint" strokeWidth={1.5} />
+        <p className="text-sm font-medium text-ink">No hay misiones disponibles</p>
+        <p className="text-xs text-ink-subtle">
+          Cuando el gestor publique nuevas necesidades, aparecerán aquí para postularte.
+        </p>
       </GlassCard>
     )
   }
@@ -84,15 +112,22 @@ function AvailableMissions() {
     <div className="space-y-3">
       {missions.map((m) => {
         const assignment = assignmentMap.get(m.id)
-        const realAssignment = assignment ?? { id: '', missionId: m.id, volunteerId: '', status: 'assigned' as const, assignedAt: new Date() }
+        const realAssignment = assignment ?? { id: '', missionId: m.id, volunteerId: '', status: 'assigned' as const, assignedAt: new Date(), evidenceUrls: [] }
         const hasRealAssignment = !!assignment
+        const alreadyApplied = appliedIds.has(m.id)
+        const canApply = isVolunteer && !!profile && !hasRealAssignment && !alreadyApplied
         return (
           <VolunteerMissionCard
             key={m.id}
             mission={m}
             assignment={realAssignment}
-            onAccept={hasRealAssignment && user ? () => respond.mutate({ assignmentId: assignment!.id, action: 'accept', volunteerId: user.id }) : undefined}
-            onReject={hasRealAssignment && user ? () => respond.mutate({ assignmentId: assignment!.id, action: 'reject', volunteerId: user.id }) : undefined}
+            onAccept={hasRealAssignment && isVolunteer && user ? () => respond.mutate({ assignmentId: assignment!.id, action: 'accept', volunteerId: profile?.id ?? user.id }) : undefined}
+            onReject={hasRealAssignment && isVolunteer && user ? () => respond.mutate({ assignmentId: assignment!.id, action: 'reject', volunteerId: profile?.id ?? user.id }) : undefined}
+            onApply={canApply ? () => {
+              applyToMission.mutate({ missionId: m.id, volunteerId: profile!.id })
+              setAppliedIds((prev) => new Set(prev).add(m.id))
+            } : undefined}
+            applied={alreadyApplied}
           />
         )
       })}
@@ -105,6 +140,7 @@ function MyMissions() {
   const { data: assignments, isLoading } = useVolunteerMissions(profile?.id ?? '')
   const { data: allMissions } = useMissions()
   const updateStatus = useUpdateMissionAssignment()
+  const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
 
   const missionMap = useMemo(() => {
     const map = new Map<string, Mission>()
@@ -132,7 +168,7 @@ function MyMissions() {
     )
   }
 
-  const activeStatuses = ['assigned', 'accepted', 'en_route', 'on_site', 'in_progress']
+  const activeStatuses: string[] = ['assigned', 'accepted', 'en_route', 'on_site']
   const activeAssignments = assignments.filter((a) => activeStatuses.includes(a.status))
   const pastAssignments = assignments.filter((a) => !activeStatuses.includes(a.status))
 
@@ -143,29 +179,55 @@ function MyMissions() {
           <h3 className="text-sm font-semibold text-ink">Misiones activas ({activeAssignments.length})</h3>
           {activeAssignments.map((a) => {
             const m = missionMap.get(a.missionId)
+            const realMission = m ?? {
+              id: a.missionId,
+              title: 'Misión',
+              description: '',
+              priority: 'medium' as const,
+              requiredSkills: [],
+              requiredPeople: 1,
+              assignedPeople: 1,
+              status: a.status as any,
+              centerId: '',
+              location: { lat: 0, lng: 0, zone: '' },
+              createdBy: '',
+              createdAt: a.assignedAt,
+              updatedAt: a.assignedAt,
+            }
+            const isExpanded = expandedMissionId === a.id
+            const timelineSteps: TimelineStep[] = [
+              { id: 'assigned', label: 'Asignada', completed: true, active: false },
+              { id: 'accepted', label: 'Aceptada', completed: a.status !== 'assigned', active: a.status === 'accepted' },
+              { id: 'en_route', label: 'En camino', completed: ['en_route', 'on_site', 'completed'].includes(a.status), active: a.status === 'en_route' },
+              { id: 'on_site', label: 'En el sitio', completed: ['on_site', 'completed'].includes(a.status), active: a.status === 'on_site' },
+              { id: 'completed', label: 'Completada', completed: a.status === 'completed', active: a.status === 'completed' },
+            ]
             return (
-              <VolunteerMissionCard
-                key={a.id}
-                mission={m ?? {
-                  id: a.missionId,
-                  title: 'Misión',
-                  description: '',
-                  priority: 'medium',
-                  requiredSkills: [],
-                  requiredPeople: 1,
-                  assignedPeople: 1,
-                  status: a.status as any,
-                  centerId: '',
-                  location: { lat: 0, lng: 0 },
-                  createdBy: '',
-                  createdAt: a.assignedAt,
-                  updatedAt: a.assignedAt,
-                }}
-                assignment={a}
-                onUpdateStatus={(status) => {
-                  updateStatus.mutate({ assignmentId: a.id, status })
-                }}
-              />
+              <div key={a.id}>
+                <button onClick={() => setExpandedMissionId(isExpanded ? null : a.id)} className="w-full text-left">
+                  <VolunteerMissionCard
+                    mission={realMission}
+                    assignment={a}
+                    onUpdateStatus={(status) => {
+                      updateStatus.mutate({ assignmentId: a.id, status })
+                    }}
+                  />
+                </button>
+                {isExpanded && (
+                  <div className="space-y-3 px-1 pt-2 pb-4">
+                    <LiveTrackingCard
+                      missionLat={realMission.location.lat}
+                      missionLng={realMission.location.lng}
+                      missionAddress={realMission.location.zone ?? `${realMission.location.lat.toFixed(4)}, ${realMission.location.lng.toFixed(4)}`}
+                      volunteerUserId={profile?.id}
+                    />
+                    <div className="bg-white/[0.03] rounded-2xl p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Progreso</p>
+                      <OperationalTimeline steps={timelineSteps} />
+                    </div>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
@@ -220,22 +282,60 @@ function ProfileSection() {
       </GlassCard>
 
       <GlassCard className="p-4">
-        <h4 className="text-xs font-semibold text-ink mb-3">Métricas</h4>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Confianza', value: `${profile.trustScore}%` },
-            { label: 'Misiones', value: `${profile.completedMissions}/${profile.totalMissions}` },
-            { label: 'Horas', value: `${profile.serviceHours}h` },
-            { label: 'Respuesta', value: `${profile.avgResponseMinutes}min` },
-            { label: 'Verificación', value: VERIFICATION_LEVEL_LABELS[profile.verificationLevel]?.split(' ')[0] ?? 'N/A' },
-          ].map((m) => (
-            <div key={m.label} className="bg-white/5 rounded-lg p-2 text-center">
-              <p className="text-lg font-semibold text-ink">{m.value}</p>
-              <p className="text-[10px] text-ink-faint">{m.label}</p>
-            </div>
-          ))}
+        <h4 className="text-xs font-semibold text-ink mb-3">Métricas operativas</h4>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/5 rounded-lg p-2 text-center">
+            <AnimatedMetric value={profile.trustScore} suffix="%" />
+            <p className="text-[10px] text-ink-faint">Confianza</p>
+          </div>
+          <div className="bg-white/5 rounded-lg p-2 text-center">
+            <AnimatedMetric value={profile.totalMissions} />
+            <p className="text-[10px] text-ink-faint">Misiones ({profile.completedMissions} ok)</p>
+          </div>
+          <div className="bg-white/5 rounded-lg p-2 text-center">
+            <AnimatedMetric value={profile.serviceHours} suffix="h" />
+            <p className="text-[10px] text-ink-faint">Horas servicio</p>
+          </div>
+          <div className="bg-white/5 rounded-lg p-2 text-center">
+            <p className="text-lg font-semibold text-ink">{profile.avgResponseMinutes}min</p>
+            <p className="text-[10px] text-ink-faint">Respuesta</p>
+          </div>
+          <div className="bg-white/5 rounded-lg p-2 text-center">
+            <p className="text-lg font-semibold text-ink">{profile.avgMissionDurationMinutes}min</p>
+            <p className="text-[10px] text-ink-faint">Duración media</p>
+          </div>
+          <div className="bg-white/5 rounded-lg p-2 text-center">
+            <p className="text-lg font-semibold text-ink">{VERIFICATION_LEVEL_LABELS[profile.verificationLevel]?.split(' ')[0] ?? 'N/A'}</p>
+            <p className="text-[10px] text-ink-faint">Verificación</p>
+          </div>
         </div>
       </GlassCard>
+
+      {profile.specialties.length > 0 && (
+        <GlassCard className="p-4">
+          <h4 className="text-xs font-semibold text-ink mb-2">Especialidades</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {profile.specialties.map((s) => (
+              <span key={s} className="inline-flex items-center rounded-full bg-operational/20 text-operational px-2.5 py-1 text-xs font-medium">
+                {SKILL_LABELS[s] ?? s}
+              </span>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
+      {profile.centersCollaborated.length > 0 && (
+        <GlassCard className="p-4">
+          <h4 className="text-xs font-semibold text-ink mb-2">Centros donde ha colaborado</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {profile.centersCollaborated.map((c) => (
+              <span key={c} className="inline-flex items-center rounded-full bg-white/10 text-ink-subtle px-2.5 py-1 text-xs">
+                {c}
+              </span>
+            ))}
+          </div>
+        </GlassCard>
+      )}
 
       {profile.skills.length > 0 && (
         <GlassCard className="p-4">
@@ -265,12 +365,13 @@ export function VolunteerWorkspace() {
 
   useRealtimeSync({
     channelName: 'volunteer-missions',
-    tables: ['missions', 'mission_assignments', 'mission_events'],
+    tables: ['missions', 'mission_assignments', 'mission_events', 'mission_applications'],
     invalidateKeys: [
       FARO_QUERY_KEYS.missions,
       FARO_QUERY_KEYS.mission,
       FARO_QUERY_KEYS.missionAssignments,
       FARO_QUERY_KEYS.missionEvents,
+      FARO_QUERY_KEYS.missionApplications,
       FARO_QUERY_KEYS.volunteerMissions,
     ],
   })

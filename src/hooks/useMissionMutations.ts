@@ -122,15 +122,53 @@ export function useUpdateMissionAssignment() {
       status,
     }: {
       assignmentId: string
-      status: 'en_route' | 'on_site' | 'completed'
+      status: 'preparing' | 'en_route' | 'on_site' | 'in_progress' | 'completed'
     }) => {
+      if (status === 'preparing') return missionService.markPreparing(assignmentId)
       if (status === 'en_route') return missionService.markEnRoute(assignmentId)
       if (status === 'on_site') return missionService.markOnSite(assignmentId)
+      if (status === 'in_progress') return missionService.markInProgress(assignmentId)
       return missionService.markCompleted(assignmentId)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+    },
+  })
+}
+
+export function useSubmitEvidence() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      missionId,
+      volunteerId,
+      evidenceUrls,
+    }: {
+      assignmentId: string
+      missionId: string
+      volunteerId: string
+      evidenceUrls: string[]
+    }) => missionService.submitEvidence(assignmentId, missionId, volunteerId, evidenceUrls),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionEvents] })
+    },
+  })
+}
+
+export function useVerifyAssignment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+    }: {
+      assignmentId: string
+    }) => missionService.verifyAssignment(assignmentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
     },
   })
 }

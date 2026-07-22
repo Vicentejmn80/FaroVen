@@ -23,6 +23,7 @@ export const FARO_QUERY_KEYS = {
   operationalContext: 'operational-context',
   executiveDashboard: 'executive-dashboard',
   operationalTimeline: 'operational-timeline',
+  missionApplications: 'mission-applications',
   riskAssessment: 'risk-assessment',
   recommendations: 'recommendations',
   simulationState: 'simulation-state',
