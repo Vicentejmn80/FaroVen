@@ -16,7 +16,7 @@ function mapMissionRow(row: MissionRow): Mission {
     requiredPeople: row.required_people,
     assignedPeople: row.assigned_people,
     status: row.status as MissionStage,
-    location: { lat: row.latitude, lng: row.longitude, address: row.address ?? undefined, zone: row.zone },
+    location: { lat: row.lat, lng: row.lng, address: row.address ?? undefined, zone: row.zone },
     deadline: row.deadline ? new Date(row.deadline) : undefined,
     eta: row.eta ? new Date(row.eta) : undefined,
     createdBy: row.created_by,

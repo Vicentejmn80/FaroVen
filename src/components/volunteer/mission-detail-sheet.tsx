@@ -20,7 +20,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { useAuth } from '@/store/auth-context'
 import { useExpressInterest } from '@/hooks/useVolunteerInterests'
-import { openExternalNavigation, buildGoogleMapsViewLink, cn, timeAgo } from '@/lib/utils'
+import { openExternalNavigation, buildGoogleMapsViewLink, cn, timeAgo, isValidCoord } from '@/lib/utils'
 import {
   label,
   MISSION_PRIORITY_LABELS,
@@ -188,6 +188,12 @@ export function MissionDetailSheet({
 
   const handleNavigate = useCallback(() => {
     if (!mission) return
+    if (!isValidCoord(mission.location.lat, mission.location.lng)) {
+      console.warn('[FARO] Mission missing latitude. Skipping navigation.', { missionId: mission.id })
+      setHelpError('Esta misión aún no posee una ubicación precisa.')
+      setPhase('error')
+      return
+    }
     openExternalNavigation({
       lat: mission.location.lat,
       lng: mission.location.lng,
@@ -198,7 +204,9 @@ export function MissionDetailSheet({
 
   const handleShare = useCallback(async () => {
     if (!mission) return
-    const maps = buildGoogleMapsViewLink(mission.location.lat, mission.location.lng, title)
+    const maps = isValidCoord(mission.location.lat, mission.location.lng)
+      ? buildGoogleMapsViewLink(mission.location.lat, mission.location.lng, title)
+      : null
     const text = `${title} · ${mission.siteName} (${mission.zone}). ${mission.distanceKm} km. Ayuda con FARO.`
     const url = maps ?? window.location.href
     try {

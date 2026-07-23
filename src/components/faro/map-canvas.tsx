@@ -5,7 +5,8 @@ import { motion } from 'framer-motion'
 import { createSiteMarkerIcon } from './map-marker'
 import { MapGoogleLinkButton, MapLocateControl, MapZoomControls } from './map-controls'
 import { MapResizeNotifier } from './map-resize-notifier'
-import { cn, defaultMapCenter, isValidCoord } from '@/lib/utils'
+import { safeFlyTo } from '@/lib/geo'
+import { cn, isValidCoord, defaultMapCenter } from '@/lib/utils'
 import type { Site } from '@/lib/types'
 
 interface MapCanvasProps {
@@ -127,11 +128,11 @@ function FocusActiveSite({ sites, activeId }: { sites: Site[]; activeId?: string
     const site = sites.find((s) => s.id === activeId)
     if (!site || !isValidCoord(site.lat, site.lng)) return
 
-    const size = map.getSize()
-    if (size.x <= 0 || size.y <= 0) return
-
-    const targetZoom = Math.max(map.getZoom(), 14)
-    map.flyTo([site.lat, site.lng], targetZoom, { duration: 0.24 })
+    safeFlyTo(map, site.lat, site.lng, {
+      zoom: Math.max(map.getZoom(), 14),
+      duration: 0.24,
+      context: { entityId: site.id, entityType: 'site', title: site.name, action: 'FocusActiveSite' },
+    })
   }, [activeId, map, sites])
 
   return null

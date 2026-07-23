@@ -7,6 +7,7 @@ import { fieldClassName } from '@/components/faro/flow-sheet'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { resolveCoordinates, searchPlaces, type ResolvedPlace } from '@/lib/osm-geocoding'
 import { readCurrentPosition } from '@/lib/site-utils'
+import { safeFlyTo } from '@/lib/geo'
 import { cn } from '@/lib/utils'
 
 const CARACAS: [number, number] = [10.4806, -66.9036]
@@ -206,7 +207,11 @@ function MapClickHandler({ onPick }: { onPick: (lat: number, lng: number) => voi
 function FlyTo({ target }: { target: [number, number] }) {
   const map = useMap()
   useEffect(() => {
-    map.flyTo(target, Math.max(map.getZoom(), 15), { duration: 0.35 })
+    safeFlyTo(map, target[0], target[1], {
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 0.35,
+      context: { action: 'LocationPickerFlyTo' },
+    })
   }, [map, target])
   return null
 }

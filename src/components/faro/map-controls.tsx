@@ -3,6 +3,7 @@ import { Minus, Navigation, Plus, ExternalLink } from 'lucide-react'
 import { useMap } from 'react-leaflet'
 import { motion } from 'framer-motion'
 import { buildGoogleMapsViewLink, isValidCoord, openExternalNavigation } from '@/lib/utils'
+import { safeFlyTo } from '@/lib/geo'
 import { cn } from '@/lib/utils'
 
 export function MapZoomControls({ className }: { className?: string }) {
@@ -38,7 +39,11 @@ export function MapLocateControl({ className }: { className?: string }) {
           setLocating(false)
           return
         }
-        map.flyTo([latitude, longitude], Math.max(map.getZoom(), 14), { duration: 0.35 })
+        safeFlyTo(map, latitude, longitude, {
+          zoom: Math.max(map.getZoom(), 14),
+          duration: 0.35,
+          context: { action: 'MapLocateControl' },
+        })
         setLocating(false)
       },
       () => setLocating(false),

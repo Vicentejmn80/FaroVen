@@ -22,8 +22,11 @@ import {
   getMissionLatLng,
   resolveMissionCoordinates,
 } from '@/lib/mission-location'
+import { safeFlyTo, safeMapCenter, safeMarkerPosition } from '@/lib/geo'
+import { MapSectionErrorBoundary } from '@/components/faro/map-section-error-boundary'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { SITE_TYPE_LABELS, siteToNeedableType } from '@/lib/site-utils'
-import { cn, defaultMapCenter, greeting, isValidCoord } from '@/lib/utils'
+import { cn, greeting } from '@/lib/utils'
 import type { Need } from '@/domain/models'
 import type { Site } from '@/lib/types'
 import { useFaro } from '@/store/faro-context'
@@ -168,7 +171,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
 
       {/* ── Móvil: listado como capa ── */}
       {viewMode === 'list' && (
-        <div className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-900 lg:hidden">
+        <div className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-base-900">
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
@@ -412,6 +415,8 @@ function VolunteerMapScreen({
   const [selectedMission, setSelectedMission] = useState<VolunteerMission | null>(null)
   const [distanceFilter, setDistanceFilter] = useState<'5' | '10' | '25'>('10')
   const [showList, setShowList] = useState(false)
+  /** Un solo MapContainer a la vez: dos mapas (móvil hidden + desktop) provocan flyTo en size 0 → NaN LatLng. */
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
 
   const visibleMissions = useMemo(() => {
     const maxKm = Number.parseFloat(distanceFilter)
@@ -429,21 +434,45 @@ function VolunteerMapScreen({
 
   const closeDetail = () => setSelectedMission(null)
 
+  const openMission = (mission: VolunteerMission) => {
+    if (import.meta.env.DEV) {
+      console.info('[FARO] Mission selected', {
+        missionId: mission.id,
+        title: mission.title,
+        hasCoords: resolveMissionCoordinates(mission.location.lat, mission.location.lng) !== null,
+      })
+    }
+    // Detalle independiente del flyTo
+    setSelectedMission(mission)
+  }
+
+  const mapCanvas = (
+    <MapSectionErrorBoundary
+      resetKey={`map-${selectedMission?.id ?? 'none'}-${isDesktop ? 'desk' : 'mob'}`}
+      title="No pudimos localizar esta necesidad"
+      description="Es posible que todavía no tenga una ubicación válida. El detalle sigue disponible."
+      onDismiss={closeDetail}
+    >
+      <VolunteerMapCanvas
+        missions={visibleMissions}
+        activeId={selectedMission?.id}
+        onSelect={openMission}
+        fullBleed={!isDesktop}
+      />
+    </MapSectionErrorBoundary>
+  )
+
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-      {/* Móvil: mapa full-bleed */}
+      {/* Móvil: mapa full-bleed — solo montar fuera de desktop */}
+      {!isDesktop && (
       <div
         className={cn(
-          'absolute inset-0 lg:hidden',
+          'absolute inset-0',
           showList && 'pointer-events-none invisible',
         )}
       >
-        <VolunteerMapCanvas
-          missions={visibleMissions}
-          activeId={selectedMission?.id}
-          onSelect={setSelectedMission}
-          fullBleed
-        />
+        {mapCanvas}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-2">
           <div className="pointer-events-auto flex items-start gap-2">
             <div className="glass-strong min-w-0 flex-1 space-y-2 rounded-2xl px-3 py-2.5 shadow-glass-sm ring-1 ring-white/10">
@@ -476,9 +505,10 @@ function VolunteerMapScreen({
           </div>
         </div>
       </div>
+      )}
 
       {/* Móvil: listado */}
-      {showList && (
+      {!isDesktop && showList && (
         <div className="absolute inset-0 z-30 flex flex-col bg-base-900 lg:hidden">
           <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3">
             <h2 className="text-sm font-semibold text-ink">Necesidades abiertas</h2>
@@ -512,7 +542,7 @@ function VolunteerMapScreen({
                     key={mission.id}
                     type="button"
                     onClick={() => {
-                      setSelectedMission(mission)
+                      openMission(mission)
                       setShowList(false)
                     }}
                     className={cn(
@@ -540,8 +570,9 @@ function VolunteerMapScreen({
         </div>
       )}
 
-      {/* Desktop */}
-      <div className="hidden h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(360px,42%)] gap-6 overflow-hidden px-8 pb-6 pt-2 lg:grid">
+      {/* Desktop: un solo mapa */}
+      {isDesktop && (
+      <div className="h-full min-h-0 grid grid-cols-[minmax(0,1fr)_minmax(360px,42%)] gap-6 overflow-hidden px-8 pb-6 pt-2">
         <div className="flex min-h-0 flex-col overflow-hidden">
           <header className="shrink-0 space-y-1">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-subtle">
@@ -608,7 +639,7 @@ function VolunteerMapScreen({
                   <button
                     key={mission.id}
                     type="button"
-                    onClick={() => setSelectedMission(mission)}
+                    onClick={() => openMission(mission)}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors',
                       selectedMission?.id === mission.id
@@ -640,38 +671,51 @@ function VolunteerMapScreen({
           <div className="map-container-wrapper min-h-0 flex-[1.1]">
             <SectionTitle className="mb-3 shrink-0">Mapa operativo</SectionTitle>
             <div className="h-[calc(100%-1.75rem)] min-h-[280px] overflow-hidden rounded-2xl border border-white/[0.06]">
-              <VolunteerMapCanvas
-                missions={visibleMissions}
-                activeId={selectedMission?.id}
-                onSelect={setSelectedMission}
-              />
+              {mapCanvas}
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/[0.06]">
-            {selectedMission ? (
-              <MissionDetailSheet
-                mission={selectedMission}
-                onClose={closeDetail}
-                variant="panel"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center px-6 text-center">
-                <div>
-                  <p className="text-sm text-ink-subtle">Selecciona una necesidad</p>
-                  <p className="mt-1 text-xs text-ink-faint">
-                    El detalle operacional aparecerá aquí
-                  </p>
+            <MapSectionErrorBoundary
+              resetKey={`panel-${selectedMission?.id ?? 'none'}`}
+              onDismiss={closeDetail}
+              title="No fue posible cargar la información completa"
+              description="Puedes volver a intentarlo o elegir otra necesidad."
+            >
+              {selectedMission ? (
+                <MissionDetailSheet
+                  mission={selectedMission}
+                  onClose={closeDetail}
+                  variant="panel"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center px-6 text-center">
+                  <div>
+                    <p className="text-sm text-ink-subtle">Selecciona una necesidad</p>
+                    <p className="mt-1 text-xs text-ink-faint">
+                      El detalle operacional aparecerá aquí
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </MapSectionErrorBoundary>
           </div>
         </section>
       </div>
+      )}
 
       {/* Móvil: bottom sheet de detalle */}
-      <div className="lg:hidden">
-        <MissionDetailSheet mission={selectedMission} onClose={closeDetail} variant="sheet" />
-      </div>
+      {!isDesktop && (
+        <div>
+          <MapSectionErrorBoundary
+            resetKey={`sheet-${selectedMission?.id ?? 'none'}`}
+            onDismiss={closeDetail}
+            title="No pudimos abrir el detalle"
+            description="Esta misión puede no tener ubicación precisa. Intenta de nuevo."
+          >
+            <MissionDetailSheet mission={selectedMission} onClose={closeDetail} variant="sheet" />
+          </MapSectionErrorBoundary>
+        </div>
+      )}
     </div>
   )
 }
@@ -689,12 +733,10 @@ function VolunteerMapCanvas({
 }) {
   const mappableMissions = useMemo(() => filterMappableMissions(missions), [missions])
 
-  const center: [number, number] = useMemo(() => {
-    if (!mappableMissions.length) return defaultMapCenter()
-    const lat = mappableMissions.reduce((acc, m) => acc + m.location.lat, 0) / mappableMissions.length
-    const lng = mappableMissions.reduce((acc, m) => acc + m.location.lng, 0) / mappableMissions.length
-    return isValidCoord(lat, lng) ? [lat, lng] : defaultMapCenter()
-  }, [mappableMissions])
+  const center: [number, number] = useMemo(
+    () => safeMapCenter(mappableMissions.map((m) => m.location)),
+    [mappableMissions],
+  )
 
   const activeMission = useMemo(
     () => mappableMissions.find((m) => m.id === activeId) ?? null,
@@ -732,7 +774,10 @@ function VolunteerMapCanvas({
         <MapZoomControls />
         <MapLocateControl />
         {mappableMissions.map((mission) => {
-          const position = getMissionLatLng(mission)
+          const position = safeMarkerPosition(mission.location.lat, mission.location.lng, {
+            entityId: mission.id,
+            title: mission.title,
+          })
           if (!position) return null
           return (
             <Marker
@@ -774,11 +819,21 @@ function FitToMissionsOnce({ missions }: { missions: VolunteerMission[] }) {
 
     if (!coords.length) return
 
-    const bounds = latLngBounds(coords)
-    if (!bounds.isValid()) return
-    map.fitBounds(bounds, { padding: [36, 36], maxZoom: 13 })
-    fittedRef.current = true
-    requestAnimationFrame(() => map.invalidateSize({ animate: false }))
+    try {
+      const bounds = latLngBounds(coords)
+      if (!bounds.isValid()) return
+      map.fitBounds(bounds, { padding: [36, 36], maxZoom: 13 })
+      fittedRef.current = true
+      requestAnimationFrame(() => {
+        try {
+          map.invalidateSize({ animate: false })
+        } catch {
+          /* mapa oculto — ignorar */
+        }
+      })
+    } catch (err) {
+      console.warn('[FARO] fitBounds skipped', err)
+    }
   }, [map, missions])
 
   return null
@@ -797,10 +852,17 @@ function FocusActiveMission({
     if (!activeId) return
     const mission = missions.find((m) => m.id === activeId)
     if (!mission) return
-    const position = getMissionLatLng(mission)
-    if (!position) return
-    const targetZoom = Math.max(map.getZoom(), 13)
-    map.flyTo(position, targetZoom, { duration: 0.24 })
+    // Independiente del bottom sheet: solo centra si el mapa es visible y las coords son válidas.
+    safeFlyTo(map, mission.location.lat, mission.location.lng, {
+      zoom: Math.max(map.getZoom(), 13),
+      duration: 0.24,
+      context: {
+        entityId: mission.id,
+        entityType: 'mission',
+        title: mission.title,
+        action: 'FocusActiveMission',
+      },
+    })
   }, [activeId, map, missions])
 
   return null

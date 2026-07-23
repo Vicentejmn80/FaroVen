@@ -200,8 +200,9 @@ export interface VolunteerRow {
   full_name: string
   phone: string
   zone: string
-  latitude: number
-  longitude: number
+  /** Columnas reales en Postgres: lat / lng */
+  lat: number
+  lng: number
   organization: string | null
   experience: string | null
   availability: 'available' | 'busy' | 'offline' | 'on_mission' | 'unavailable'
@@ -246,8 +247,9 @@ export interface MissionRow {
   required_people: number
   assigned_people: number
   status: 'created' | 'matching' | 'assigned' | 'accepted' | 'en_route' | 'on_site' | 'in_progress' | 'completed' | 'verified' | 'archived'
-  latitude: number
-  longitude: number
+  /** Columnas reales en Postgres: lat / lng (no latitude/longitude). */
+  lat: number
+  lng: number
   address: string | null
   zone: string
   deadline: string | null

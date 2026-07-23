@@ -1,12 +1,21 @@
 import type { GeoCoordinates } from '@/domain/models'
-import { isValidCoord, parseCoord } from '@/lib/utils'
+import { toGeoPoint, toLatLngTuple, type GeoContext } from '@/lib/geo'
 
-const OMIT_LOG = '[FARO Mapa Voluntario] Misión omitida por falta de coordenadas'
+const OMIT_LOG_CONTEXT = { entityType: 'mission' as const }
 
 export interface MissionLocationContext {
   missionId?: string
   needId?: string
   title?: string
+}
+
+function toContext(context?: MissionLocationContext, action?: string): GeoContext {
+  return {
+    entityId: context?.missionId ?? context?.needId,
+    entityType: 'mission',
+    title: context?.title,
+    action,
+  }
 }
 
 /**
@@ -17,23 +26,7 @@ export function resolveMissionCoordinates(
   lng: unknown,
   context?: MissionLocationContext,
 ): GeoCoordinates | null {
-  const parsedLat = parseCoord(lat as number | string | null | undefined)
-  const parsedLng = parseCoord(lng as number | string | null | undefined)
-
-  if (!isValidCoord(parsedLat, parsedLng)) {
-    if (context && (context.missionId || context.needId || context.title)) {
-      console.warn(OMIT_LOG, {
-        missionId: context.missionId,
-        needId: context.needId,
-        title: context.title,
-        lat,
-        lng,
-      })
-    }
-    return null
-  }
-
-  return { lat: parsedLat, lng: parsedLng }
+  return toGeoPoint(lat, lng, toContext(context, 'resolveMissionCoordinates'))
 }
 
 export function missionHasMapLocation(mission: {
@@ -49,21 +42,24 @@ export function getMissionLatLng(mission: {
   title?: string
   location?: { lat?: unknown; lng?: unknown } | null
 }): [number, number] | null {
-  const coords = resolveMissionCoordinates(mission.location?.lat, mission.location?.lng, {
-    missionId: mission.id,
+  return toLatLngTuple(mission.location?.lat, mission.location?.lng, {
+    ...OMIT_LOG_CONTEXT,
+    entityId: mission.id,
     title: mission.title,
+    action: 'getMissionLatLng',
   })
-  if (!coords) return null
-  return [coords.lat, coords.lng]
 }
 
 /** Filtra misiones mapeables; registra en consola las omitidas. */
-export function filterMappableMissions<T extends { id: string; title?: string; location?: { lat?: unknown; lng?: unknown } | null }>(
-  missions: T[],
-): T[] {
+export function filterMappableMissions<
+  T extends { id: string; title?: string; location?: { lat?: unknown; lng?: unknown } | null },
+>(missions: T[]): T[] {
   return missions.filter((mission) => {
     if (missionHasMapLocation(mission)) return true
-    console.warn(OMIT_LOG, { missionId: mission.id, title: mission.title })
+    console.warn('[FARO] Mission omitted from map — missing latitude/longitude.', {
+      missionId: mission.id,
+      title: mission.title,
+    })
     return false
   })
 }
