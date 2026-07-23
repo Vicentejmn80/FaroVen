@@ -1,5 +1,5 @@
 import { missionRepository, type MissionFilters } from '@/repositories/mission-repository'
-import { transitionMission, canTransitionMission } from '@/domain/mission.service'
+import { transitionMission, canTransitionMission, isTerminalMissionStage } from '@/domain/mission.service'
 import type { Mission, MissionAssignment, MissionEvent, MissionStage, TransitionResult } from '@/domain/mission.types'
 import { MISSION_STAGES } from '@/domain/mission.types'
 import {
@@ -18,6 +18,23 @@ async function emitAssignmentStatus(
     volunteerId: assignment.volunteerId,
     detail,
   })
+}
+
+async function advanceMissionStage(missionId: string, toStage: MissionStage, actorId?: string) {
+  const mission = await missionRepository.findById(missionId)
+  if (!mission || mission.status === toStage || isTerminalMissionStage(mission.status)) return
+  try {
+    const result = transitionMission(mission, toStage, actorId)
+    await missionRepository.update(missionId, result.mission)
+    await missionRepository.addEvent({
+      missionId,
+      eventType: result.event.eventType,
+      actorId,
+      description: result.event.description ?? `Misión avanzó a ${toStage}`,
+    })
+  } catch {
+    // transition not allowed in current state; skip silently
+  }
 }
 
 export interface CreateMissionParams {
@@ -95,6 +112,17 @@ export const missionService = {
     const assignment = await missionRepository.createAssignment({ missionId, volunteerId })
     const mission = await missionRepository.findById(missionId)
     if (mission) {
+      if (mission.status === MISSION_STAGES.CREATED || mission.status === MISSION_STAGES.MATCHING) {
+        const result = transitionMission(mission, MISSION_STAGES.ASSIGNED, actorId)
+        await missionRepository.update(missionId, { ...result.mission, assignedPeople: (mission.assignedPeople ?? 0) + 1 })
+        await missionRepository.addEvent({
+          missionId,
+          eventType: result.event.eventType,
+          actorId,
+          description: 'Voluntario asignado a la misión',
+        })
+        return assignment
+      }
       await missionRepository.update(missionId, {
         assignedPeople: (mission.assignedPeople ?? 0) + 1,
       } as Partial<Mission>)
@@ -138,6 +166,7 @@ export const missionService = {
       respondedAt: new Date(),
     })
     await emitAssignmentStatus(updated, 'accepted', 'El voluntario aceptó la asignación')
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.ACCEPTED, _volunteerId)
     return updated
   },
 
@@ -155,6 +184,7 @@ export const missionService = {
       status: 'en_route',
     })
     await emitAssignmentStatus(updated, 'en_route', 'El voluntario está en camino')
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.EN_ROUTE)
     return updated
   },
 
@@ -164,6 +194,7 @@ export const missionService = {
       arrivedAt: new Date(),
     })
     await emitAssignmentStatus(updated, 'on_site', 'El voluntario llegó al sitio')
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.ON_SITE)
     return updated
   },
 
@@ -173,6 +204,7 @@ export const missionService = {
       completedAt: new Date(),
     })
     await emitAssignmentStatus(updated, 'completed', 'El voluntario finalizó la operación')
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.COMPLETED)
     return updated
   },
 
@@ -190,6 +222,7 @@ export const missionService = {
       status: 'in_progress',
     })
     await emitAssignmentStatus(updated, 'in_progress', 'La operación está en progreso')
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.IN_PROGRESS)
     return updated
   },
 
@@ -209,13 +242,17 @@ export const missionService = {
       description: `Evidencia adjunta (${evidenceUrls.length} archivo(s))`,
       metadata: { evidenceUrls, assignmentId },
     })
+    await emitAssignmentStatus(updated, 'evidence_submitted', `${evidenceUrls.length} archivo(s) de evidencia`)
     return updated
   },
 
   async verifyAssignment(assignmentId: string): Promise<MissionAssignment> {
-    return missionRepository.updateAssignment(assignmentId, {
+    const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'verified',
       verifiedAt: new Date(),
     })
+    await emitAssignmentStatus(updated, 'verified', 'Operación verificada por el coordinador')
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.VERIFIED)
+    return updated
   },
 }

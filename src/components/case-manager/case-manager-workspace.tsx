@@ -16,10 +16,11 @@ import { cn } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS } from '@/lib/labels'
-import { useAuth } from '@/store/auth-context'
+import { useAuth, usePermissions } from '@/store/auth-context'
 import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
-import { useMissionTimeline } from '@/hooks/useMissions'
+import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
+import { useVerifyAssignment } from '@/hooks/useMissionMutations'
 import { VOLUNTEER_AVAILABILITY_LABELS } from '@/domain/volunteer.types'
 
 type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'solicitudes'
@@ -73,6 +74,8 @@ function NeedInterestsPanel({
   const { data: interests = [], isLoading } = useNeedInterests(publicNeedId)
   const approveInterest = useApproveNeedInterest()
   const rejectInterest = useRejectNeedInterest()
+  const { isCaseManager, isCoordinator, isRegionalAdmin, isSuperAdmin } = usePermissions()
+  const canModerate = isCaseManager || isCoordinator || isRegionalAdmin || isSuperAdmin
 
   const pending = useMemo(() => interests.filter((interest) => interest.status === 'reserved'), [interests])
   const history = useMemo(() => interests.filter((interest) => interest.status !== 'reserved'), [interests])
@@ -111,30 +114,32 @@ function NeedInterestsPanel({
                 {interest.volunteerCompletedMissions != null && <span>{interest.volunteerCompletedMissions} misiones</span>}
               </div>
             </div>
-            <div className="flex gap-1.5">
-              <EmergencyButton
-                variant="glass"
-                size="sm"
-                disabled={!operatorId || approveInterest.isPending}
-                onClick={() => {
-                  if (!operatorId) return
-                  approveInterest.mutate({ reservationId: interest.id, operatorId })
-                }}
-              >
-                Aprobar
-              </EmergencyButton>
-              <EmergencyButton
-                variant="glass"
-                size="sm"
-                disabled={!operatorId || rejectInterest.isPending}
-                onClick={() => {
-                  if (!operatorId) return
-                  rejectInterest.mutate({ reservationId: interest.id, operatorId })
-                }}
-              >
-                Rechazar
-              </EmergencyButton>
-            </div>
+            {canModerate && (
+              <div className="flex gap-1.5">
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  disabled={!operatorId || approveInterest.isPending}
+                  onClick={() => {
+                    if (!operatorId) return
+                    approveInterest.mutate({ reservationId: interest.id, operatorId })
+                  }}
+                >
+                  Aprobar
+                </EmergencyButton>
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  disabled={!operatorId || rejectInterest.isPending}
+                  onClick={() => {
+                    if (!operatorId) return
+                    rejectInterest.mutate({ reservationId: interest.id, operatorId })
+                  }}
+                >
+                  Rechazar
+                </EmergencyButton>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -155,6 +160,13 @@ function NeedInterestsPanel({
 
 function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: () => void }) {
   const { data: missionEvents } = useMissionTimeline(mission.id)
+  const { data: assignments } = useMissionAssignments(mission.id)
+  const verifyAssignment = useVerifyAssignment()
+
+  const pendingEvidence = useMemo(() => {
+    if (!assignments) return []
+    return assignments.filter((a) => a.status === 'completed' && a.evidenceUrls && a.evidenceUrls.length > 0)
+  }, [assignments])
 
   const timelineSteps: TimelineStep[] = [
     { id: 'created', label: 'Misión creada', timestamp: new Date(mission.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }), completed: true, active: false },
@@ -191,6 +203,35 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
                 <span className="h-1.5 w-1.5 rounded-full bg-info shrink-0" />
                 <span className="text-ink-subtle">{ev.eventType}</span>
                 {ev.description && <span className="text-ink-faint">&middot; {ev.description}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pendingEvidence.length > 0 && (
+        <div className="bg-white/[0.03] rounded-2xl p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Evidencia por verificar</p>
+          <div className="space-y-2">
+            {pendingEvidence.map((a) => (
+              <div key={a.id} className="space-y-1.5">
+                <p className="text-[11px] text-ink-muted">Voluntario {a.volunteerId.slice(0, 8)}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {a.evidenceUrls?.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                       className="text-xs text-info underline truncate max-w-[200px]">
+                      {url.split('/').pop() ?? `Evidencia ${i + 1}`}
+                    </a>
+                  ))}
+                </div>
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  disabled={verifyAssignment.isPending}
+                  onClick={() => verifyAssignment.mutate({ assignmentId: a.id })}
+                >
+                  Verificar
+                </EmergencyButton>
               </div>
             ))}
           </div>
@@ -435,9 +476,6 @@ export function CaseManagerWorkspace() {
                         }}
                       >
                         Publicar necesidad
-                      </EmergencyButton>
-                      <EmergencyButton variant="glass" size="sm">
-                        Interesados
                       </EmergencyButton>
                     </div>
                     <div className="mt-2">

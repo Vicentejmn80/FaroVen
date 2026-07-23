@@ -26,6 +26,8 @@ export type VolunteerDispatchAction =
   | 'on_site'
   | 'in_progress'
   | 'completed'
+  | 'verified'
+  | 'evidence_submitted'
 
 export interface VolunteerDispatchEventInput {
   action: VolunteerDispatchAction
@@ -48,6 +50,8 @@ const DISPATCH_TITLES: Record<VolunteerDispatchAction, string> = {
   on_site: 'Voluntario en sitio',
   in_progress: 'Operación en progreso',
   completed: 'Operación completada',
+  verified: 'Operación verificada',
+  evidence_submitted: 'Evidencia adjuntada',
 }
 
 function dispatchSeverity(action: VolunteerDispatchAction): OperationalTimelineEntry['severity'] {

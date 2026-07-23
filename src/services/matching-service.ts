@@ -2,6 +2,7 @@ import { missionRepository } from '@/repositories/mission-repository'
 import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { rankVolunteers, selectTopVolunteers, getMinimumScoreForMission } from '@/domain/matching.service'
 import { MISSION_STAGES } from '@/domain/mission.types'
+import { transitionMission } from '@/domain/mission.service'
 
 export const matchingService = {
   async runMatching(missionId: string): Promise<void> {
@@ -12,7 +13,6 @@ export const matchingService = {
     const volunteers = await volunteerRepository.list({ zone: mission.location.zone, availability: 'available' })
 
     if (volunteers.length === 0) {
-      await missionRepository.update(missionId, { status: MISSION_STAGES.MATCHING })
       await missionRepository.addEvent({
         missionId,
         eventType: 'volunteer_unavailable',
@@ -40,10 +40,8 @@ export const matchingService = {
       return
     }
 
-    await missionRepository.update(missionId, {
-      status: MISSION_STAGES.ASSIGNED,
-      assignedPeople: top.length,
-    })
+    const result = transitionMission(mission, MISSION_STAGES.ASSIGNED)
+    await missionRepository.update(missionId, { ...result.mission, assignedPeople: top.length })
 
     for (const scored of top) {
       await missionRepository.createAssignment({

@@ -1,3 +1,4 @@
+import { useToast } from '@/store/toast-context'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   CoverageInterest,
@@ -143,9 +144,11 @@ export function useVerifyPublicNeedEntry() {
 
 export function useApproveNeedInterest() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   return useMutation({
     mutationFn: (input: { reservationId: string; operatorId: string }) => approveNeedInterest(input),
     onSuccess: () => {
+      showToast('Postulación aprobada — misión creada y voluntario asignado', 'success')
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
@@ -157,9 +160,11 @@ export function useApproveNeedInterest() {
 
 export function useRejectNeedInterest() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   return useMutation({
     mutationFn: (input: { reservationId: string; operatorId: string }) => rejectNeedInterest(input),
     onSuccess: () => {
+      showToast('Postulación rechazada', 'info')
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.operationalTimeline] })

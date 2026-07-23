@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useVolunteerProfile, useVolunteerMissions, useUpdateVolunteerAvailability } from '@/hooks/useVolunteerProfile'
 import { useMissions } from '@/hooks/useMissions'
-import { useUpdateMissionAssignment } from '@/hooks/useMissionMutations'
+import { useUpdateMissionAssignment, useRespondMission, useSubmitEvidence } from '@/hooks/useMissionMutations'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { VolunteerMissionCard } from './volunteer-mission-card'
@@ -10,7 +10,7 @@ import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { VOLUNTEER_AVAILABILITY, VOLUNTEER_AVAILABILITY_LABELS, VOLUNTEER_AVAILABILITY_TONES, VERIFICATION_LEVEL_LABELS, SKILL_LABELS } from '@/domain/volunteer.types'
 import type { Mission } from '@/domain/mission.types'
-import { usePermissions } from '@/store/auth-context'
+import { useAuth, usePermissions } from '@/store/auth-context'
 import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
 import { Flag } from 'lucide-react'
@@ -164,11 +164,14 @@ function AvailableMissions() {
   )
 }
 
-function MyMissions() {
+function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
+  const { user } = useAuth()
   const { data: profile } = useVolunteerProfile()
   const { data: assignments, isLoading } = useVolunteerMissions(profile?.id ?? '')
   const { data: allMissions } = useMissions()
   const updateStatus = useUpdateMissionAssignment()
+  const respondMission = useRespondMission()
+  const submitEvidence = useSubmitEvidence()
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
 
   const missionMap = useMemo(() => {
@@ -201,9 +204,17 @@ function MyMissions() {
   const activeAssignments = assignments.filter((a) => activeStatuses.includes(a.status))
   const pastAssignments = assignments.filter((a) => !activeStatuses.includes(a.status))
 
+  if (showPastOnly && pastAssignments.length === 0) {
+    return (
+      <GlassCard className="p-6 text-center">
+        <p className="text-sm text-ink-subtle">No hay historial de misiones</p>
+      </GlassCard>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      {activeAssignments.length > 0 && (
+      {!showPastOnly && activeAssignments.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-ink">Misiones activas ({activeAssignments.length})</h3>
           {activeAssignments.map((a) => {
@@ -243,6 +254,17 @@ function MyMissions() {
                     onUpdateStatus={(status) => {
                       updateStatus.mutate({ assignmentId: a.id, status })
                     }}
+                    onAccept={() => {
+                      if (!user?.id) return
+                      respondMission.mutate({ assignmentId: a.id, action: 'accept', volunteerId: user.id })
+                    }}
+                    onReject={() => {
+                      if (!user?.id) return
+                      respondMission.mutate({ assignmentId: a.id, action: 'reject', volunteerId: user.id })
+                    }}
+                    onEvidenceSubmit={(evidenceUrls) => {
+                      submitEvidence.mutate({ assignmentId: a.id, missionId: a.missionId, volunteerId: user?.id ?? '', evidenceUrls })
+                    }}
                   />
                 </button>
                 {isExpanded && (
@@ -251,7 +273,7 @@ function MyMissions() {
                       missionLat={realMission.location.lat}
                       missionLng={realMission.location.lng}
                       missionAddress={realMission.location.zone ?? `${realMission.location.lat.toFixed(4)}, ${realMission.location.lng.toFixed(4)}`}
-                      volunteerUserId={profile?.id}
+                      volunteerUserId={user?.id}
                     />
                     <div className="bg-white/[0.03] rounded-2xl p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Progreso</p>
@@ -463,7 +485,7 @@ export function VolunteerWorkspace({
           </div>
         )}
         {tab === 'my-missions' && <div className="pt-2"><MyMissions /></div>}
-        {tab === 'history' && <div className="pt-2"><MyMissions /></div>}
+        {tab === 'history' && <div className="pt-2"><MyMissions showPastOnly /></div>}
         {tab === 'profile' && <div className="pt-2"><ProfileSection /></div>}
       </div>
     </div>
