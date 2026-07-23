@@ -122,6 +122,11 @@ export class ReportRepository {
     }
     return reportRowToReport(data as ReportRow)
   }
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase.from('reports').delete().eq('id', id)
+    if (error) throw error
+  }
 }
 
 export const reportRepository = new ReportRepository()

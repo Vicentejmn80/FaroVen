@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { caseService } from '@/services/case-service'
 import { FARO_QUERY_KEYS } from './query-keys'
 import type { CaseFilters } from '@/repositories/case-repository'
@@ -26,5 +26,24 @@ export function useCaseTimeline(caseId: string | null) {
     queryFn: () => (caseId ? caseService.getTimeline(caseId) : []),
     enabled: !!caseId,
     staleTime: 5000,
+  })
+}
+
+export function useArchiveCase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      caseId,
+      actorId,
+      comment,
+    }: {
+      caseId: string
+      actorId?: string
+      comment?: string
+    }) => caseService.archive(caseId, actorId, comment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+    },
   })
 }

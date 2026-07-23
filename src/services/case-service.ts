@@ -91,4 +91,8 @@ export const caseService = {
   async getTimeline(caseId: string): Promise<CaseDomainEvent[]> {
     return caseRepository.listEvents(caseId)
   },
+
+  async archive(caseId: string, actorId?: string, comment?: string): Promise<TransitionResult> {
+    return caseService.transition(caseId, 'archived', actorId, comment)
+  },
 }

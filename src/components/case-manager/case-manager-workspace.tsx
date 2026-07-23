@@ -18,6 +18,8 @@ import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS } from '@/lib/labels'
 import { useAuth, usePermissions } from '@/store/auth-context'
 import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
+import { useDeleteReport } from '@/hooks/useReports'
+import { useArchiveCase } from '@/hooks/useCases'
 import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
@@ -255,6 +257,8 @@ export function CaseManagerWorkspace() {
   const { user } = useAuth()
   const { data: publicNeeds = [], isLoading: publicNeedsLoading } = useOperationalPublicNeeds()
   const verifyPublicNeed = useVerifyPublicNeedEntry()
+  const deleteReport = useDeleteReport()
+  const archiveCase = useArchiveCase()
 
   useRealtimeSync({
     channelName: 'cm-reports',
@@ -354,16 +358,29 @@ export function CaseManagerWorkspace() {
               ) : (
                 <div className="space-y-1 px-2">
                   {pendingReports.map((report) => (
-                    <button key={report.id} onClick={() => selectReport(report.id)}
-                      className={cn('w-full rounded-2xl p-3 text-left transition-all hover:bg-white/[0.04]', selectedReportId === report.id ? 'bg-info/10 ring-1 ring-info/30' : '')}>
-                      <p className="text-sm font-medium text-ink line-clamp-1 leading-snug">{report.description}</p>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-ink-subtle">
-                        <span>{report.location?.zone ?? '—'}</span>
-                        <span>&middot;</span>
-                        <span>{new Date(report.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                    </button>
-                  ))}
+                    <div key={report.id} className="group flex items-start gap-1">
+                      <button onClick={() => selectReport(report.id)}
+                        className={cn('flex-1 rounded-2xl p-3 text-left transition-all hover:bg-white/[0.04]', selectedReportId === report.id ? 'bg-info/10 ring-1 ring-info/30' : '')}>
+                        <p className="text-sm font-medium text-ink line-clamp-1 leading-snug">{report.description}</p>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-ink-subtle">
+                          <span>{report.location?.zone ?? '—'}</span>
+                          <span>&middot;</span>
+                          <span>{new Date(report.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('¿Eliminar este reporte? No se podrá recuperar.')) {
+                            deleteReport.mutate(report.id)
+                          }
+                        }}
+                        disabled={deleteReport.isPending}
+                        className="mt-2.5 mr-1 shrink-0 rounded-full p-1.5 text-ink-faint opacity-0 transition-opacity hover:bg-critical/15 hover:text-critical group-hover:opacity-100"
+                        title="Eliminar reporte"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                      </button>
+                    </div>                  ))}
                 </div>
               )}
             </div>
@@ -398,9 +415,23 @@ export function CaseManagerWorkspace() {
                 <GlassCard key={c.id} className="p-3">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <p className="text-sm font-medium text-ink">{c.title}</p>
-                    <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
-                      {label(PRIORITY_LABELS, c.priority, c.priority)}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
+                        {label(PRIORITY_LABELS, c.priority, c.priority)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`¿Archivar el caso "${c.title}"? Se moverá a casos archivados.`)) {
+                            archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Archivado por gestor de casos' })
+                          }
+                        }}
+                        disabled={archiveCase.isPending}
+                        className="rounded-full p-1 text-ink-faint hover:bg-critical/15 hover:text-critical"
+                        title="Archivar caso"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-ink-subtle">
                     <span>{c.zone}</span>

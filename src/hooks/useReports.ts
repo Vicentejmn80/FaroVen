@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Report } from '@/domain/models'
 import { requireSupabase } from '@/lib/require-supabase'
 import { fetchReports } from '@/services/repository-service'
+import { reportRepository } from '@/repositories/report-repository'
 import { FARO_QUERY_KEYS } from './query-keys'
 
 export function useReports() {
@@ -12,10 +13,19 @@ export function useReports() {
       try {
         return await fetchReports()
       } catch {
-        // Lectura pública de reportes no habilitada aún; no bloquea la consola.
         return []
       }
     },
     staleTime: 30_000,
+  })
+}
+
+export function useDeleteReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (reportId: string) => reportRepository.delete(reportId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.reports] })
+    },
   })
 }
