@@ -206,7 +206,7 @@ export class CaseRepository {
       .from('cases')
       .select('*', { count: 'exact', head: true })
       .eq('assigned_center_id', centerId)
-      .not('pipeline_stage', 'in', '("resolved","closed","cancelled")')
+      .not('pipeline_stage', 'in', '("resolved","archived")')
     if (error) throw error
     return count ?? 0
   }

@@ -10,6 +10,7 @@ export const ADMIN_QUERY_KEYS = {
   registry: ['admin', 'registry'] as const,
   coordinators: ['admin', 'coordinators'] as const,
   needs: ['admin', 'needs'] as const,
+  publicNeeds: ['admin', 'public-needs'] as const,
   reports: ['admin', 'reports'] as const,
   notifications: ['admin', 'notifications'] as const,
   events: ['admin', 'events'] as const,
@@ -20,7 +21,9 @@ function invalidateAllAdmin(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.registry })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.coordinators })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.needs })
+  void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.publicNeeds })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.reports })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.notifications })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.events })
   void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.operational })
@@ -57,6 +60,15 @@ export function useAdminNeeds(enabled: boolean) {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.needs,
     queryFn: () => adminService.listNeeds(),
+    enabled,
+    staleTime: 15_000,
+  })
+}
+
+export function useAdminPublicNeeds(enabled: boolean) {
+  return useQuery({
+    queryKey: ADMIN_QUERY_KEYS.publicNeeds,
+    queryFn: () => adminService.listPublicNeeds(),
     enabled,
     staleTime: 15_000,
   })
@@ -154,6 +166,15 @@ export function useAdminMutations() {
     mutationFn: (needId: string) => adminService.deleteNeed(needId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.needs })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.needs] })
+    },
+  })
+
+  const deletePublicNeed = useMutation({
+    mutationFn: (publicNeedId: string) => adminService.deletePublicNeed(publicNeedId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.publicNeeds })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
     },
   })
 
@@ -263,6 +284,7 @@ export function useAdminMutations() {
     updateProfile,
     createNeed,
     deleteNeed,
+    deletePublicNeed,
     updateNeed,
     markNeedCovered,
     reviewReport,

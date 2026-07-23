@@ -39,6 +39,12 @@ export const adminService = {
 
   deleteNeed: (needId: string) => adminRepository.deleteNeed(needId),
 
+  deletePublicNeed: (publicNeedId: string) => adminRepository.deletePublicNeed(publicNeedId),
+
+  deleteCase: (caseId: string) => adminRepository.deleteCase(caseId),
+
+  listPublicNeeds: () => adminRepository.listPublicNeeds(),
+
   createNeed: (input: Parameters<typeof adminRepository.createNeed>[0]) =>
     adminRepository.createNeed(input),
 

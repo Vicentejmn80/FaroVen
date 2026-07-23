@@ -35,6 +35,8 @@ import { MissionDetailSheet } from '@/components/volunteer/mission-detail-sheet'
 import { INCIDENT_TYPE_LABELS, label, PRIORITY_SHORT_LABELS } from '@/lib/labels'
 import { useMapData, type Mission } from '@/hooks/useMapData'
 import { useCases } from '@/hooks/useCases'
+import { usePublicNeeds } from '@/hooks/usePublicNeeds'
+import type { PublicNeed } from '@/domain/public-need.types'
 
 interface SituationScreenProps {
   onOpenDetail?: (site: Site) => void
@@ -51,6 +53,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   const { user } = useAuth()
   const mapData = useMapData({ userRole: role, userId: user?.id ?? null, location: null })
   const { data: openCases } = useCases({ stage: 'open_for_applications' })
+  const { data: publicNeeds, isLoading: publicNeedsLoading } = usePublicNeeds()
   const { sites, latestActivity, isLoading, loadError, state } = useFaro()
   const needs = state.needs
   const [selected, setSelected] = useState<Site | null>(null)
@@ -117,9 +120,9 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
     return { active, critical, high, covered, recentCovered }
   }, [listSites])
 
-  if (isVolunteer) {
-    const openCaseMissions: Mission[] = useMemo(
-      () => (openCases ?? []).map((c) => ({
+  const openCaseMissions = useMemo(
+    () =>
+      (openCases ?? []).map((c) => ({
         id: c.id,
         title: c.title,
         requiredSkill: null,
@@ -128,16 +131,26 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
         location: { lat: c.location.lat, lng: c.location.lng },
         createdAt: c.createdAt,
       })),
-      [openCases],
-    )
-    const allMissions = [...mapData.missions, ...openCaseMissions]
-    const volunteerMissions = filterMappableMissions(
+    [openCases],
+  )
+
+  const publicNeedMissions = useMemo(
+    () => buildMissionsFromPublicNeeds(publicNeeds ?? []),
+    [publicNeeds],
+  )
+
+  const volunteerMissions = useMemo(() => {
+    const allMissions = [...mapData.missions, ...openCaseMissions, ...publicNeedMissions]
+    return filterMappableMissions(
       normalizeVolunteerMissions(allMissions, mapData.sites, mapData.needs),
     )
+  }, [mapData.missions, mapData.sites, mapData.needs, openCaseMissions, publicNeedMissions])
+
+  if (isVolunteer) {
     return (
       <VolunteerMapScreen
         missions={volunteerMissions}
-        isLoading={mapData.isLoading}
+        isLoading={mapData.isLoading || publicNeedsLoading}
         loadError={mapData.loadError}
       />
     )
@@ -387,15 +400,54 @@ function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[
   return results
 }
 
+function buildMissionsFromPublicNeeds(needs: PublicNeed[]): VolunteerMission[] {
+  const results: VolunteerMission[] = []
+
+  for (const [index, need] of needs.entries()) {
+    if (need.visibilityStatus !== 'public') continue
+    if (!['active', 'reserved', 'in_progress'].includes(need.status)) continue
+
+    const location = resolveMissionCoordinates(need.locationPublic.lat, need.locationPublic.lng, {
+      needId: need.id,
+      missionId: need.id,
+      title: need.title,
+    })
+    if (!location) continue
+
+    const distanceKm = (1.1 + (index % 5) * 0.7 + (need.id.charCodeAt(0) % 5) * 0.15).toFixed(1)
+    results.push({
+      id: need.id,
+      title: humanizeMissionTitle(need.title),
+      requiredSkill: null,
+      status: 'open',
+      priority: need.priority,
+      location,
+      createdAt: need.createdAt,
+      siteName: need.locationPublic.address ?? need.locationPublic.zone ?? 'Zona cercana',
+      zone: need.locationPublic.zone ?? 'Zona por confirmar',
+      distanceKm,
+      description: need.summary,
+      affectedPeople: null,
+      expiresAt: need.expiresAt,
+      required: need.requiredQuantity,
+      available: need.coveredQuantity,
+    })
+  }
+
+  return results
+}
+
 function normalizeVolunteerMissions(
   missions: Mission[],
   sites: Site[],
   needs: Need[],
 ): VolunteerMission[] {
-  if (!missions.length) return buildVolunteerMissions(sites, needs)
+  const fromSites = buildVolunteerMissions(sites, needs)
+  if (!missions.length) return fromSites
 
   const fallbackSite = sites.find((site) => resolveMissionCoordinates(site.lat, site.lng) !== null)
   const results: VolunteerMission[] = []
+  const seen = new Set<string>()
 
   for (const [index, mission] of missions.entries()) {
     const location = resolveMissionCoordinates(mission.location?.lat, mission.location?.lng, {
@@ -404,15 +456,40 @@ function normalizeVolunteerMissions(
     })
     if (!location) continue
 
-    const distanceKm = (1.4 + (index % 4) * 0.8).toFixed(1)
+    seen.add(mission.id)
+    const distanceKm =
+      'distanceKm' in mission && typeof (mission as VolunteerMission).distanceKm === 'string'
+        ? (mission as VolunteerMission).distanceKm
+        : (1.4 + (index % 4) * 0.8).toFixed(1)
+
     results.push({
       ...mission,
       title: humanizeMissionTitle(mission.title),
       location,
-      siteName: fallbackSite?.name ?? 'Zona cercana',
-      zone: fallbackSite?.zone ?? 'Zona',
+      siteName:
+        ('siteName' in mission && typeof (mission as VolunteerMission).siteName === 'string'
+          ? (mission as VolunteerMission).siteName
+          : null) ??
+        fallbackSite?.name ??
+        'Zona cercana',
+      zone:
+        ('zone' in mission && typeof (mission as VolunteerMission).zone === 'string'
+          ? (mission as VolunteerMission).zone
+          : null) ??
+        fallbackSite?.zone ??
+        'Zona',
       distanceKm,
+      description:
+        'description' in mission ? (mission as VolunteerMission).description : undefined,
+      expiresAt: 'expiresAt' in mission ? (mission as VolunteerMission).expiresAt : undefined,
+      required: 'required' in mission ? (mission as VolunteerMission).required : undefined,
+      available: 'available' in mission ? (mission as VolunteerMission).available : undefined,
     })
+  }
+
+  for (const siteMission of fromSites) {
+    if (seen.has(siteMission.id)) continue
+    results.push(siteMission)
   }
 
   return results

@@ -7,6 +7,7 @@ import {
   Calendar,
   ClipboardList,
   FileQuestion,
+  Flag,
   HeartPulse,
   Home,
   Package,
@@ -38,6 +39,7 @@ import {
   useAdminNeeds,
   useAdminNotificationsList,
   useAdminOperationalSettings,
+  useAdminPublicNeeds,
   useAdminRegistry,
   useAdminReports,
 } from '@/hooks/useAdminConsole'
@@ -76,6 +78,7 @@ const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; desc
   { id: 'shelters', label: 'Refugios', icon: Home, description: 'Registro y mantenimiento' },
   { id: 'supply_centers', label: 'Acopios', icon: Warehouse, description: 'Centros de acopio' },
   { id: 'needs', label: 'Necesidades', icon: ClipboardList, description: 'CRUD global' },
+  { id: 'public_needs', label: 'Necesidades públicas', icon: Flag, description: 'Radar ciudadano / voluntarios' },
   { id: 'reports', label: 'Reportes', icon: ScrollText, description: 'Moderación ciudadana' },
   { id: 'notifications', label: 'Notificaciones', icon: Bell, description: 'Bandeja del sistema' },
   { id: 'inventory', label: 'Inventario', icon: Package, description: 'Stock por centro' },
@@ -104,6 +107,7 @@ export function SuperAdminConsole() {
   )
   const loadCoordinators = canAdmin && (activeModule === 'coordinators' || activeModule === 'users')
   const loadNeeds = canAdmin && (activeModule === 'needs' || activeModule === 'inventory')
+  const loadPublicNeeds = canAdmin && activeModule === 'public_needs'
   const loadReports = canAdmin && activeModule === 'reports'
   const loadEvents = canAdmin && activeModule === 'events'
   const loadNotifications = canAdmin && activeModule === 'notifications'
@@ -115,6 +119,7 @@ export function SuperAdminConsole() {
   const registry = useAdminRegistry(loadRegistry)
   const coordinators = useAdminCoordinators(loadCoordinators)
   const needs = useAdminNeeds(loadNeeds)
+  const publicNeeds = useAdminPublicNeeds(loadPublicNeeds)
   const reports = useAdminReports(loadReports)
   const events = useAdminEvents(loadEvents)
   const notifications = useAdminNotificationsList(loadNotifications)
@@ -411,9 +416,31 @@ export function SuperAdminConsole() {
               }
             }}
             onDelete={async (id) => {
+              if (!window.confirm('¿Eliminar esta necesidad de centro?')) return
               setBusyId(id)
+              setError(null)
               try {
                 await mutations.deleteNeed.mutateAsync(id)
+              } catch (err) {
+                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
+              } finally {
+                setBusyId(null)
+              }
+            }}
+          />
+        )}
+
+        {activeModule === 'public_needs' && (
+          <PublicNeedsModule
+            rows={publicNeeds.data ?? []}
+            loading={publicNeeds.isLoading}
+            busyId={busyId}
+            onDelete={async (id) => {
+              if (!window.confirm('¿Eliminar esta necesidad pública del radar? No se puede deshacer.')) return
+              setBusyId(id)
+              setError(null)
+              try {
+                await mutations.deletePublicNeed.mutateAsync(id)
               } catch (err) {
                 setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
               } finally {
@@ -760,6 +787,61 @@ function SitesModule({
             onClick={() => void onDelete(siteType, row.site_id)}
           >
             Eliminar {label}
+          </EmergencyButton>
+        </GlassCard>
+      ))}
+    </section>
+  )
+}
+
+function PublicNeedsModule({
+  rows,
+  loading,
+  busyId,
+  onDelete,
+}: {
+  rows: Array<{
+    id: string
+    title: string
+    summary: string | null
+    category: string | null
+    priority: string
+    status: string
+    visibility_status: string
+    location_public: { lat?: number; lng?: number; zone?: string; address?: string } | null
+    created_at: string
+  }>
+  loading: boolean
+  busyId: string | null
+  onDelete: (id: string) => Promise<void>
+}) {
+  if (loading) return <p className="text-sm text-ink-subtle">Cargando necesidades públicas…</p>
+  if (rows.length === 0) return <EmptyState icon={Flag} title="Sin necesidades públicas" />
+
+  return (
+    <section className="space-y-3">
+      <p className="text-xs text-ink-subtle">
+        Estas son las necesidades que ven los voluntarios en el radar y en la pestaña Necesidades.
+      </p>
+      {rows.map((need) => (
+        <GlassCard key={need.id} className="space-y-2">
+          <div>
+            <p className="text-sm font-medium text-ink">{need.title}</p>
+            <p className="text-xs text-ink-subtle line-clamp-2">{need.summary ?? 'Sin resumen'}</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              {label(PRIORITY_LABELS, need.priority, need.priority)} · {need.status} ·{' '}
+              {need.visibility_status}
+              {need.location_public?.zone ? ` · ${need.location_public.zone}` : ''}
+            </p>
+          </div>
+          <EmergencyButton
+            variant="glass"
+            size="sm"
+            className="w-full text-critical"
+            disabled={busyId === need.id}
+            onClick={() => void onDelete(need.id)}
+          >
+            Eliminar del radar
           </EmergencyButton>
         </GlassCard>
       ))}

@@ -276,8 +276,44 @@ export const adminRepository = {
   },
 
   async deleteNeed(needId: string): Promise<void> {
-    const { error } = await supabase.from('needs').delete().eq('id', needId)
+    const { error } = await supabase.rpc('admin_delete_need', { p_need_id: needId })
+    if (error) {
+      // Fallback for environments where the RPC is not yet applied
+      const direct = await supabase.from('needs').delete().eq('id', needId)
+      if (direct.error) throw error
+    }
+  },
+
+  async deletePublicNeed(publicNeedId: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_delete_public_need', {
+      p_public_need_id: publicNeedId,
+    })
     if (error) throw error
+  },
+
+  async deleteCase(caseId: string): Promise<void> {
+    const { error } = await supabase.rpc('admin_delete_case', { p_case_id: caseId })
+    if (error) throw error
+  },
+
+  async listPublicNeeds() {
+    const { data, error } = await supabase
+      .from('public_needs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) throw error
+    return (data ?? []) as Array<{
+      id: string
+      title: string
+      summary: string | null
+      category: string | null
+      priority: string
+      status: string
+      visibility_status: string
+      location_public: { lat?: number; lng?: number; zone?: string; address?: string } | null
+      created_at: string
+    }>
   },
 
   async deleteNotification(notificationId: string): Promise<void> {

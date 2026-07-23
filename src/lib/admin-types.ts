@@ -44,6 +44,7 @@ export type SuperAdminModuleId =
   | 'shelters'
   | 'supply_centers'
   | 'needs'
+  | 'public_needs'
   | 'reports'
   | 'notifications'
   | 'inventory'
