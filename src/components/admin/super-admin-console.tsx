@@ -53,6 +53,14 @@ import type { Site } from '@/lib/types'
 import type { Need, Report } from '@/domain/models'
 import type { Event } from '@/domain/models'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
+import {
+  NOTIFICATION_TYPE_LABELS,
+  PRIORITY_LABELS,
+  REPORT_STATUS_LABELS,
+  SITE_TYPE_LABELS,
+  label,
+} from '@/lib/labels'
 
 function invalidateSitesCache(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centers] })
@@ -690,7 +698,7 @@ function CoordinatorsModule({
               <p className="text-sm font-medium text-ink">{row.full_name || row.email}</p>
               <p className="text-xs text-ink-subtle">{row.email}</p>
               <p className="mt-1 text-xs text-info">
-                {row.site_name ?? 'Sin centro'} · {row.site_type}
+                {row.site_name ?? 'Sin centro'} · {label(SITE_TYPE_LABELS, row.site_type, row.site_type ?? '')}
               </p>
             </div>
             <span className="rounded-full bg-white/10 px-2 py-1 text-[11px] text-ink-muted">{row.user_status}</span>
@@ -836,9 +844,9 @@ function NeedsModule({
         rows.slice(0, 100).map((need) => (
           <GlassCard key={need.id} className="space-y-2">
             <div>
-              <p className="text-sm font-medium text-ink">{need.type}</p>
+              <NeedItemLabel name={need.type} className="text-sm font-medium text-ink" />
               <p className="text-xs text-ink-subtle">
-                Prioridad {need.priority} · {need.available}/{need.required}
+                Prioridad {label(PRIORITY_LABELS, need.priority, need.priority)} · {need.available}/{need.required}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -882,7 +890,7 @@ function InventoryModule({ rows, loading }: { rows: Need[]; loading: boolean }) 
         const pct = need.required > 0 ? Math.round((need.available / need.required) * 100) : 0
         return (
           <GlassCard key={need.id}>
-            <p className="text-sm font-medium text-ink">{need.type}</p>
+            <NeedItemLabel name={need.type} className="text-sm font-medium text-ink" />
             <p className="text-xs text-ink-subtle">
               Stock: {need.available}/{need.required} ({pct}%)
             </p>
@@ -917,7 +925,7 @@ function ReportsModule({
         <GlassCard key={report.id} className="space-y-2">
           <p className="line-clamp-3 text-sm text-ink">{report.description}</p>
           <p className="text-xs text-ink-subtle">
-            {report.status} · {report.createdAt.toLocaleString('es-VE')}
+            {label(REPORT_STATUS_LABELS, report.status, report.status)} · {report.createdAt.toLocaleString('es-VE')}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {report.status === 'new' && (
@@ -1352,7 +1360,7 @@ function NotificationsModule({
               <p className="text-sm font-medium text-ink">{n.title}</p>
               <p className="line-clamp-2 text-xs text-ink-subtle">{n.body}</p>
               <p className="mt-1 text-[11px] text-ink-faint">
-                {n.type} · {new Date(n.created_at).toLocaleString('es-VE')}
+                {label(NOTIFICATION_TYPE_LABELS, n.type, n.type)} · {new Date(n.created_at).toLocaleString('es-VE')}
               </p>
             </div>
             {!n.read && <span className="rounded-full bg-info/20 px-2 py-0.5 text-[10px] text-info">Nueva</span>}

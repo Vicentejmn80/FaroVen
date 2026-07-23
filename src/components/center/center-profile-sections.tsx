@@ -6,6 +6,7 @@ import { VerificationBadge } from '@/components/trust/verification-badge'
 import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { cn, timeAgo } from '@/lib/utils'
 import type { Need, Report, Site } from '@/lib/types'
+import { INCIDENT_TYPE_LABELS, label } from '@/lib/labels'
 
 export function CenterQuickSheet({
   site,
@@ -235,7 +236,7 @@ export function CitizenReportsPreview({ reports }: { reports: Report[] }) {
               />
               <p className="text-sm text-ink">{report.description}</p>
               <p className="text-[11px] text-ink-subtle">
-                {timeAgo(report.createdAt)} · {report.type}
+                {timeAgo(report.createdAt)} · {label(INCIDENT_TYPE_LABELS, report.type, report.type)}
               </p>
             </div>
           ))

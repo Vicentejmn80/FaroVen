@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { GlassCard } from '@/components/ui/glass-card'
+import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { CaseManagerHeader } from '@/components/case-manager/CaseManagerHeader'
 import { CaseSummaryCards } from '@/components/case-manager/CaseSummaryCards'
@@ -364,7 +365,7 @@ export function CaseManagerDashboard({
           {state.needs.length ? (
             state.needs.slice(0, 8).map((need) => (
               <GlassCard key={need.id} className="space-y-1 text-sm">
-                <p className="text-ink">{need.type}</p>
+                <NeedItemLabel name={need.type} className="text-ink" />
                 <p className="text-xs text-ink-subtle">
                   Requerido: {need.required} · Disponible: {need.available}
                 </p>

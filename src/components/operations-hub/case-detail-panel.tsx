@@ -9,6 +9,7 @@ import { getValidTargets } from '@/domain/case-lifecycle.service'
 import { slaService } from '@/services/sla-service'
 import type { AssignmentSuggestion } from '@/types/operations-hub.types'
 import { CaseStatusBadge } from './case-status-badge'
+import { INCIDENT_TYPE_LABELS, label } from '@/lib/labels'
 
 interface CaseDetailPanelProps {
   caseItem: CaseDomain | null
@@ -131,7 +132,12 @@ export function CaseDetailPanel({
           {/* Datos del caso */}
           <div className="grid grid-cols-2 gap-2">
             <InfoChip label="Afectados" value={String(caseItem.affectedCount)} />
-            {caseItem.category && <InfoChip label="Categoría" value={caseItem.category} />}
+            {caseItem.category && (
+              <InfoChip
+                label="Categoría"
+                value={label(INCIDENT_TYPE_LABELS, caseItem.category, caseItem.category)}
+              />
+            )}
             {caseItem.zone && <InfoChip label="Zona" value={caseItem.zone} />}
             <InfoChip label="ID" value={caseItem.id.slice(0, 8)} />
           </div>

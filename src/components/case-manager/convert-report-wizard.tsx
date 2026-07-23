@@ -3,6 +3,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useReportAnalysis, useConvertReportToCase } from '@/hooks/useCaseManager'
 import { cn } from '@/lib/utils'
+import { SITE_TYPE_LABELS, label } from '@/lib/labels'
 
 type WizardStep = 'classification' | 'details' | 'center' | 'confirm'
 
@@ -148,7 +149,9 @@ export function ConvertReportWizard({ reportId, onDone, onCancel }: ConvertRepor
                 className={cn('w-full rounded-xl border px-3 py-2 text-left transition-all', selectedCenterId === center.id ? 'border-info/50 bg-info/10' : 'border-white/[0.06] bg-white/[0.03]')}
               >
                 <p className="text-sm font-medium text-ink">{center.name}</p>
-                <p className="text-xs text-ink-subtle">{center.distance} km · {center.type}</p>
+                <p className="text-xs text-ink-subtle">
+                  {center.distance} km · {label(SITE_TYPE_LABELS, center.type, center.type)}
+                </p>
               </button>
             ))}
           </div>

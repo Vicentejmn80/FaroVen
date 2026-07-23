@@ -112,12 +112,9 @@ const ContactScreen = lazyWithRetry(() =>
 const AboutFaroScreen = lazyWithRetry(() =>
   import('@/screens/about-faro-screen').then((m) => ({ default: m.AboutFaroScreen })),
 )
-const VolunteerNeedsScreen = lazyWithRetry(() =>
-  import('@/screens/volunteer-needs-screen').then((m) => ({ default: m.VolunteerNeedsScreen })),
-)
-const VolunteerCollaborationsScreen = lazyWithRetry(() =>
-  import('@/screens/volunteer-collaborations-screen').then((m) => ({
-    default: m.VolunteerCollaborationsScreen,
+const VolunteerWorkspace = lazyWithRetry(() =>
+  import('@/components/volunteer/volunteer-workspace').then((m) => ({
+    default: m.VolunteerWorkspace,
   })),
 )
 
@@ -138,7 +135,7 @@ export function AppShell() {
     usePermissions()
   const { session, user, pendingAuthIntent, clearPendingAuthIntent, refreshProfile, simulatedRole, setSimulatedRole } = useAuth()
   const { assignment } = useCoordinatorAssignment()
-  const { cachedAt, sites, state } = useFaro()
+  const { cachedAt, state } = useFaro()
   const [activeView, setActiveViewState] = useState<TabId>(isVolunteer ? 'needs' : 'map')
   const [flow, setFlow] = useState<FlowId | null>(null)
   const [needPresetSiteId, setNeedPresetSiteId] = useState<string | undefined>()
@@ -520,16 +517,6 @@ export function AppShell() {
                       onOpenNotificationPreferences={() => setProfileSubview('notification-preferences')}
                       onBackFromNotificationPrefs={() => setProfileSubview('main')}
                       onNavigate={setActiveView}
-                      onOpenMapSite={(siteId) => {
-                        const site = sites.find((item) => item.id === siteId) ?? null
-                        setDetailSite(site)
-                        setActiveViewState('map')
-                      }}
-                      onOfferHelp={() => {
-                        setDetailSite(null)
-                        setActiveView('map')
-                        showToast('Elige una necesidad activa en el mapa para ofrecer ayuda.', 'info')
-                      }}
                     />
                   </Suspense>
                 </ScreenErrorBoundary>
@@ -722,8 +709,6 @@ function ShellActiveView({
   onOpenNotificationPreferences,
   onBackFromNotificationPrefs,
   onNavigate,
-  onOpenMapSite,
-  onOfferHelp,
 }: {
   activeView: TabId
   role: FaroRole
@@ -749,8 +734,6 @@ function ShellActiveView({
   onOpenNotificationPreferences: () => void
   onBackFromNotificationPrefs: () => void
   onNavigate: (view: TabId) => void
-  onOpenMapSite: (siteId: string) => void
-  onOfferHelp: () => void
 }) {
   const view = normalizeTabId(activeView) ?? activeView
 
@@ -778,22 +761,10 @@ function ShellActiveView({
       )
 
     case 'needs':
-      return (
-        <VolunteerNeedsScreen
-          onViewMap={() => onNavigate('map')}
-          onOfferHelp={onOfferHelp}
-          onMyCollaborations={() => onNavigate('collaborations')}
-          onOpenSite={onOpenMapSite}
-        />
-      )
+      return <VolunteerWorkspace initialTab="available" />
 
     case 'collaborations':
-      return (
-        <VolunteerCollaborationsScreen
-          onBrowseNeeds={() => onNavigate('needs')}
-          onOpenMap={() => onNavigate('map')}
-        />
-      )
+      return <VolunteerWorkspace initialTab="my-missions" />
 
     case 'reports':
       return <ReportsScreen />

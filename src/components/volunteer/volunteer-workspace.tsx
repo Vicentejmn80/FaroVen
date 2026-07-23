@@ -16,6 +16,7 @@ import { useAuth, usePermissions } from '@/store/auth-context'
 import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
 import { Flag } from 'lucide-react'
+import { ASSIGNMENT_STATUS_LABELS, label } from '@/lib/labels'
 
 type VolunteerTab = 'available' | 'my-missions' | 'history' | 'profile'
 
@@ -242,7 +243,9 @@ function MyMissions() {
               <GlassCard key={a.id} className="p-3 opacity-70">
                 <div className="flex justify-between text-xs">
                   <span className="text-ink">{m?.title ?? `Misión ${a.missionId.slice(0, 8)}`}</span>
-                  <span className="text-ink-subtle">{a.status}</span>
+                  <span className="text-ink-subtle">
+                    {label(ASSIGNMENT_STATUS_LABELS, a.status, a.status)}
+                  </span>
                 </div>
               </GlassCard>
             )
@@ -360,8 +363,16 @@ const TABS: Array<{ id: VolunteerTab; label: string }> = [
   { id: 'profile', label: 'Perfil' },
 ]
 
-export function VolunteerWorkspace() {
-  const [tab, setTab] = useState<VolunteerTab>('available')
+export function VolunteerWorkspace({
+  initialTab = 'available',
+}: {
+  initialTab?: VolunteerTab
+}) {
+  const [tab, setTab] = useState<VolunteerTab>(initialTab)
+
+  useEffect(() => {
+    setTab(initialTab)
+  }, [initialTab])
 
   useRealtimeSync({
     channelName: 'volunteer-missions',
