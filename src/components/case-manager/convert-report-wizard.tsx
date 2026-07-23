@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { LocationPickerMap } from '@/components/faro/location-picker-map'
 import { useReportAnalysis, useConvertReportToCase } from '@/hooks/useCaseManager'
 import { cn, isValidCoord } from '@/lib/utils'
 import { SITE_TYPE_LABELS, label } from '@/lib/labels'
+import { normalizeCitizenReportType } from '@/lib/report-types'
 import type { ResolvedPlace } from '@/lib/osm-geocoding'
 import { reportRepository } from '@/repositories/report-repository'
 
@@ -48,6 +49,12 @@ export function ConvertReportWizard({ reportId, onDone, onCancel }: ConvertRepor
 
   const report = analysis?.report
   const nearby = analysis?.nearbyCenters ?? []
+
+  useEffect(() => {
+    if (!report) return
+    setCategory(normalizeCitizenReportType(report.type))
+  }, [report?.id, report?.type])
+
   const reportHasGps = Boolean(
     report && isValidCoord(report.location.coordinates.lat, report.location.coordinates.lng),
   )

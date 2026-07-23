@@ -4,6 +4,7 @@ import type { ReportRow } from '@/types/supabase'
 import { reportRowToReport } from './mappers'
 import type { SubmitReportInput, ReviewReportInput, RegisterSiteType } from './types'
 import { generateTrackingCode } from '@/lib/portal-report-tracking'
+import { normalizeCitizenReportType } from '@/lib/report-types'
 
 export class ReportRepository {
   async list(): Promise<Report[]> {
@@ -55,7 +56,8 @@ export class ReportRepository {
   }): Promise<{ report: Report; trackingCode: string }> {
     const trackingCode = generateTrackingCode()
     const contactInfo = [input.contactName, input.contactPhone, input.contactEmail].filter(Boolean).join(' | ') || null
-    const description = [input.category, input.location, input.description].filter(Boolean).join(' — ')
+    const reportType = normalizeCitizenReportType(input.category)
+    const description = [input.location, input.description].filter(Boolean).join(' — ')
     const hasCoords =
       input.latitude != null &&
       input.longitude != null &&
@@ -65,7 +67,7 @@ export class ReportRepository {
     const { data, error } = await supabase
       .from('reports')
       .insert({
-        type: input.category?.trim() || 'other',
+        type: reportType,
         description,
         contact_info: contactInfo,
         tracking_code: trackingCode,

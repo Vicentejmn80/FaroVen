@@ -96,12 +96,20 @@ export const REPORT_STATUS_LABELS: Record<string, string> = {
 export const INCIDENT_TYPE_LABELS: Record<string, string> = {
   need: 'Necesidad humanitaria',
   damage: 'Daño en infraestructura',
+  center: 'Problema en centro',
+  person: 'Persona necesita ayuda',
+  infra: 'Infraestructura',
   health: 'Emergencia médica',
   risk: 'Riesgo',
   shelter: 'Refugio temporal',
   supply: 'Suministros',
   security: 'Seguridad',
   road: 'Vialidad',
+  wrong_info: 'Información incorrecta',
+  person_found: 'Persona encontrada',
+  person_transferred: 'Persona trasladada',
+  hospital_changed: 'Cambio en hospital',
+  need_covered: 'Necesidad cubierta',
   other: 'Otro',
 }
 

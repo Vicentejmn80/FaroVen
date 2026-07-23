@@ -11,6 +11,7 @@ import type {
   Report,
 } from '@/domain/models'
 import { parseCoord } from '@/lib/utils'
+import { normalizeCitizenReportType } from '@/lib/report-types'
 import type {
   EventRow,
   HospitalRow,
@@ -191,19 +192,37 @@ export function needRowToNeed(row: NeedRow): Need {
   }
 }
 
+const DOMAIN_REPORT_TYPES = new Set([
+  'inventory',
+  'saturation',
+  'access',
+  'shelter',
+  'health',
+  'need',
+  'damage',
+  'center',
+  'person',
+  'infra',
+  'other',
+])
+
+function mapReportType(raw: string): Report['type'] {
+  const normalized = raw.trim().toLowerCase()
+  if (DOMAIN_REPORT_TYPES.has(normalized)) return normalized as Report['type']
+  const citizen = normalizeCitizenReportType(normalized)
+  return citizen
+}
+
 export function reportRowToReport(row: ReportRow): Report {
   const lat = row.latitude != null && Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null
   const lng = row.longitude != null && Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null
   const addressFromDescription = row.description?.includes(' — ')
-    ? row.description.split(' — ')[1]?.trim()
+    ? row.description.split(' — ')[0]?.trim()
     : undefined
 
   return {
     id: row.id,
-    type:
-      row.type === 'inventory' || row.type === 'saturation' || row.type === 'access' || row.type === 'shelter' || row.type === 'health'
-        ? row.type
-        : 'other',
+    type: mapReportType(row.type),
     description: row.description,
     userId: row.reported_by ?? 'anonymous',
     source: row.source ?? row.contact_info ?? 'Sin fuente',

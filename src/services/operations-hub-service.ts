@@ -1,4 +1,5 @@
 import type { Center, Need, Event, Report } from '@/domain/models'
+import { citizenReportPriority } from '@/lib/report-types'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import type { OpsCaseRecord, PipelineTransition, AssignmentSuggestion, OpsSummaryItem } from '@/types/operations-hub.types'
 import type { CasePriority as LegacyCasePriority } from '@/types/case.types'
@@ -70,9 +71,7 @@ export function reportToOpsCase(
 }
 
 function mapPriority(report: Report): LegacyCasePriority {
-  if (report.type === 'health' || report.type === 'shelter') return 'high'
-  if (report.type === 'access' || report.type === 'saturation') return 'medium'
-  return 'low'
+  return citizenReportPriority(report.type)
 }
 
 export function sortOpsCases(cases: OpsCaseRecord[]): OpsCaseRecord[] {

@@ -13,6 +13,7 @@ import { useAuth } from '@/store/auth-context'
 import { useMapData } from '@/hooks/useMapData'
 import { useFaro } from '@/store/faro-context'
 import { timeAgo } from '@/lib/utils'
+import { citizenReportPriority } from '@/lib/report-types'
 import type { TabId } from '@/components/faro/app-navigation'
 import type {
   CaseActivityItem,
@@ -117,9 +118,7 @@ function mapReportStatus(status: string): CaseRecord['status'] {
 }
 
 function mapReportPriority(type: string): CaseRecord['priority'] {
-  if (type === 'health' || type === 'shelter') return 'high'
-  if (type === 'access') return 'medium'
-  return 'low'
+  return citizenReportPriority(type)
 }
 
 export function CaseManagerDashboard({
