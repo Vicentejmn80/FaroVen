@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Camera, CheckCircle2, ChevronRight, Copy, SearchCheck } from 'lucide-react'
+import { Camera, CheckCircle2, ChevronRight, Copy, MapPin, SearchCheck } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { GlassCard } from '@/components/ui/glass-card'
+import { LocationPickerMap } from '@/components/faro/location-picker-map'
 import { reportRepository } from '@/repositories/report-repository'
-import { cn } from '@/lib/utils'
+import type { ResolvedPlace } from '@/lib/osm-geocoding'
+import { cn, isValidCoord } from '@/lib/utils'
 import {
   ReportContactSheet,
   type ReportContactData,
@@ -38,6 +40,7 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
   const [contactOpen, setContactOpen] = useState(false)
   const [category, setCategory] = useState<string | null>(null)
   const [location, setLocation] = useState('')
+  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(null)
   const [description, setDescription] = useState('')
   const [submitted, setSubmitted] = useState<{ trackingCode: string } | null>(null)
   const [lookupCode, setLookupCode] = useState('')
@@ -54,6 +57,11 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
 
   const handleSubmit = async () => {
     if (!contactData || description.trim().length < 8) return
+    if (!resolvedPlace || !isValidCoord(resolvedPlace.lat, resolvedPlace.lng)) {
+      setSubmitError('Marca la ubicación en el mapa o usa el GPS antes de enviar.')
+      setStep('location')
+      return
+    }
     setSubmitting(true)
     setSubmitError(null)
     try {
@@ -62,8 +70,10 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
         contactName: contactData.name,
         contactPhone: contactData.phone,
         contactEmail: contactData.email,
-        location,
+        location: location.trim() || resolvedPlace.address,
         category: category ?? undefined,
+        latitude: resolvedPlace.lat,
+        longitude: resolvedPlace.lng,
       })
       setSubmitted({ trackingCode })
       setStep('confirmation')
@@ -109,6 +119,7 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
     setStep('start')
     setCategory(null)
     setLocation('')
+    setResolvedPlace(null)
     setDescription('')
     setSubmitted(null)
     setContactData(null)
@@ -285,12 +296,36 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
       {step === 'location' && (
         <div className="space-y-3">
           <p className="text-sm text-ink-subtle">¿Dónde ocurre?</p>
+          <p className="text-xs text-ink-muted">
+            Usa tu GPS o marca el punto en el mapa. Sin coordenadas, la red FARO no podrá ubicarlo.
+          </p>
+          <LocationPickerMap
+            value={resolvedPlace}
+            onChange={(place) => {
+              setResolvedPlace(place)
+              if (place?.address) setLocation(place.name || place.address.split(',')[0] || place.address)
+            }}
+            onNameHint={(name) => {
+              if (!location.trim()) setLocation(name)
+            }}
+            className="min-h-[280px]"
+          />
           <input
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="Ej: Macuto, La Guaira — cerca de la plaza"
             className="h-12 w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-ink placeholder:text-ink-muted outline-none focus:border-info/50"
           />
+          {resolvedPlace && isValidCoord(resolvedPlace.lat, resolvedPlace.lng) ? (
+            <p className="flex items-center gap-1.5 text-xs text-operational">
+              <MapPin className="h-3.5 w-3.5" />
+              Ubicación confirmada · {resolvedPlace.lat.toFixed(5)}, {resolvedPlace.lng.toFixed(5)}
+            </p>
+          ) : (
+            <p className="text-xs text-warning">
+              Falta confirmar el punto GPS (botón de ubicación o toca el mapa).
+            </p>
+          )}
           <div className="flex gap-2">
             <EmergencyButton variant="glass" size="sm" onClick={() => setStep('category')}>
               Atrás
@@ -299,7 +334,11 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
               variant="primary"
               size="sm"
               className="flex-1"
-              disabled={location.trim().length < 3}
+              disabled={
+                location.trim().length < 3 ||
+                !resolvedPlace ||
+                !isValidCoord(resolvedPlace.lat, resolvedPlace.lng)
+              }
               onClick={() => setStep('description')}
             >
               Continuar

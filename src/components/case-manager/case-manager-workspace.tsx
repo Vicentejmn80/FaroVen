@@ -15,7 +15,7 @@ import { AvailabilityCalendarCard } from '@/components/availability/availability
 import { PostulationPanel } from '@/components/dispatch/postulation-panel'
 import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
-import { cn } from '@/lib/utils'
+import { cn, isValidCoord } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS, SKILL_LABELS } from '@/lib/labels'
@@ -376,6 +376,16 @@ export function CaseManagerWorkspace() {
                           <span>{report.location?.zone ?? '—'}</span>
                           <span>&middot;</span>
                           <span>{new Date(report.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>&middot;</span>
+                          <span className={cn(
+                            isValidCoord(report.location?.coordinates?.lat ?? 0, report.location?.coordinates?.lng ?? 0)
+                              ? 'text-operational'
+                              : 'text-warning',
+                          )}>
+                            {isValidCoord(report.location?.coordinates?.lat ?? 0, report.location?.coordinates?.lng ?? 0)
+                              ? 'GPS'
+                              : 'Sin GPS'}
+                          </span>
                         </div>
                       </button>
                       <button

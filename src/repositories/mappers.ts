@@ -192,6 +192,12 @@ export function needRowToNeed(row: NeedRow): Need {
 }
 
 export function reportRowToReport(row: ReportRow): Report {
+  const lat = row.latitude != null && Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null
+  const lng = row.longitude != null && Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null
+  const addressFromDescription = row.description?.includes(' — ')
+    ? row.description.split(' — ')[1]?.trim()
+    : undefined
+
   return {
     id: row.id,
     type:
@@ -206,9 +212,10 @@ export function reportRowToReport(row: ReportRow): Report {
     confidence: 'medium',
     photoUrls: [],
     location: {
-      zone: row.site_label ?? 'Caracas',
-      address: row.site_label ?? 'Ubicación reportada',
-      coordinates: { lat: row.latitude ?? 10.48, lng: row.longitude ?? -66.9 },
+      zone: row.site_label ?? addressFromDescription ?? 'Zona por confirmar',
+      address: row.site_label ?? addressFromDescription ?? 'Ubicación reportada',
+      // Never invent Caracas coords — missing GPS must stay explicit (0,0) for UI validation
+      coordinates: { lat: lat ?? 0, lng: lng ?? 0 },
     },
     centerId: row.site_id ?? undefined,
     contactInfo: row.contact_info ?? undefined,

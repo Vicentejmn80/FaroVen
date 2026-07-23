@@ -35,7 +35,11 @@ export function parseCoord(value?: number | string | null, fallback?: number): n
 }
 
 export function isValidCoord(lat: number, lng: number): boolean {
-  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false
+  // (0,0) is a sentinel for "missing GPS" in FARO — never treat as a real point
+  if (lat === 0 && lng === 0) return false
+  return true
 }
 
 export function defaultMapCenter(): [number, number] {

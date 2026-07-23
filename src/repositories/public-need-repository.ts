@@ -197,7 +197,9 @@ export class PublicNeedRepository {
           zone: input.zone,
         },
         visibility_status: 'public',
+        verification_status: 'approved_entry',
         status: 'active',
+        verified_by: input.actorId ?? null,
         expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
       })
       .select('*')

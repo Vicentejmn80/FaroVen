@@ -50,19 +50,29 @@ export class ReportRepository {
     contactEmail?: string
     location?: string
     category?: string
+    latitude?: number | null
+    longitude?: number | null
   }): Promise<{ report: Report; trackingCode: string }> {
     const trackingCode = generateTrackingCode()
     const contactInfo = [input.contactName, input.contactPhone, input.contactEmail].filter(Boolean).join(' | ') || null
     const description = [input.category, input.location, input.description].filter(Boolean).join(' — ')
+    const hasCoords =
+      input.latitude != null &&
+      input.longitude != null &&
+      Number.isFinite(input.latitude) &&
+      Number.isFinite(input.longitude)
 
     const { data, error } = await supabase
       .from('reports')
       .insert({
-        type: 'other',
+        type: input.category?.trim() || 'other',
         description,
         contact_info: contactInfo,
         tracking_code: trackingCode,
         status: 'pending',
+        site_label: input.location?.trim() || null,
+        latitude: hasCoords ? input.latitude : null,
+        longitude: hasCoords ? input.longitude : null,
       })
       .select('*')
       .single()
@@ -126,6 +136,26 @@ export class ReportRepository {
   async delete(id: string): Promise<void> {
     const { error } = await supabase.rpc('delete_report', { p_report_id: id })
     if (error) throw error
+  }
+
+  async updateLocation(input: {
+    id: string
+    latitude: number
+    longitude: number
+    siteLabel?: string
+  }): Promise<Report> {
+    const { data, error } = await supabase
+      .from('reports')
+      .update({
+        latitude: input.latitude,
+        longitude: input.longitude,
+        site_label: input.siteLabel ?? undefined,
+      })
+      .eq('id', input.id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return reportRowToReport(data as ReportRow)
   }
 
   async findWithAnalysis(id: string): Promise<Report | null> {

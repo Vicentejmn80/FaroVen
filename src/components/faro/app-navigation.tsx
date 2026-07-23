@@ -45,6 +45,7 @@ export interface NavTab {
   id: TabId
   label: string
   icon: LucideIcon
+  badge?: number
 }
 
 const CITIZEN_BASE: NavTab[] = [
@@ -104,6 +105,14 @@ export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab
 export function getMobilePrimaryTabs(role: FaroRole, email?: string | null): NavTab[] {
   const tabs = getNavigationTabs(role, email)
   if (isVolunteerRole(role)) return tabs.slice(0, 4)
+
+  if (canAccessCaseManagerPanel(role)) {
+    const manager = tabs.find((t) => t.id === 'case-manager')
+    const map = tabs.find((t) => t.id === 'map')
+    const reports = tabs.find((t) => t.id === 'reports')
+    const profile = tabs.find((t) => t.id === 'profile')
+    return [manager, map, reports, profile].filter(Boolean) as NavTab[]
+  }
 
   const baseIds = new Set(CITIZEN_BASE.map((t) => t.id))
   const primary = tabs.filter((t) => baseIds.has(t.id)).slice(0, 4)
@@ -246,6 +255,7 @@ function NavButton({
   active,
   onClick,
   rail,
+  badge,
 }: {
   label: string
   icon: LucideIcon
@@ -253,6 +263,7 @@ function NavButton({
   onClick: () => void
   compact?: boolean
   rail?: boolean
+  badge?: number
 }) {
   if (rail) {
     return (
@@ -262,13 +273,20 @@ function NavButton({
         aria-current={active ? 'page' : undefined}
         title={label}
         className={cn(
-          'flex w-[68px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 transition-colors',
+          'relative flex w-[68px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 transition-colors',
           active
             ? 'bg-white/[0.12] text-ink ring-1 ring-white/[0.08]'
             : 'text-ink-faint hover:bg-white/[0.04] hover:text-ink-muted',
         )}
       >
-        <Icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.25 : 1.75} />
+        <span className="relative">
+          <Icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.25 : 1.75} />
+          {badge != null && badge > 0 && (
+            <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[9px] font-bold text-white">
+              {badge > 9 ? '9+' : badge}
+            </span>
+          )}
+        </span>
         <span className="text-[10px] font-medium leading-none">{label}</span>
       </button>
     )
@@ -279,15 +297,22 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-[52px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40',
+        'relative flex h-[52px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40',
         active && 'bg-white/[0.08]',
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon
-        className={cn('h-[21px] w-[21px]', active ? 'text-info' : 'text-ink-muted')}
-        strokeWidth={active ? 2.25 : 1.75}
-      />
+      <span className="relative">
+        <Icon
+          className={cn('h-[21px] w-[21px]', active ? 'text-info' : 'text-ink-muted')}
+          strokeWidth={active ? 2.25 : 1.75}
+        />
+        {badge != null && badge > 0 && (
+          <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[9px] font-bold text-white">
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
+      </span>
       <span className={cn('text-[10px] font-medium transition-colors', active ? 'text-info' : 'text-ink-muted')}>
         {label}
       </span>

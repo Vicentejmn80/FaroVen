@@ -1,9 +1,9 @@
-import { AlertTriangle, Building2, ShieldCheck, User, Phone, Mail } from 'lucide-react'
+import { AlertTriangle, Building2, ShieldCheck, User, Phone, Mail, MapPin } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useReportAnalysis } from '@/hooks/useCaseManager'
 import { useDeleteReport } from '@/hooks/useReports'
-import { cn } from '@/lib/utils'
+import { cn, isValidCoord } from '@/lib/utils'
 import { SITE_TYPE_LABELS, label, REPORT_STATUS_LABELS } from '@/lib/labels'
 
 interface ReportDetailPanelProps {
@@ -97,6 +97,17 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
               </div>
               <p className="mb-2 text-sm text-ink">{analysis.report.description}</p>
               <p className="text-xs text-ink-subtle">Ubicación: {analysis.report.location.address}</p>
+              {isValidCoord(analysis.report.location.coordinates.lat, analysis.report.location.coordinates.lng) ? (
+                <p className="mt-1 flex items-center gap-1 text-xs text-operational">
+                  <MapPin className="h-3 w-3" />
+                  GPS {analysis.report.location.coordinates.lat.toFixed(5)}, {analysis.report.location.coordinates.lng.toFixed(5)}
+                </p>
+              ) : (
+                <p className="mt-1 flex items-center gap-1 text-xs text-warning">
+                  <AlertTriangle className="h-3 w-3" />
+                  Sin GPS — al abrir el caso podrás marcar el punto en el mapa
+                </p>
+              )}
               <p className="text-xs text-ink-subtle">Origen: {sourceLabel(analysis.report.source)}</p>
             </GlassCard>
 

@@ -44,6 +44,9 @@ import { NeedCycleClosureModal } from '@/components/coordinator/need-cycle-closu
 import { Skeleton } from '@/components/ui/skeleton'
 import type { NotificationRow } from '@/domain/notification-models'
 import { PendingRoleBanner } from '@/components/auth/pending-role-banner'
+import { useReports } from '@/hooks/useReports'
+import { useRealtimeSync } from '@/supabase/use-realtime-sync'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 
 type FlowId =
   | ActionId
@@ -157,6 +160,39 @@ export function AppShell() {
   const isCoordinatorOps = canAccessCoordinatorPanel
   const isCaseManager = role === FARO_ROLES.CASE_MANAGER
   const defaultTab: TabId = isVolunteer ? 'needs' : 'map'
+  const { data: inboxReports = [] } = useReports()
+  const pendingReportCount = useMemo(
+    () => (isCaseManager ? inboxReports.filter((r) => r.status === 'new').length : 0),
+    [inboxReports, isCaseManager],
+  )
+
+  useRealtimeSync({
+    channelName: 'shell-case-manager-inbox',
+    tables: isCaseManager ? ['reports', 'notifications'] : [],
+    invalidateKeys: isCaseManager
+      ? [FARO_QUERY_KEYS.reports]
+      : [],
+  })
+
+  const tabsWithBadges = useMemo(
+    () =>
+      tabs.map((tab) =>
+        tab.id === 'case-manager' && pendingReportCount > 0
+          ? { ...tab, badge: pendingReportCount }
+          : tab,
+      ),
+    [tabs, pendingReportCount],
+  )
+
+  const mobileTabsWithBadges = useMemo(
+    () =>
+      mobileTabs.map((tab) =>
+        tab.id === 'case-manager' && pendingReportCount > 0
+          ? { ...tab, badge: pendingReportCount }
+          : tab,
+      ),
+    [mobileTabs, pendingReportCount],
+  )
 
   const actionsMode = isCoordinatorOps
     ? ('coordinator' as const)
@@ -440,7 +476,7 @@ export function AppShell() {
           active={activeView}
           onChange={setActiveView}
           onCreate={openMenu}
-          tabs={tabs}
+          tabs={tabsWithBadges}
           createLabel={fabContext.label}
         />
 
@@ -528,7 +564,7 @@ export function AppShell() {
             active={activeView}
             onChange={setActiveView}
             onCreate={openMenu}
-            mobileTabs={mobileTabs}
+            mobileTabs={mobileTabsWithBadges}
             createLabel={fabContext.label}
           />
         </div>

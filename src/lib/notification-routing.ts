@@ -46,6 +46,7 @@ export function getNotificationActionLabel(actionUrl: string | null | undefined,
   if (target?.tab === 'ops') return 'Ir a Mi Centro'
   if (target?.tab === 'system') return 'Ir a usuarios'
   if (target?.tab === 'admin') return 'Ir a administración'
+  if (target?.tab === 'case-manager') return 'Ir a bandeja'
   if (target?.flow === 'coordinator-request') return 'Responder'
   if (type?.includes('approved')) return 'Ir a Mi Centro'
   if (type?.includes('rejected') || type?.includes('info_request')) return 'Ver solicitud'

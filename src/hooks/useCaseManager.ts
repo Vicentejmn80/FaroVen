@@ -22,6 +22,8 @@ export function useConvertReportToCase() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.reports] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.reportAnalysis] })
     },
   })
 }

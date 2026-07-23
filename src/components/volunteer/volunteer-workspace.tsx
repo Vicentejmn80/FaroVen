@@ -76,8 +76,8 @@ function AvailableMissions() {
     () =>
       publicNeeds?.filter((need) =>
         need.visibilityStatus === 'public' &&
-        need.verificationStatus === 'approved_entry' &&
-        ['active', 'in_progress', 'reserved'].includes(need.status),
+        ['active', 'in_progress', 'reserved'].includes(need.status) &&
+        (need.verificationStatus === 'approved_entry' || need.verificationStatus === 'pending_exit' || need.verificationStatus === 'approved_exit'),
       ) ?? [],
     [publicNeeds],
   )

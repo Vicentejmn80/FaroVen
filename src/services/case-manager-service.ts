@@ -134,6 +134,20 @@ export const caseManagerService = {
 
   async convertReportToCase(data: ConvertReportWizardData, actorId?: string) {
     const report = data.reportId ? await reportRepository.findWithAnalysis(data.reportId) : null
+    const lat = report?.location.coordinates.lat ?? 0
+    const lng = report?.location.coordinates.lng ?? 0
+    const hasValidCoords =
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      !(lat === 0 && lng === 0) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180
+
+    if (!hasValidCoords) {
+      throw new Error(
+        'Este reporte no tiene GPS válido. Pide al ciudadano reenviarlo con ubicación, o marca el punto antes de convertir.',
+      )
+    }
 
     const result = await caseService.create({
       title: data.title,
@@ -143,8 +157,9 @@ export const caseManagerService = {
       category: data.category,
       affectedCount: data.affectedCount,
       location: {
-        lat: report?.location.coordinates.lat ?? 0,
-        lng: report?.location.coordinates.lng ?? 0,
+        lat,
+        lng,
+        address: report?.location.address,
       },
       reporterInfo: {
         name: data.reporterName ?? undefined,
@@ -164,8 +179,8 @@ export const caseManagerService = {
       priority: data.priority,
       zone: data.zone,
       location: {
-        lat: report?.location.coordinates.lat,
-        lng: report?.location.coordinates.lng,
+        lat,
+        lng,
         address: report?.location.address,
         zone: data.zone,
       },
