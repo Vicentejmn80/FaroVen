@@ -47,3 +47,22 @@ export function useArchiveCase() {
     },
   })
 }
+
+export function useOpenCaseForApplications() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      caseId,
+      actorId,
+      comment,
+    }: {
+      caseId: string
+      actorId?: string
+      comment?: string
+    }) => caseService.transition(caseId, 'open_for_applications', actorId, comment ?? 'Caso abierto a postulaciones'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+    },
+  })
+}

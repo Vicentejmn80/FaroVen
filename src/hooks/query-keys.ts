@@ -9,6 +9,7 @@ export const FARO_QUERY_KEYS = {
   cases: 'cases',
   caseEvents: 'case-events',
   caseAssignments: 'case-assignments',
+  caseApplications: 'case-applications',
   centerResources: 'center-resources',
   centerEvents: 'center-events',
   supportRequests: 'support-requests',

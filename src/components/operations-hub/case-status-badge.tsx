@@ -11,6 +11,7 @@ const STAGE_META: Record<PipelineStage, { label: string; color: string; bg: stri
   pending_review: { label: 'Pendiente', color: 'text-warning', bg: 'bg-warning/10' },
   validating: { label: 'Validando', color: 'text-warning', bg: 'bg-warning/10' },
   awaiting_info: { label: 'Espera info', color: 'text-ink-muted', bg: 'bg-white/[0.06]' },
+  open_for_applications: { label: 'Postulaciones', color: 'text-info', bg: 'bg-info/10' },
   assigned: { label: 'Asignado', color: 'text-info', bg: 'bg-info/10' },
   accepted: { label: 'Aceptado', color: 'text-operational', bg: 'bg-operational/10' },
   in_attention: { label: 'En atención', color: 'text-operational', bg: 'bg-operational/10' },

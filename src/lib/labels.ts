@@ -10,6 +10,7 @@ export const PIPELINE_LABELS: Record<PipelineStage, string> = {
   pending_review: 'Esperando revisión',
   validating: 'En validación',
   awaiting_info: 'Esperando información',
+  open_for_applications: 'Aceptando postulaciones',
   assigned: 'Asignado',
   accepted: 'Aceptado',
   in_attention: 'En atención',

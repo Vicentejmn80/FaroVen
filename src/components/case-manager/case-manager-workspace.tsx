@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
-import { useCases, useArchiveCase } from '@/hooks/useCases'
+import { useCases, useArchiveCase, useOpenCaseForApplications } from '@/hooks/useCases'
 import { useRoleRequests } from '@/hooks/useRoleRequests'
 import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -16,9 +16,10 @@ import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/op
 import { cn } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
-import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS } from '@/lib/labels'
+import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS, SKILL_LABELS } from '@/lib/labels'
 import { useAuth, usePermissions } from '@/store/auth-context'
 import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
+import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplication } from '@/hooks/useCaseApplications'
 import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
@@ -260,6 +261,11 @@ export function CaseManagerWorkspace() {
   const verifyPublicNeed = useVerifyPublicNeedEntry()
   const deleteReport = useDeleteReport()
   const archiveCase = useArchiveCase()
+  const openForApplications = useOpenCaseForApplications()
+  const [applicationCaseId, setApplicationCaseId] = useState<string | undefined>(undefined)
+  const { data: applications = [] } = useCaseApplications(applicationCaseId)
+  const approveApp = useApproveCaseApplication()
+  const rejectApp = useRejectCaseApplication()
 
   useRealtimeSync({
     channelName: 'cm-reports',
@@ -454,13 +460,15 @@ export function CaseManagerWorkspace() {
                   {isExpanded && (
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
+
+                      {/* Actions for cases not yet open to applications */}
+                      {c.pipelineStage !== 'open_for_applications' && c.pipelineStage !== 'assigned' && c.pipelineStage !== 'archived' && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
-                            if (c.pipelineStage === 'nuevo') {
-                              archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'En espera de postulantes' })
-                            }
+                            openForApplications.mutate({ caseId: c.id, actorId: user?.id, comment: 'Caso abierto a postulaciones voluntarias' })
                           }}
+                          disabled={openForApplications.isPending}
                           className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
                         >
                           <p className="font-medium text-ink">Esperar postulante</p>
@@ -478,6 +486,92 @@ export function CaseManagerWorkspace() {
                           <p className="text-ink-faint mt-0.5">Enviar a Protección Civil, centros de acopio u otras instituciones</p>
                         </button>
                       </div>
+                      )}
+
+                      {/* Applications panel when case is open_for_applications */}
+                      {c.pipelineStage === 'open_for_applications' && (
+                        <div className="space-y-2">
+                          {applicationCaseId !== c.id && (
+                            <button
+                              onClick={() => setApplicationCaseId(c.id)}
+                              className="w-full rounded-xl border border-white/[0.08] px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]"
+                            >
+                              <p className="font-medium text-ink">Ver postulaciones ({applications.length})</p>
+                              <p className="text-ink-faint mt-0.5">Revisa y aprueba postulantes para este caso</p>
+                            </button>
+                          )}
+
+                          {applicationCaseId === c.id && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">Postulaciones</p>
+                                <button
+                                  onClick={() => setApplicationCaseId(undefined)}
+                                  className="text-xs text-ink-faint hover:text-ink"
+                                >
+                                  Cerrar
+                                </button>
+                              </div>
+
+                              {applications.length === 0 ? (
+                                <p className="text-xs text-ink-faint text-center py-4">Aún no hay postulaciones. Comparte el caso para que voluntarios y ONGs puedan postularse.</p>
+                              ) : (
+                                applications.map((app) => {
+                                  const canModerate = app.status === 'pending' || app.status === 'under_review'
+                                  return (
+                                    <div key={app.id} className="rounded-xl border border-white/[0.08] p-3 space-y-2">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-medium text-ink">{app.applicantName}</p>
+                                          {app.organization && <p className="text-xs text-ink-subtle">{app.organization}</p>}
+                                          {app.trustScore !== undefined && (
+                                            <p className="text-[10px] text-ink-faint mt-0.5">Confianza: {app.trustScore}%</p>
+                                          )}
+                                        </div>
+                                        <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', app.status === 'pending' ? 'bg-warning/15 text-warning' : app.status === 'approved' ? 'bg-operational/15 text-operational' : app.status === 'rejected' ? 'bg-critical/15 text-critical' : 'bg-white/[0.06] text-ink-muted')}>
+                                          {label({ pending: 'Pendiente', under_review: 'En revisión', approved: 'Aprobado', rejected: 'Rechazado', withdrawn: 'Retirado', expired: 'Expirado' }, app.status)}
+                                        </span>
+                                      </div>
+                                      {app.message && <p className="text-xs text-ink-muted">{app.message}</p>}
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {app.skills?.map((s) => (
+                                          <span key={s} className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-ink-faint">{label(SKILL_LABELS, s, s)}</span>
+                                        ))}
+                                      </div>
+                                      {app.totalMissions !== undefined && (
+                                        <div className="flex gap-3 text-[10px] text-ink-faint">
+                                          <span>{app.totalMissions} misiones</span>
+                                          {app.completedMissions !== undefined &&                                           <span>{app.completedMissions} completadas</span>}
+                                          {app.serviceHours !== undefined && <span>{app.serviceHours} horas</span>}
+                                        </div>
+                                      )}
+                                      {canModerate && (
+                                        <div className="flex gap-2 pt-1">
+                                          <button
+                                            onClick={() => approveApp.mutate({ applicationId: app.id, operatorId: user?.id ?? '' })}
+                                            disabled={approveApp.isPending}
+                                            className="flex-1 rounded-lg bg-operational/15 py-1.5 text-xs font-medium text-operational hover:bg-operational/25 transition-colors"
+                                          >
+                                            Aprobar
+                                          </button>
+                                          <button
+                                            onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: user?.id ?? '' })}
+                                            disabled={rejectApp.isPending}
+                                            className="flex-1 rounded-lg bg-critical/15 py-1.5 text-xs font-medium text-critical hover:bg-critical/25 transition-colors"
+                                          >
+                                            Rechazar
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {c.reporterInfo && (c.reporterInfo.name || c.reporterInfo.phone) && (
                         <div className="bg-white/[0.03] rounded-xl p-2.5 space-y-1">
                           <p className="text-[10px] uppercase tracking-wide text-ink-faint">Contacto del reportante</p>
