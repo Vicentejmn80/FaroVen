@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from 'react'
-import { useReports } from '@/hooks/useReports'
+import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
-import { useCases } from '@/hooks/useCases'
+import { useCases, useArchiveCase } from '@/hooks/useCases'
 import { useRoleRequests } from '@/hooks/useRoleRequests'
 import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { ReportDetailPanel } from '@/components/case-manager/report-detail-panel'
+import { ConvertReportWizard } from '@/components/case-manager/convert-report-wizard'
 import { RoleRequestAdminPanel } from '@/components/role-request/role-request-admin-panel'
 import { AvailabilityCalendarCard } from '@/components/availability/availability-calendar-card'
 import { PostulationPanel } from '@/components/dispatch/postulation-panel'
@@ -18,8 +19,6 @@ import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS } from '@/lib/labels'
 import { useAuth, usePermissions } from '@/store/auth-context'
 import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
-import { useDeleteReport } from '@/hooks/useReports'
-import { useArchiveCase } from '@/hooks/useCases'
 import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
@@ -254,6 +253,8 @@ export function CaseManagerWorkspace() {
   const [tab, setTab] = useState<ManagerTab>('inbox')
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
+  const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null)
+  const [convertingReportId, setConvertingReportId] = useState<string | null>(null)
   const { user } = useAuth()
   const { data: publicNeeds = [], isLoading: publicNeedsLoading } = useOperationalPublicNeeds()
   const verifyPublicNeed = useVerifyPublicNeedEntry()
@@ -386,11 +387,21 @@ export function CaseManagerWorkspace() {
             </div>
             {selectedReportId ? (
               <div className="flex-1 border-l border-white/[0.06]">
-                <ReportDetailPanel
-                  reportId={selectedReportId}
-                  onClose={() => setSelectedReportId(null)}
-                  onConvertToCase={() => {}}
-                />
+                {convertingReportId === selectedReportId ? (
+                  <div className="overflow-y-auto p-4">
+                    <ConvertReportWizard
+                      reportId={selectedReportId}
+                      onDone={() => { setConvertingReportId(null); setSelectedReportId(null) }}
+                      onCancel={() => setConvertingReportId(null)}
+                    />
+                  </div>
+                ) : (
+                  <ReportDetailPanel
+                    reportId={selectedReportId}
+                    onClose={() => setSelectedReportId(null)}
+                    onConvertToCase={() => setConvertingReportId(selectedReportId)}
+                  />
+                )}
               </div>
             ) : (
               <div className="hidden flex-1 items-center justify-center border-l border-white/[0.06] lg:flex">
@@ -411,35 +422,74 @@ export function CaseManagerWorkspace() {
             ) : activeCases.length === 0 ? (
               <GlassCard className="p-4 text-center text-sm text-ink-subtle">No hay casos activos</GlassCard>
             ) : (
-              activeCases.map((c) => (
-                <GlassCard key={c.id} className="p-3">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="text-sm font-medium text-ink">{c.title}</p>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
-                        {label(PRIORITY_LABELS, c.priority, c.priority)}
-                      </span>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`¿Archivar el caso "${c.title}"? Se moverá a casos archivados.`)) {
-                            archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Archivado por gestor de casos' })
-                          }
-                        }}
-                        disabled={archiveCase.isPending}
-                        className="rounded-full p-1 text-ink-faint hover:bg-critical/15 hover:text-critical"
-                        title="Archivar caso"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
-                      </button>
+              activeCases.map((c) => {
+                const isExpanded = expandedCaseId === c.id
+                return (
+                <div key={c.id}>
+                  <button onClick={() => setExpandedCaseId(isExpanded ? null : c.id)} className="w-full text-left">
+                    <GlassCard className={cn('p-3 transition-all', isExpanded ? 'ring-1 ring-info/30' : '')}>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-sm font-medium text-ink">{c.title}</p>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
+                            {label(PRIORITY_LABELS, c.priority, c.priority)}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (window.confirm(`¿Archivar el caso "${c.title}"? Se moverá a casos archivados.`)) { archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Archivado por gestor de casos' }) } }}
+                            disabled={archiveCase.isPending}
+                            className="rounded-full p-1 text-ink-faint hover:bg-critical/15 hover:text-critical"
+                            title="Archivar caso"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-ink-subtle">
+                        <span>{c.zone}</span>
+                        <span>&middot;</span>
+                        <span>Etapa: {label(PIPELINE_LABELS, c.pipelineStage)}</span>
+                      </div>
+                    </GlassCard>
+                  </button>
+                  {isExpanded && (
+                    <div className="space-y-2 px-1 pt-2 pb-3">
+                      <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (c.pipelineStage === 'nuevo') {
+                              archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'En espera de postulantes' })
+                            }
+                          }}
+                          className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
+                        >
+                          <p className="font-medium text-ink">Esperar postulante</p>
+                          <p className="text-ink-faint mt-0.5">Cualquier voluntario, ONG o brigada cerca podrá postularse</p>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('¿Asignar este caso a un centro específico? Se abrirá la lista de centros disponibles.')) {
+                              archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Asignado a centro' })
+                            }
+                          }}
+                          className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
+                        >
+                          <p className="font-medium text-ink">Asignar a centro</p>
+                          <p className="text-ink-faint mt-0.5">Enviar a Protección Civil, centros de acopio u otras instituciones</p>
+                        </button>
+                      </div>
+                      {c.reporterInfo && (c.reporterInfo.name || c.reporterInfo.phone) && (
+                        <div className="bg-white/[0.03] rounded-xl p-2.5 space-y-1">
+                          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Contacto del reportante</p>
+                          {c.reporterInfo.name && <p className="text-xs text-ink">{c.reporterInfo.name}</p>}
+                          {c.reporterInfo.phone && <p className="text-xs text-info">{c.reporterInfo.phone}</p>}
+                          {c.reporterInfo.email && <p className="text-xs text-ink-subtle">{c.reporterInfo.email}</p>}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-ink-subtle">
-                    <span>{c.zone}</span>
-                    <span>&middot;</span>
-                    <span>Etapa: {label(PIPELINE_LABELS, c.pipelineStage)}</span>
-                  </div>
-                </GlassCard>
-              ))
+                  )}
+                </div>
+              )})
             )}
           </div>
         )}

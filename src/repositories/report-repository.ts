@@ -127,6 +127,12 @@ export class ReportRepository {
     const { error } = await supabase.from('reports').delete().eq('id', id)
     if (error) throw error
   }
+
+  async findWithAnalysis(id: string): Promise<Report | null> {
+    const { data, error } = await supabase.from('reports').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data ? reportRowToReport(data as ReportRow) : null
+  }
 }
 
 export const reportRepository = new ReportRepository()

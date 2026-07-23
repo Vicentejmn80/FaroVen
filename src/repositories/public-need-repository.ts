@@ -170,6 +170,42 @@ export class PublicNeedRepository {
     return toPublicNeed(data as AnyRow)
   }
 
+  async createFromCase(input: {
+    caseId: string
+    title: string
+    summary: string
+    category: string
+    priority: string
+    zone: string
+    location?: { lat?: number | null; lng?: number | null; address?: string; zone?: string }
+    actorId?: string
+  }): Promise<PublicNeed> {
+    const { data, error } = await supabase
+      .from('public_needs')
+      .insert({
+        case_id: input.caseId,
+        title: input.title,
+        summary: input.summary,
+        category: input.category,
+        priority: input.priority,
+        required_quantity: 1,
+        unit: 'unidad',
+        location_public: {
+          lat: input.location?.lat ?? null,
+          lng: input.location?.lng ?? null,
+          address: input.location?.address ?? null,
+          zone: input.zone,
+        },
+        visibility_status: 'public',
+        status: 'active',
+        expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return toPublicNeed(data as AnyRow)
+  }
+
   async verifyEntry(input: {
     publicNeedId: string
     checklist: string[]

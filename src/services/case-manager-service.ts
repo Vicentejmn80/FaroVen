@@ -1,5 +1,6 @@
 import { reportRepository } from '@/repositories/report-repository'
 import { caseService } from './case-service'
+import { publicNeedRepository } from '@/repositories/public-need-repository'
 import type { Report } from '@/domain/models'
 import type { CasePriority } from '@/domain/case-lifecycle.types'
 import { supabase } from '@/lib/supabase'
@@ -132,7 +133,9 @@ export const caseManagerService = {
   },
 
   async convertReportToCase(data: ConvertReportWizardData, actorId?: string) {
-    return caseService.create({
+    const report = data.reportId ? await reportRepository.findWithAnalysis(data.reportId) : null
+
+    const result = await caseService.create({
       title: data.title,
       description: data.description,
       priority: data.priority,
@@ -140,16 +143,36 @@ export const caseManagerService = {
       category: data.category,
       affectedCount: data.affectedCount,
       location: {
-        lat: 0,
-        lng: 0,
+        lat: report?.location.coordinates.lat ?? 0,
+        lng: report?.location.coordinates.lng ?? 0,
       },
       reporterInfo: {
-        name: data.reporterName,
-        phone: data.reporterPhone,
-        email: data.reporterEmail,
+        name: data.reporterName ?? undefined,
+        phone: data.reporterPhone ?? undefined,
+        email: data.reporterEmail ?? undefined,
       },
       actorId,
     })
+
+    const transitioned = await caseService.transition(result.case.id, 'pending_review', actorId, 'Caso abierto desde reporte ciudadano — pasa a revisión')
+
+    await publicNeedRepository.createFromCase({
+      caseId: transitioned.case.id,
+      title: data.title,
+      summary: data.description,
+      category: data.category,
+      priority: data.priority,
+      zone: data.zone,
+      location: {
+        lat: report?.location.coordinates.lat,
+        lng: report?.location.coordinates.lng,
+        address: report?.location.address,
+        zone: data.zone,
+      },
+      actorId,
+    })
+
+    return transitioned
   },
 }
 

@@ -1,7 +1,8 @@
-import { Sparkles, AlertTriangle, Building2, ShieldCheck } from 'lucide-react'
+import { Sparkles, AlertTriangle, Building2, ShieldCheck, User, Phone, Mail } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useReportAnalysis } from '@/hooks/useCaseManager'
+import { useDeleteReport } from '@/hooks/useReports'
 import { cn } from '@/lib/utils'
 import { SITE_TYPE_LABELS, confidenceBand, label, REPORT_STATUS_LABELS } from '@/lib/labels'
 
@@ -33,8 +34,26 @@ function sourceLabel(source: string): string {
 
 export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: ReportDetailPanelProps) {
   const { data: analysis, isLoading } = useReportAnalysis(reportId)
+  const deleteReport = useDeleteReport()
 
   if (!reportId) return null
+
+  const parseContactInfo = (raw?: string) => {
+    if (!raw) return null
+    const parts = raw.split('|').map((p) => p.trim())
+    return {
+      name: parts[0] || null,
+      phone: parts[1] || null,
+      email: parts[2] || null,
+    }
+  }
+
+  const handleDiscard = () => {
+    if (window.confirm('¿Descartar este reporte? Se eliminará de la bandeja de entrada.')) {
+      deleteReport.mutate(reportId)
+      onClose()
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -80,6 +99,36 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
               <p className="text-xs text-ink-subtle">Ubicación: {analysis.report.location.address}</p>
               <p className="text-xs text-ink-subtle">Origen: {sourceLabel(analysis.report.source)}</p>
             </GlassCard>
+
+            {(() => {
+              const contact = parseContactInfo(analysis.report.contactInfo)
+              if (!contact) return null
+              return (
+                <GlassCard className="p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-2">Información de contacto</p>
+                  <div className="space-y-1.5">
+                    {contact.name && (
+                      <div className="flex items-center gap-2 text-xs text-ink">
+                        <User className="h-3 w-3 text-ink-subtle" />
+                        <span>{contact.name}</span>
+                      </div>
+                    )}
+                    {contact.phone && (
+                      <div className="flex items-center gap-2 text-xs text-ink">
+                        <Phone className="h-3 w-3 text-ink-subtle" />
+                        <span>{contact.phone}</span>
+                      </div>
+                    )}
+                    {contact.email && (
+                      <div className="flex items-center gap-2 text-xs text-ink">
+                        <Mail className="h-3 w-3 text-ink-subtle" />
+                        <span>{contact.email}</span>
+                      </div>
+                    )}
+                  </div>
+                </GlassCard>
+              )
+            })()}
 
             {analysis.duplicates.length > 0 && (
               <GlassCard className="border-warning/25 bg-warning/[0.04] p-3.5">
@@ -198,6 +247,15 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
                 onClick={() => onConvertToCase(analysis.report.id)}
               >
                 Abrir caso operativo
+              </EmergencyButton>
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                disabled={deleteReport.isPending}
+                onClick={handleDiscard}
+                className="text-critical border-critical/30 hover:bg-critical/15"
+              >
+                Descartar
               </EmergencyButton>
             </div>
           </>

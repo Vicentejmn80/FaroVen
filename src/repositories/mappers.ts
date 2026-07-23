@@ -211,6 +211,7 @@ export function reportRowToReport(row: ReportRow): Report {
       coordinates: { lat: row.latitude ?? 10.48, lng: row.longitude ?? -66.9 },
     },
     centerId: row.site_id ?? undefined,
+    contactInfo: row.contact_info ?? undefined,
   }
 }
 

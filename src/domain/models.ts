@@ -80,6 +80,7 @@ export interface Report {
   photoUrls: string[]
   location: Location
   centerId?: string
+  contactInfo?: string
 }
 
 export interface Event {
