@@ -9,6 +9,7 @@ import type {
 } from '@/domain/public-need.types'
 
 type AnyRow = Record<string, unknown>
+type CoverageReservationRow = AnyRow
 
 function toPublicNeed(row: AnyRow): PublicNeed {
   return {
@@ -99,6 +100,16 @@ function toSuccessCase(row: AnyRow): SuccessCase {
 }
 
 export class PublicNeedRepository {
+  async findById(id: string): Promise<PublicNeed | null> {
+    const { data, error } = await supabase
+      .from('public_needs')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    return data ? toPublicNeed(data as AnyRow) : null
+  }
+
   async listActivePublic(): Promise<PublicNeed[]> {
     const { data, error } = await supabase
       .from('public_needs')
@@ -224,6 +235,26 @@ export class PublicNeedRepository {
       .single()
     if (error) throw error
     return toCoverageReservation(data as AnyRow)
+  }
+
+  async listCoverageReservationsByNeed(publicNeedId: string): Promise<CoverageReservation[]> {
+    const { data, error } = await supabase
+      .from('coverage_reservations')
+      .select('*')
+      .eq('public_need_id', publicNeedId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return ((data ?? []) as CoverageReservationRow[]).map((row) => toCoverageReservation(row))
+  }
+
+  async findCoverageReservationById(reservationId: string): Promise<CoverageReservation | null> {
+    const { data, error } = await supabase
+      .from('coverage_reservations')
+      .select('*')
+      .eq('id', reservationId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? toCoverageReservation(data as CoverageReservationRow) : null
   }
 
   async updateReservationStatus(input: {

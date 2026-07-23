@@ -13,6 +13,8 @@ import type { Site } from '@/lib/types'
 import { generatePublicSummary, type PublicSummaryMessage } from '@/services/public-summary-engine'
 import { CenterPublicSummary } from '@/components/citizen/center-public-summary'
 import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { useRealtimeSync } from '@/supabase/use-realtime-sync'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { PublicNeed } from '@/domain/public-need.types'
 
 /** Superficie sólida sobre el mapa — legible, blur mínimo */
@@ -31,6 +33,11 @@ interface CitizenMapViewProps {
 export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProps) {
   const { sites: liveSites, state } = useFaro()
   const { data: publicNeeds = [] } = usePublicNeeds()
+  useRealtimeSync({
+    channelName: 'citizen-public-needs',
+    tables: ['public_needs', 'coverage_reservations'],
+    invalidateKeys: [FARO_QUERY_KEYS.publicNeeds],
+  })
   const reserveCoverage = useCreateCoverageReservation()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<PortalCategoryId | 'all'>('all')

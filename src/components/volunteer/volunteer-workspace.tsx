@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useVolunteerProfile, useVolunteerMissions, useUpdateVolunteerAvailability } from '@/hooks/useVolunteerProfile'
 import { useMissions } from '@/hooks/useMissions'
-import { useRespondMission, useUpdateMissionAssignment } from '@/hooks/useMissionMutations'
-import { useApplyToMission } from '@/hooks/useMissionApplications'
+import { useUpdateMissionAssignment } from '@/hooks/useMissionMutations'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { VolunteerMissionCard } from './volunteer-mission-card'
@@ -10,13 +9,13 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { VOLUNTEER_AVAILABILITY, VOLUNTEER_AVAILABILITY_LABELS, VOLUNTEER_AVAILABILITY_TONES, VERIFICATION_LEVEL_LABELS, SKILL_LABELS } from '@/domain/volunteer.types'
-import { MISSION_STAGES } from '@/domain/mission.types'
-import type { Mission, MissionAssignment } from '@/domain/mission.types'
-import { useAuth, usePermissions } from '@/store/auth-context'
+import type { Mission } from '@/domain/mission.types'
+import { usePermissions } from '@/store/auth-context'
 import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
 import { Flag } from 'lucide-react'
-import { ASSIGNMENT_STATUS_LABELS, label } from '@/lib/labels'
+import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
+import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
 
 type VolunteerTab = 'available' | 'my-missions' | 'history' | 'profile'
 
@@ -65,25 +64,20 @@ function AnimatedMetric({ value, suffix = '' }: { value: number; suffix?: string
 }
 
 function AvailableMissions() {
-  const { data: allMissions, isLoading, error } = useMissions()
-  const missions = useMemo(() => allMissions?.filter((m) => m.status === MISSION_STAGES.MATCHING || m.status === MISSION_STAGES.ASSIGNED) ?? [], [allMissions])
-  const { user } = useAuth()
+  const { data: publicNeeds, isLoading, error } = usePublicNeeds()
   const { isVolunteer } = usePermissions()
   const { data: profile } = useVolunteerProfile()
-  const { data: myAssignments } = useVolunteerMissions(profile?.id ?? '')
-  const respond = useRespondMission()
-  const applyToMission = useApplyToMission()
+  const reserveCoverage = useCreateCoverageReservation()
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
-
-  const assignmentMap = useMemo(() => {
-    const map = new Map<string, MissionAssignment>()
-    if (myAssignments) {
-      for (const a of myAssignments) {
-        map.set(a.missionId, a)
-      }
-    }
-    return map
-  }, [myAssignments])
+  const needs = useMemo(
+    () =>
+      publicNeeds?.filter((need) =>
+        need.visibilityStatus === 'public' &&
+        need.verificationStatus === 'approved_entry' &&
+        ['active', 'in_progress', 'reserved'].includes(need.status),
+      ) ?? [],
+    [publicNeeds],
+  )
 
   if (isLoading) {
     return (
@@ -97,11 +91,11 @@ function AvailableMissions() {
     return <div className="text-sm text-critical">Error: {(error as Error).message}</div>
   }
 
-  if (!missions || missions.length === 0) {
+  if (!needs || needs.length === 0) {
     return (
       <GlassCard className="flex flex-col items-center gap-2 p-6 text-center">
         <Flag className="h-8 w-8 text-ink-faint" strokeWidth={1.5} />
-        <p className="text-sm font-medium text-ink">No hay misiones disponibles</p>
+        <p className="text-sm font-medium text-ink">No hay necesidades públicas disponibles</p>
         <p className="text-xs text-ink-subtle">
           Cuando el gestor publique nuevas necesidades, aparecerán aquí para postularte.
         </p>
@@ -111,25 +105,59 @@ function AvailableMissions() {
 
   return (
     <div className="space-y-3">
-      {missions.map((m) => {
-        const assignment = assignmentMap.get(m.id)
-        const realAssignment = assignment ?? { id: '', missionId: m.id, volunteerId: '', status: 'assigned' as const, assignedAt: new Date(), evidenceUrls: [] }
-        const hasRealAssignment = !!assignment
-        const alreadyApplied = appliedIds.has(m.id)
-        const canApply = isVolunteer && !!profile && !hasRealAssignment && !alreadyApplied
+      {needs.map((need) => {
+        const alreadyApplied = appliedIds.has(need.id)
+        const canApply = isVolunteer && !!profile && !alreadyApplied && need.remainingQuantity > 0
+        const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
+
         return (
-          <VolunteerMissionCard
-            key={m.id}
-            mission={m}
-            assignment={realAssignment}
-            onAccept={hasRealAssignment && isVolunteer && user ? () => respond.mutate({ assignmentId: assignment!.id, action: 'accept', volunteerId: profile?.id ?? user.id }) : undefined}
-            onReject={hasRealAssignment && isVolunteer && user ? () => respond.mutate({ assignmentId: assignment!.id, action: 'reject', volunteerId: profile?.id ?? user.id }) : undefined}
-            onApply={canApply ? () => {
-              applyToMission.mutate({ missionId: m.id, volunteerId: profile!.id })
-              setAppliedIds((prev) => new Set(prev).add(m.id))
-            } : undefined}
-            applied={alreadyApplied}
-          />
+          <GlassCard key={need.id} className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-ink">{need.title}</p>
+                <p className="mt-1 text-xs text-ink-subtle line-clamp-2">{need.summary}</p>
+              </div>
+              <span className="rounded-full bg-info/20 px-2 py-0.5 text-[10px] font-semibold text-info">
+                {label(PRIORITY_LABELS, need.priority, need.priority)}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-ink-muted">
+              <span>{need.locationPublic.zone ?? 'Zona por confirmar'}</span>
+              <span>{need.remainingQuantity} {need.unit} por cubrir</span>
+              <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
+              <span>{label(PUBLIC_NEED_STATUS_LABELS, need.status, need.status)}</span>
+            </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                className={cn(
+                  'w-full rounded-xl px-3 py-2 text-xs font-medium transition-colors',
+                  canApply
+                    ? 'bg-info text-white hover:bg-info/90'
+                    : 'cursor-not-allowed border border-white/10 text-ink-faint',
+                )}
+                disabled={!canApply || reserveCoverage.isPending}
+                onClick={() => {
+                  if (!profile) return
+                  reserveCoverage.mutate(
+                    {
+                      publicNeedId: need.id,
+                      collaboratorType: 'volunteer',
+                      collaboratorName: profile.fullName,
+                      quantity: 1,
+                    },
+                    {
+                      onSuccess: () => {
+                        setAppliedIds((prev) => new Set(prev).add(need.id))
+                      },
+                    },
+                  )
+                }}
+              >
+                {alreadyApplied ? 'Postulación enviada' : reserveCoverage.isPending ? 'Enviando...' : 'Quiero ayudar'}
+              </button>
+            </div>
+          </GlassCard>
         )
       })}
     </div>
@@ -169,7 +197,7 @@ function MyMissions() {
     )
   }
 
-  const activeStatuses: string[] = ['assigned', 'accepted', 'en_route', 'on_site']
+  const activeStatuses: string[] = ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress', 'completed']
   const activeAssignments = assignments.filter((a) => activeStatuses.includes(a.status))
   const pastAssignments = assignments.filter((a) => !activeStatuses.includes(a.status))
 
@@ -199,9 +227,12 @@ function MyMissions() {
             const timelineSteps: TimelineStep[] = [
               { id: 'assigned', label: 'Asignada', completed: true, active: false },
               { id: 'accepted', label: 'Aceptada', completed: a.status !== 'assigned', active: a.status === 'accepted' },
-              { id: 'en_route', label: 'En camino', completed: ['en_route', 'on_site', 'completed'].includes(a.status), active: a.status === 'en_route' },
-              { id: 'on_site', label: 'En el sitio', completed: ['on_site', 'completed'].includes(a.status), active: a.status === 'on_site' },
-              { id: 'completed', label: 'Completada', completed: a.status === 'completed', active: a.status === 'completed' },
+              { id: 'preparing', label: 'Preparándose', completed: ['preparing', 'en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(a.status), active: a.status === 'preparing' },
+              { id: 'en_route', label: 'En camino', completed: ['en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(a.status), active: a.status === 'en_route' },
+              { id: 'on_site', label: 'En sitio', completed: ['on_site', 'in_progress', 'completed', 'verified'].includes(a.status), active: a.status === 'on_site' },
+              { id: 'in_progress', label: 'Ejecutando', completed: ['in_progress', 'completed', 'verified'].includes(a.status), active: a.status === 'in_progress' },
+              { id: 'completed', label: 'Esperando verificación', completed: ['completed', 'verified'].includes(a.status), active: a.status === 'completed' },
+              { id: 'verified', label: 'Completada', completed: a.status === 'verified', active: a.status === 'verified' },
             ]
             return (
               <div key={a.id}>
@@ -376,8 +407,17 @@ export function VolunteerWorkspace({
 
   useRealtimeSync({
     channelName: 'volunteer-missions',
-    tables: ['missions', 'mission_assignments', 'mission_events', 'mission_applications'],
+    tables: [
+      'public_needs',
+      'coverage_reservations',
+      'missions',
+      'mission_assignments',
+      'mission_events',
+      'mission_applications',
+    ],
     invalidateKeys: [
+      FARO_QUERY_KEYS.publicNeeds,
+      FARO_QUERY_KEYS.coverage,
       FARO_QUERY_KEYS.missions,
       FARO_QUERY_KEYS.mission,
       FARO_QUERY_KEYS.missionAssignments,
@@ -418,7 +458,7 @@ export function VolunteerWorkspace({
       <div className="flex-1 overflow-y-auto px-4 pb-32 lg:pb-8">
         {tab === 'available' && (
           <div className="space-y-3 pt-2">
-            <h2 className="text-sm font-semibold text-ink">Misiones disponibles</h2>
+            <h2 className="text-sm font-semibold text-ink">Necesidades disponibles</h2>
             <AvailableMissions />
           </div>
         )}

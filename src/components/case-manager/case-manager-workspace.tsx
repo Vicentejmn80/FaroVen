@@ -15,11 +15,12 @@ import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/op
 import { cn } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
-import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
+import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS } from '@/lib/labels'
 import { useAuth } from '@/store/auth-context'
-import { useOperationalPublicNeeds, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
+import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
 import { useMissionTimeline } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
+import { VOLUNTEER_AVAILABILITY_LABELS } from '@/domain/volunteer.types'
 
 type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'solicitudes'
 
@@ -58,6 +59,96 @@ function InterestsPanel() {
           </div>
         </GlassCard>
       ))}
+    </div>
+  )
+}
+
+function NeedInterestsPanel({
+  publicNeedId,
+  operatorId,
+}: {
+  publicNeedId: string
+  operatorId?: string
+}) {
+  const { data: interests = [], isLoading } = useNeedInterests(publicNeedId)
+  const approveInterest = useApproveNeedInterest()
+  const rejectInterest = useRejectNeedInterest()
+
+  const pending = useMemo(() => interests.filter((interest) => interest.status === 'reserved'), [interests])
+  const history = useMemo(() => interests.filter((interest) => interest.status !== 'reserved'), [interests])
+
+  if (isLoading) {
+    return <GlassCard className="h-16 animate-pulse" />
+  }
+
+  if (interests.length === 0) {
+    return (
+      <p className="text-xs text-ink-muted">
+        Sin interesados todavía.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {pending.map((interest) => (
+        <div key={interest.id} className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold text-ink">
+                {interest.collaboratorName ?? 'Colaborador FARO'}
+              </p>
+              <p className="text-[11px] text-ink-subtle">
+                {interest.collaboratorType} · {label(COVERAGE_RESERVATION_LABELS, interest.status, interest.status)}
+              </p>
+              <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-ink-faint">
+                {interest.distanceKm != null && <span>{interest.distanceKm.toFixed(1)} km</span>}
+                {interest.volunteerAvailability && (
+                  <span>{label(VOLUNTEER_AVAILABILITY_LABELS, interest.volunteerAvailability, interest.volunteerAvailability)}</span>
+                )}
+                {interest.volunteerExperience && <span>{interest.volunteerExperience}</span>}
+                {interest.volunteerAvgResponseMinutes != null && <span>Resp. {interest.volunteerAvgResponseMinutes} min</span>}
+                {interest.volunteerCompletedMissions != null && <span>{interest.volunteerCompletedMissions} misiones</span>}
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                disabled={!operatorId || approveInterest.isPending}
+                onClick={() => {
+                  if (!operatorId) return
+                  approveInterest.mutate({ reservationId: interest.id, operatorId })
+                }}
+              >
+                Aprobar
+              </EmergencyButton>
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                disabled={!operatorId || rejectInterest.isPending}
+                onClick={() => {
+                  if (!operatorId) return
+                  rejectInterest.mutate({ reservationId: interest.id, operatorId })
+                }}
+              >
+                Rechazar
+              </EmergencyButton>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {history.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Historial de decisiones</p>
+          {history.map((interest) => (
+            <p key={interest.id} className="text-[11px] text-ink-muted">
+              {interest.collaboratorName ?? 'Colaborador'} · {label(COVERAGE_RESERVATION_LABELS, interest.status, interest.status)}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -144,6 +235,7 @@ export function CaseManagerWorkspace() {
       FARO_QUERY_KEYS.missionApplications,
       FARO_QUERY_KEYS.missionAssignments,
       FARO_QUERY_KEYS.publicNeeds,
+      FARO_QUERY_KEYS.coverage,
       FARO_QUERY_KEYS.successCases,
     ],
   })
@@ -345,8 +437,11 @@ export function CaseManagerWorkspace() {
                         Publicar necesidad
                       </EmergencyButton>
                       <EmergencyButton variant="glass" size="sm">
-                        Revisar cobertura
+                        Interesados
                       </EmergencyButton>
+                    </div>
+                    <div className="mt-2">
+                      <NeedInterestsPanel publicNeedId={need.id} operatorId={user?.id} />
                     </div>
                   </GlassCard>
                 )

@@ -80,8 +80,19 @@ export function CoordinatorWorkspace({
 
   useRealtimeSync({
     channelName: 'coordinator-live',
-    tables: ['missions', 'mission_assignments', 'mission_applications', 'reports', 'needs', 'cases'],
+    tables: [
+      'public_needs',
+      'coverage_reservations',
+      'missions',
+      'mission_assignments',
+      'mission_applications',
+      'reports',
+      'needs',
+      'cases',
+    ],
     invalidateKeys: [
+      FARO_QUERY_KEYS.publicNeeds,
+      FARO_QUERY_KEYS.coverage,
       FARO_QUERY_KEYS.missions,
       FARO_QUERY_KEYS.missionAssignments,
       FARO_QUERY_KEYS.missionApplications,

@@ -141,7 +141,10 @@ export function ConvertReportWizard({ reportId, onDone, onCancel }: ConvertRepor
 
       {step === 'center' && (
         <GlassCard className="p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-ink">Centro recomendado</h3>
+          <h3 className="text-sm font-semibold text-ink">Centro recomendado (opcional)</h3>
+          <p className="text-xs text-ink-subtle">
+            Solo selecciónalo si la necesidad requiere infraestructura física. Para ayuda móvil, puedes continuar sin centro.
+          </p>
           {nearby.length === 0 && <p className="text-xs text-ink-muted">No hay centros cercanos disponibles</p>}
           <div className="space-y-2">
             {nearby.map((center) => (

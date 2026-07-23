@@ -88,13 +88,23 @@ export interface CoverageReservation {
   publicNeedId: string
   collaboratorUserId: string | null
   collaboratorName: string | null
-  collaboratorType: 'citizen' | 'volunteer' | 'organization' | 'coordinator'
+  collaboratorType: 'citizen' | 'volunteer' | 'organization' | 'coordinator' | 'center' | 'ngo' | 'company'
   quantity: number
   status: CoverageReservationStatus
   expiresAt: Date
   confirmedAt: Date | null
   cancelledAt: Date | null
   createdAt: Date
+}
+
+export interface CoverageInterest extends CoverageReservation {
+  volunteerId?: string
+  volunteerAvailability?: string
+  volunteerExperience?: string
+  volunteerAvgResponseMinutes?: number
+  volunteerCompletedMissions?: number
+  volunteerServiceHours?: number
+  distanceKm?: number
 }
 
 export interface NeedVerification {

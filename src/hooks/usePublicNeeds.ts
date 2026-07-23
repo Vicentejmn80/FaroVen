@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
+  CoverageInterest,
   CoverageReservation,
   NeedTimeline,
   NeedVerification,
@@ -12,7 +13,10 @@ import {
   fetchNeedVerifications,
   fetchOperationalPublicNeeds,
   fetchPublicNeeds,
+  fetchNeedInterests,
   fetchSuccessCases,
+  approveNeedInterest,
+  rejectNeedInterest,
   reserveNeedCoverage,
   updateNeedReservationStatus,
   verifyPublicNeedEntry,
@@ -51,6 +55,19 @@ export function useNeedTimeline(publicNeedId: string | null) {
     },
     enabled: Boolean(publicNeedId),
     staleTime: 20_000,
+  })
+}
+
+export function useNeedInterests(publicNeedId: string | null) {
+  return useQuery<CoverageInterest[]>({
+    queryKey: [FARO_QUERY_KEYS.coverage, 'interests', publicNeedId],
+    queryFn: async () => {
+      requireSupabase()
+      if (!publicNeedId) return []
+      return fetchNeedInterests(publicNeedId)
+    },
+    enabled: Boolean(publicNeedId),
+    staleTime: 15_000,
   })
 }
 
@@ -120,6 +137,32 @@ export function useVerifyPublicNeedEntry() {
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.needTimeline] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.needVerifications] })
+    },
+  })
+}
+
+export function useApproveNeedInterest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { reservationId: string; operatorId: string }) => approveNeedInterest(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.operationalTimeline] })
+    },
+  })
+}
+
+export function useRejectNeedInterest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { reservationId: string; operatorId: string }) => rejectNeedInterest(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.operationalTimeline] })
     },
   })
 }

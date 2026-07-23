@@ -248,9 +248,9 @@ export const PUBLIC_NEED_VERIFICATION_LABELS: Record<string, string> = {
 }
 
 export const COVERAGE_RESERVATION_LABELS: Record<string, string> = {
-  reserved: 'Ayuda reservada',
-  confirmed: 'Ayuda confirmada',
-  cancelled: 'Ayuda cancelada',
+  reserved: 'Postulación pendiente',
+  confirmed: 'Postulación aprobada',
+  cancelled: 'Postulación rechazada',
   expired: 'Reserva expirada',
 }
 
