@@ -9,6 +9,7 @@ import { EmergencyButton } from '@/components/ui/emergency-button'
 import { ReportDetailPanel } from '@/components/case-manager/report-detail-panel'
 import { ConvertReportWizard } from '@/components/case-manager/convert-report-wizard'
 import { EsperarPostulanteModal } from '@/components/case-manager/esperar-postulante-modal'
+import { AsignarCentroModal } from '@/components/case-manager/asignar-centro-modal'
 import { RoleRequestAdminPanel } from '@/components/role-request/role-request-admin-panel'
 import { AvailabilityCalendarCard } from '@/components/availability/availability-calendar-card'
 import { PostulationPanel } from '@/components/dispatch/postulation-panel'
@@ -263,6 +264,7 @@ export function CaseManagerWorkspace() {
   const deleteReport = useDeleteReport()
   const archiveCase = useArchiveCase()
   const [esperandoCasoId, setEsperandoCasoId] = useState<string | null>(null)
+  const [asignandoCasoId, setAsignandoCasoId] = useState<string | null>(null)
   const [applicationCaseId, setApplicationCaseId] = useState<string | undefined>(undefined)
   const { data: applications = [] } = useCaseApplications(applicationCaseId)
   const approveApp = useApproveCaseApplication()
@@ -473,11 +475,7 @@ export function CaseManagerWorkspace() {
                           <p className="text-ink-faint mt-0.5">Espera postulaciones con radar de tiempo</p>
                         </button>
                         <button
-                          onClick={() => {
-                            if (window.confirm('¿Asignar este caso a un centro específico? Se abrirá la lista de centros disponibles.')) {
-                              archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Asignado a centro' })
-                            }
-                          }}
+                          onClick={() => setAsignandoCasoId(c.id)}
                           className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
                         >
                           <p className="font-medium text-ink">Asignar a centro</p>
@@ -714,6 +712,15 @@ export function CaseManagerWorkspace() {
           open={!!esperandoCasoId}
           onClose={() => setEsperandoCasoId(null)}
           onTimeUp={() => setEsperandoCasoId(null)}
+        />
+      )}
+
+      {asignandoCasoId && (
+        <AsignarCentroModal
+          caseData={allCases?.find((c) => c.id === asignandoCasoId) ?? ({} as any)}
+          open={!!asignandoCasoId}
+          onClose={() => setAsignandoCasoId(null)}
+          actorId={user?.id}
         />
       )}
     </div>

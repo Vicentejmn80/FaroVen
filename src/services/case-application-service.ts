@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { caseApplicationRepository } from '@/repositories/case-application-repository'
 import { caseService } from '@/services/case-service'
+import { missionService } from '@/services/mission-service'
 import { notifyUser } from '@/lib/notify'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
@@ -50,11 +51,29 @@ export const caseApplicationService = {
 
     await caseApplicationRepository.updateStatus(applicationId, 'approved')
 
+    const caseData = await caseService.getById(app.caseId)
+    if (!caseData) throw new Error('Caso no encontrado')
+
     await caseService.transition(app.caseId, 'assigned', operatorId, `Postulación aprobada — voluntario asignado al caso`)
+
+    // Create mission linked to case and assign the approved volunteer
+    const created = await missionService.create({
+      centerId: 'volunteer_pool',
+      title: caseData.title,
+      description: caseData.description,
+      priority: caseData.priority,
+      requiredSkills: app.skills ?? [],
+      requiredPeople: 1,
+      location: { lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
+      caseId: app.caseId,
+      createdBy: operatorId,
+    })
+
+    await missionService.assignVolunteer(created.mission.id, app.applicantId, operatorId)
 
     const applicant = await getProfileName(app.applicantId)
     if (applicant) {
-      await notifyUser(app.applicantId, 'Postulación aprobada', 'Tu postulación fue aprobada. El caso te ha sido asignado.', { caseId: app.caseId, type: 'case_approved' })
+      await notifyUser(app.applicantId, 'Postulación aprobada', `Fuiste asignado a "${caseData.title}". Revisa tus misiones activas.`, { caseId: app.caseId, missionId: created.mission.id, type: 'case_approved' })
     }
   },
 

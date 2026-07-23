@@ -6,6 +6,8 @@ import {
   operationalIntelligenceService,
   type VolunteerDispatchAction,
 } from '@/services/operational-intelligence-service'
+import { caseService } from '@/services/case-service'
+import { supabase } from '@/lib/supabase'
 
 async function emitAssignmentStatus(
   assignment: MissionAssignment,
@@ -253,6 +255,51 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'verified', 'Operación verificada por el coordinador')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.VERIFIED)
+
+    // If mission is linked to a case, resolve it and record success
+    const mission = await missionRepository.findById(updated.missionId)
+    if (mission?.caseId) {
+      try {
+        await caseService.transition(mission.caseId, 'resolved', updated.volunteerId, 'Misión verificada — caso resuelto')
+        await recordSuccessCase({
+          caseId: mission.caseId,
+          missionId: mission.id,
+          zone: mission.location.zone ?? mission.title,
+          verifiedBy: updated.volunteerId,
+          evidenceUrls: updated.evidenceUrls,
+          durationMinutes: mission.completedAt && mission.createdAt
+            ? Math.round((mission.completedAt.getTime() - mission.createdAt.getTime()) / 60000)
+            : null,
+        })
+      } catch {
+        // Case transition may fail if not allowed, skip silently
+      }
+    }
+
     return updated
   },
+}
+
+async function recordSuccessCase(input: {
+  caseId: string
+  missionId: string
+  zone: string
+  verifiedBy: string
+  evidenceUrls: string[]
+  durationMinutes: number | null
+}) {
+  try {
+    await supabase.from('success_cases').insert({
+      case_id: input.caseId,
+      mission_id: input.missionId,
+      zone: input.zone,
+      verified_by: input.verifiedBy,
+      evidence_urls: input.evidenceUrls,
+      total_duration_minutes: input.durationMinutes,
+      public_code: `CASO-${input.caseId.slice(0, 8)}`,
+      verified_at: new Date().toISOString(),
+    })
+  } catch {
+    console.warn('[SUCCESS_CASE] Failed to record success case')
+  }
 }

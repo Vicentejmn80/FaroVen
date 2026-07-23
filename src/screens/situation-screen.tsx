@@ -34,6 +34,7 @@ import { useAuth, usePermissions } from '@/store/auth-context'
 import { MissionDetailSheet } from '@/components/volunteer/mission-detail-sheet'
 import { INCIDENT_TYPE_LABELS, label, PRIORITY_SHORT_LABELS } from '@/lib/labels'
 import { useMapData, type Mission } from '@/hooks/useMapData'
+import { useCases } from '@/hooks/useCases'
 
 interface SituationScreenProps {
   onOpenDetail?: (site: Site) => void
@@ -49,6 +50,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   const { role, isVolunteer } = usePermissions()
   const { user } = useAuth()
   const mapData = useMapData({ userRole: role, userId: user?.id ?? null, location: null })
+  const { data: openCases } = useCases({ stage: 'open_for_applications' })
   const { sites, latestActivity, isLoading, loadError, state } = useFaro()
   const needs = state.needs
   const [selected, setSelected] = useState<Site | null>(null)
@@ -116,8 +118,21 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   }, [listSites])
 
   if (isVolunteer) {
+    const openCaseMissions: Mission[] = useMemo(
+      () => (openCases ?? []).map((c) => ({
+        id: c.id,
+        title: c.title,
+        requiredSkill: null,
+        status: 'open' as const,
+        priority: c.priority as 'low' | 'medium' | 'high' | 'critical',
+        location: { lat: c.location.lat, lng: c.location.lng },
+        createdAt: c.createdAt,
+      })),
+      [openCases],
+    )
+    const allMissions = [...mapData.missions, ...openCaseMissions]
     const volunteerMissions = filterMappableMissions(
-      normalizeVolunteerMissions(mapData.missions, mapData.sites, mapData.needs),
+      normalizeVolunteerMissions(allMissions, mapData.sites, mapData.needs),
     )
     return (
       <VolunteerMapScreen
