@@ -124,7 +124,7 @@ export class ReportRepository {
   }
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase.from('reports').delete().eq('id', id)
+    const { error } = await supabase.rpc('delete_report', { p_report_id: id })
     if (error) throw error
   }
 

@@ -1,10 +1,10 @@
-import { Sparkles, AlertTriangle, Building2, ShieldCheck, User, Phone, Mail } from 'lucide-react'
+import { AlertTriangle, Building2, ShieldCheck, User, Phone, Mail } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useReportAnalysis } from '@/hooks/useCaseManager'
 import { useDeleteReport } from '@/hooks/useReports'
 import { cn } from '@/lib/utils'
-import { SITE_TYPE_LABELS, confidenceBand, label, REPORT_STATUS_LABELS } from '@/lib/labels'
+import { SITE_TYPE_LABELS, label, REPORT_STATUS_LABELS } from '@/lib/labels'
 
 interface ReportDetailPanelProps {
   reportId: string | null
@@ -130,40 +130,6 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
               )
             })()}
 
-            {analysis.duplicates.length > 0 && (
-              <GlassCard className="border-warning/25 bg-warning/[0.04] p-3.5">
-                <div className="mb-2.5 flex items-start gap-2">
-                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                  <div>
-                    <p className="text-sm font-semibold text-ink">
-                      Información similar cerca de esta zona
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      La inteligencia operacional detectó {analysis.duplicates.length} reporte
-                      {analysis.duplicates.length === 1 ? '' : 's'} relacionado
-                      {analysis.duplicates.length === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {analysis.duplicates.slice(0, 5).map((dup) => (
-                    <div
-                      key={dup.id}
-                      className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2"
-                    >
-                      <p className="line-clamp-2 text-xs text-ink-subtle">{dup.description}</p>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">
-                          {confidenceBand(dup.score)}
-                        </span>
-                        <span className="text-[10px] text-ink-faint">Posible coincidencia</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </GlassCard>
-            )}
-
             <GlassCard className="p-3.5">
               <div className="mb-2.5 flex items-center gap-2">
                 <Building2 className="h-3.5 w-3.5 text-info" />
@@ -218,10 +184,6 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-white/[0.04] p-2.5">
-                  <p className="text-[10px] uppercase tracking-wide text-ink-muted">Reportes relacionados</p>
-                  <p className="mt-1 text-lg font-semibold text-ink">{analysis.duplicates.length}</p>
-                </div>
-                <div className="rounded-xl bg-white/[0.04] p-2.5">
                   <p className="text-[10px] uppercase tracking-wide text-ink-muted">Centros cercanos</p>
                   <p className="mt-1 text-lg font-semibold text-ink">{analysis.nearbyCenters.length}</p>
                 </div>
@@ -231,7 +193,7 @@ export function ReportDetailPanel({ reportId, onClose, onConvertToCase }: Report
                     <p className="text-xs text-ink-muted">
                       Nivel de prioridad sugerido:{' '}
                       <strong className="text-ink">
-                        {analysis.duplicates.length >= 3 ? 'Alta' : analysis.duplicates.length >= 1 ? 'Media' : 'Normal'}
+                        {analysis.nearbyCenters.length >= 3 ? 'Alta' : analysis.nearbyCenters.length >= 1 ? 'Media' : 'Normal'}
                       </strong>
                     </p>
                   </div>

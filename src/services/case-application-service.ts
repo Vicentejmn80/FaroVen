@@ -1,6 +1,9 @@
+import { supabase } from '@/lib/supabase'
 import { caseApplicationRepository } from '@/repositories/case-application-repository'
 import { caseService } from '@/services/case-service'
+import { notifyUser } from '@/lib/notify'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
+import type { CaseDomain } from '@/domain/case-lifecycle.types'
 
 export const caseApplicationService = {
   async listByCase(caseId: string): Promise<CaseApplicationWithApplicant[]> {
@@ -13,7 +16,32 @@ export const caseApplicationService = {
     skills?: string[]
     availability?: string
   }) {
-    return caseApplicationRepository.apply(caseId, applicantId, params)
+    const app = await caseApplicationRepository.apply(caseId, applicantId, params)
+    const caseData = await caseService.getById(caseId)
+    if (caseData) {
+      const managers = await getActiveManagers()
+      for (const m of managers) {
+        await notifyUser(
+          m.id,
+          'Nuevo postulante',
+          `Un voluntario se postuló al caso "${caseData.title}"`,
+          { caseId, applicationId: app.id, type: 'case_application' },
+        )
+      }
+    }
+    return app
+  },
+
+  async notifyVolunteersAboutCase(caseData: CaseDomain) {
+    const volunteers = await getActiveVolunteersNear(caseData.location.lat, caseData.location.lng, 25)
+    for (const v of volunteers) {
+      await notifyUser(
+        v.userId,
+        'Nuevo caso cerca de ti',
+        `Se abrió "${caseData.title}" en ${caseData.zone} — ¿quieres postularte?`,
+        { caseId: caseData.id, type: 'case_open', lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
+      )
+    }
   },
 
   async approve(applicationId: string, operatorId: string) {
@@ -22,7 +50,12 @@ export const caseApplicationService = {
 
     await caseApplicationRepository.updateStatus(applicationId, 'approved')
 
-    await caseService.transition(app.caseId, 'assigned', operatorId, `Postulación aprobada — ${app.organization || 'voluntario/a'} asignado al caso`)
+    await caseService.transition(app.caseId, 'assigned', operatorId, `Postulación aprobada — voluntario asignado al caso`)
+
+    const applicant = await getProfileName(app.applicantId)
+    if (applicant) {
+      await notifyUser(app.applicantId, 'Postulación aprobada', 'Tu postulación fue aprobada. El caso te ha sido asignado.', { caseId: app.caseId, type: 'case_approved' })
+    }
   },
 
   async reject(applicationId: string, operatorId: string) {
@@ -32,5 +65,44 @@ export const caseApplicationService = {
     await caseApplicationRepository.updateStatus(applicationId, 'rejected')
 
     await caseService.transition(app.caseId, 'open_for_applications', operatorId, 'Postulación rechazada — el caso sigue abierto a otras postulaciones')
+
+    const applicant = await getProfileName(app.applicantId)
+    if (applicant) {
+      await notifyUser(app.applicantId, 'Postulación rechazada', 'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.', { caseId: app.caseId, type: 'case_rejected' })
+    }
   },
+}
+
+async function getActiveVolunteersNear(lat: number, lng: number, radiusKm: number) {
+  try {
+    const { data } = await supabase.rpc('get_volunteers_near_location', {
+      p_lat: lat,
+      p_lng: lng,
+      p_radius_km: radiusKm,
+    })
+    return (data ?? []) as { userId: string; fullName: string; phone?: string; distanceKm: number }[]
+  } catch {
+    return []
+  }
+}
+
+async function getActiveManagers() {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['case_manager', 'coordinator', 'regional_admin', 'super_admin'])
+    return (data ?? []) as { id: string }[]
+  } catch {
+    return []
+  }
+}
+
+async function getProfileName(userId: string): Promise<string | null> {
+  try {
+    const { data } = await supabase.from('profiles').select('full_name').eq('id', userId).maybeSingle()
+    return data?.full_name ?? null
+  } catch {
+    return null
+  }
 }

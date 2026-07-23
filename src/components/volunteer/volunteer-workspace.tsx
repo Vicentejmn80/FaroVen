@@ -10,12 +10,15 @@ import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { VOLUNTEER_AVAILABILITY, VOLUNTEER_AVAILABILITY_LABELS, VOLUNTEER_AVAILABILITY_TONES, VERIFICATION_LEVEL_LABELS, SKILL_LABELS } from '@/domain/volunteer.types'
 import type { Mission } from '@/domain/mission.types'
+import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { useAuth, usePermissions } from '@/store/auth-context'
 import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
-import { Flag } from 'lucide-react'
-import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
+import { Flag, MapPin, AlertTriangle, Share2, Send, X } from 'lucide-react'
+import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS, PIPELINE_LABELS } from '@/lib/labels'
 import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { useCases } from '@/hooks/useCases'
+import { useApplyToCase } from '@/hooks/useCaseApplications'
 
 type VolunteerTab = 'available' | 'my-missions' | 'history' | 'profile'
 
@@ -160,6 +163,155 @@ function AvailableMissions() {
           </GlassCard>
         )
       })}
+    </div>
+  )
+}
+
+function OpenCases() {
+  const { data: allCases, isLoading } = useCases({ stage: 'open_for_applications' })
+  const { data: profile } = useVolunteerProfile()
+  const { user } = useAuth()
+  const applyToCase = useApplyToCase()
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
+  const [applyMessage, setApplyMessage] = useState('')
+  const [showApplyModal, setShowApplyModal] = useState(false)
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null)
+
+  const cases = useMemo(() => allCases ?? [], [allCases])
+
+  const handleApply = (caseId: string) => {
+    if (!user?.id || !profile) return
+    applyToCase.mutate(
+      { caseId, applicantId: user.id, message: applyMessage, skills: profile.specialties, organization: '' },
+      {
+        onSuccess: () => {
+          setAppliedIds((prev) => new Set(prev).add(caseId))
+          setShowApplyModal(false)
+          setApplyMessage('')
+          setSelectedCaseId(null)
+        },
+      },
+    )
+  }
+
+  const handleShare = async (c: CaseDomain) => {
+    const shareData = { title: c.title, text: `Hay un caso abierto en Faro: ${c.title} — ${c.zone}`, url: window.location.href }
+    try { await navigator.share(shareData) } catch {
+      await navigator.clipboard.writeText(`${c.title} — ${c.zone}`)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2].map((i) => <GlassCard key={i} className="h-28 animate-pulse" />)}
+      </div>
+    )
+  }
+
+  if (cases.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-semibold text-ink flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-warning" />
+        Casos abiertos cerca
+        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">{cases.length}</span>
+      </h2>
+      {cases.map((c) => {
+        const alreadyApplied = appliedIds.has(c.id)
+        return (
+          <GlassCard key={c.id} className="relative overflow-hidden border-l-2 p-0" style={{ borderLeftColor: c.priority === 'critical' ? '#ef4444' : c.priority === 'high' ? '#f59e0b' : '#3b82f6' }}>
+            {/* Priority gradient line */}
+            <div className={cn('absolute left-0 top-0 h-full w-0.5', c.priority === 'critical' ? 'bg-critical' : c.priority === 'high' ? 'bg-warning' : 'bg-info')} />
+
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink">{c.title}</p>
+                  <p className="mt-1 text-xs text-ink-muted line-clamp-2">{c.description}</p>
+                </div>
+                <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
+                  {label(PRIORITY_LABELS, c.priority, c.priority)}
+                </span>
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-ink-muted">
+                <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.zone}</span>
+                {c.location.lat && c.location.lng && (
+                  <span className="flex items-center gap-1 text-ink-faint">
+                    {c.location.lat.toFixed(4)}, {c.location.lng.toFixed(4)}
+                  </span>
+                )}
+                <span className="rounded-full bg-white/[0.06] px-2 py-0.5">{label(PIPELINE_LABELS, c.pipelineStage)}</span>
+              </div>
+
+              {c.reporterInfo?.name && (
+                <p className="mt-1.5 text-[10px] text-ink-faint">
+                  Reportado por: {c.reporterInfo.name}
+                  {c.reporterInfo.phone && <> — {c.reporterInfo.phone}</>}
+                </p>
+              )}
+
+              <div className="mt-3 flex gap-2">
+                {alreadyApplied ? (
+                  <div className="flex-1 rounded-xl bg-operational/15 px-3 py-2 text-center text-xs font-medium text-operational">
+                    Postulación enviada
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setSelectedCaseId(c.id); setShowApplyModal(true) }}
+                    className={cn('flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-all flex items-center justify-center gap-1.5', 'bg-info text-white hover:bg-info/90')}
+                  >
+                    <Send className="h-3 w-3" />
+                    Postularme
+                  </button>
+                )}
+                <button
+                  onClick={() => handleShare(c)}
+                  className="rounded-xl border border-white/[0.1] px-3 py-2 text-xs font-medium text-ink-subtle hover:bg-white/[0.04] transition-all flex items-center gap-1.5"
+                >
+                  <Share2 className="h-3 w-3" />
+                  Compartir
+                </button>
+              </div>
+            </div>
+          </GlassCard>
+        )
+      })}
+
+      {/* Apply modal */}
+      {showApplyModal && selectedCaseId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowApplyModal(false)}>
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#0A0F1A]/95 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-ink">Postularme al caso</p>
+              <button onClick={() => setShowApplyModal(false)} className="rounded-full p-1 text-ink-faint hover:text-ink">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs text-ink-muted mb-3">Agrega un mensaje para el gestor del caso (opcional):</p>
+            <textarea
+              value={applyMessage}
+              onChange={(e) => setApplyMessage(e.target.value)}
+              placeholder="Ej: Soy paramédico con experiencia en emergencias..."
+              className="h-24 w-full resize-none rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-xs text-ink placeholder:text-ink-faint outline-none focus:border-info/50"
+            />
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => setShowApplyModal(false)} className="flex-1 rounded-xl border border-white/[0.1] py-2 text-xs font-medium text-ink-subtle hover:bg-white/[0.04]">
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleApply(selectedCaseId)}
+                disabled={applyToCase.isPending}
+                className="flex-1 rounded-xl bg-info py-2 text-xs font-medium text-white hover:bg-info/90 disabled:opacity-50"
+              >
+                {applyToCase.isPending ? 'Enviando...' : 'Enviar postulación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -479,9 +631,10 @@ export function VolunteerWorkspace({
 
       <div className="flex-1 overflow-y-auto px-4 pb-32 lg:pb-8">
         {tab === 'available' && (
-          <div className="space-y-3 pt-2">
+          <div className="space-y-4 pt-2">
             <h2 className="text-sm font-semibold text-ink">Necesidades disponibles</h2>
             <AvailableMissions />
+            <OpenCases />
           </div>
         )}
         {tab === 'my-missions' && <div className="pt-2"><MyMissions /></div>}
