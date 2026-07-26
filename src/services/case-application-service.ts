@@ -12,12 +12,19 @@ export const caseApplicationService = {
     return caseApplicationRepository.listByCase(caseId)
   },
 
+  async findByCaseAndApplicant(caseId: string, applicantId: string) {
+    return caseApplicationRepository.findByCaseAndApplicant(caseId, applicantId)
+  },
+
   async apply(caseId: string, applicantId: string, params?: {
     organization?: string
     message?: string
     skills?: string[]
     availability?: string
   }) {
+    const existing = await caseApplicationRepository.findByCaseAndApplicant(caseId, applicantId)
+    if (existing) return existing
+
     const app = await caseApplicationRepository.apply(caseId, applicantId, params)
     const caseData = await caseService.getById(caseId)
     if (caseData) {

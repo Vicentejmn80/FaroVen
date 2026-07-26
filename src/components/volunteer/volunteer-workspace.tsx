@@ -20,6 +20,8 @@ import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LA
 import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
 import { useCases } from '@/hooks/useCases'
 import { useApplyToCase } from '@/hooks/useCaseApplications'
+import { caseApplicationService } from '@/services/case-application-service'
+import { useQuery } from '@tanstack/react-query'
 
 type VolunteerTab = 'available' | 'my-missions' | 'history' | 'profile'
 
@@ -173,10 +175,31 @@ function OpenCases() {
   const { data: profile } = useVolunteerProfile()
   const { user } = useAuth()
   const applyToCase = useApplyToCase()
-  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
   const [applyMessage, setApplyMessage] = useState('')
   const [showApplyModal, setShowApplyModal] = useState(false)
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null)
+
+  const { data: myApplications = [] } = useQuery({
+    queryKey: ['my-case-applications', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return []
+      const results = []
+      for (const c of (allCases ?? [])) {
+        const app = await caseApplicationService.findByCaseAndApplicant(c.id, user.id)
+        if (app) results.push(app)
+      }
+      return results
+    },
+    enabled: !!user?.id && (allCases?.length ?? 0) > 0,
+  })
+
+  const myAppMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const app of myApplications) {
+      map.set(app.caseId, app.status)
+    }
+    return map
+  }, [myApplications])
 
   const cases = useMemo(() => allCases ?? [], [allCases])
 
@@ -186,10 +209,12 @@ function OpenCases() {
       { caseId, applicantId: user.id, message: applyMessage, skills: profile.specialties, organization: '' },
       {
         onSuccess: () => {
-          setAppliedIds((prev) => new Set(prev).add(caseId))
           setShowApplyModal(false)
           setApplyMessage('')
           setSelectedCaseId(null)
+        },
+        onError: (err) => {
+          alert(`Error al postularte: ${err.message}`)
         },
       },
     )
@@ -220,7 +245,7 @@ function OpenCases() {
         <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">{cases.length}</span>
       </h2>
       {cases.map((c) => {
-        const alreadyApplied = appliedIds.has(c.id)
+        const alreadyApplied = myAppMap.has(c.id)
         return (
           <GlassCard key={c.id} className="relative overflow-hidden border-l-2 p-0" style={{ borderLeftColor: c.priority === 'critical' ? '#ef4444' : c.priority === 'high' ? '#f59e0b' : '#3b82f6' }}>
             {/* Priority gradient line */}

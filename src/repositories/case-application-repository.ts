@@ -38,6 +38,17 @@ export const caseApplicationRepository = {
     return data ? mapRow(data as CaseApplicationRow) : null
   },
 
+  async findByCaseAndApplicant(caseId: string, applicantId: string): Promise<CaseApplication | null> {
+    const { data, error } = await supabase
+      .from('case_applications')
+      .select('*')
+      .eq('case_id', caseId)
+      .eq('applicant_id', applicantId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapRow(data as CaseApplicationRow) : null
+  },
+
   async listByCase(caseId: string): Promise<CaseApplicationWithApplicant[]> {
     const { data, error } = await supabase
       .from('case_applications')
@@ -84,10 +95,23 @@ export const caseApplicationRepository = {
         distance_km: params?.distanceKm ?? null,
       })
       .select('*')
-      .single()
 
-    if (error) throw error
-    return mapRow(data as CaseApplicationRow)
+    if (error) {
+      if (error.code === '23505') {
+        const existing = await this.findByCaseAndApplicant(caseId, applicantId)
+        if (existing) return existing
+      }
+      throw error
+    }
+
+    const row = data?.[0]
+    if (!row) {
+      const existing = await this.findByCaseAndApplicant(caseId, applicantId)
+      if (existing) return existing
+      throw new Error('No se pudo crear la postulación')
+    }
+
+    return mapRow(row as CaseApplicationRow)
   },
 
   async updateStatus(applicationId: string, status: CaseApplicationStatus): Promise<void> {

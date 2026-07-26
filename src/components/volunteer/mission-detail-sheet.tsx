@@ -21,6 +21,7 @@ import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { useAuth } from '@/store/auth-context'
 import { useExpressInterest } from '@/hooks/useVolunteerInterests'
 import { caseApplicationService } from '@/services/case-application-service'
+import { useQuery } from '@tanstack/react-query'
 import { openExternalNavigation, buildGoogleMapsViewLink, cn, timeAgo, isValidCoord } from '@/lib/utils'
 import {
   label,
@@ -50,7 +51,7 @@ export interface VolunteerMissionDetail {
   available?: number | null
 }
 
-type HelpPhase = 'idle' | 'confirming' | 'submitted' | 'error'
+type HelpPhase = 'idle' | 'confirming' | 'submitted' | 'approved' | 'error'
 
 interface MissionDetailSheetProps {
   mission: VolunteerMissionDetail | null
@@ -117,10 +118,23 @@ export function MissionDetailSheet({
   const [phase, setPhase] = useState<HelpPhase>('idle')
   const [helpError, setHelpError] = useState<string | null>(null)
 
+  const volunteerId = user?.id ?? profile?.id
+
+  const { data: existingApplication } = useQuery({
+    queryKey: ['my-case-application', mission?.id, volunteerId],
+    queryFn: () => caseApplicationService.findByCaseAndApplicant(mission!.id, volunteerId!),
+    enabled: !!mission && !!volunteerId,
+  })
+
   useEffect(() => {
-    setPhase('idle')
+    if (existingApplication) {
+      if (existingApplication.status === 'approved') setPhase('approved')
+      else setPhase('submitted')
+    } else {
+      setPhase('idle')
+    }
     setHelpError(null)
-  }, [mission?.id])
+  }, [mission?.id, existingApplication?.id, existingApplication?.status])
 
   const handleReportProblem = useCallback(() => {
     window.dispatchEvent(new CustomEvent('faro:open-help-center'))
@@ -172,8 +186,15 @@ export function MissionDetailSheet({
     setPhase('confirming')
     setHelpError(null)
     try {
-      const volunteerId = user?.id ?? profile?.id
       if (!volunteerId) throw new Error('Debes iniciar sesión para ofrecer ayuda.')
+
+      // Check if already applied before doing anything
+      const existing = await caseApplicationService.findByCaseAndApplicant(mission.id, volunteerId)
+      if (existing) {
+        setPhase(existing.status === 'approved' ? 'approved' : 'submitted')
+        return
+      }
+
       await expressInterest.mutateAsync({
         volunteerId,
         volunteerName: profile?.full_name ?? 'Voluntario',
@@ -181,20 +202,19 @@ export function MissionDetailSheet({
         needId: mission.id,
       })
 
-      // Also create a case_application if this mission corresponds to an open case
-      caseApplicationService.apply(mission.id, volunteerId, {
+      // Create case_application — will succeed or return existing (handles 409)
+      const app = await caseApplicationService.apply(mission.id, volunteerId, {
         message: `Quiero ayudar: ${title}`,
-        skills: [],
-      }).catch(() => {
-        // mission.id might not be a case — that's fine
+        skills: profile?.specialty ? [profile.specialty] : [],
       })
 
-      setPhase('submitted')
+      if (app.status === 'approved') setPhase('approved')
+      else setPhase('submitted')
     } catch (err) {
       setPhase('error')
       setHelpError(err instanceof Error ? err.message : 'No se pudo registrar tu interés.')
     }
-  }, [mission, expressInterest, user?.id, profile?.id, profile?.full_name, title])
+  }, [mission, expressInterest, user?.id, profile?.id, profile?.full_name, title, volunteerId])
 
   const handleNavigate = useCallback(() => {
     if (!mission) return
