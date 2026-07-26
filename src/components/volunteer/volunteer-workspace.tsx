@@ -342,6 +342,16 @@ function OpenCases() {
   )
 }
 
+/** Estados donde la experiencia de misión debe invadir toda la pantalla. */
+const IMMERSIVE_MISSION_STATUSES = [
+  'assigned',
+  'accepted',
+  'preparing',
+  'en_route',
+  'on_site',
+  'in_progress',
+] as const
+
 function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
   const { user } = useAuth()
   const { data: profile } = useVolunteerProfile()
@@ -351,7 +361,6 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
   const respondMission = useRespondMission()
   const submitEvidence = useSubmitEvidence()
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
-  const [activeMissionViewId, setActiveMissionViewId] = useState<string | null>(null)
 
   const missionMap = useMemo(() => {
     const map = new Map<string, Mission>()
@@ -362,6 +371,30 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
     }
     return map
   }, [allMissions])
+
+  const activeStatuses: string[] = [
+    'assigned',
+    'accepted',
+    'preparing',
+    'en_route',
+    'on_site',
+    'in_progress',
+    'completed',
+  ]
+  const activeAssignments = useMemo(
+    () => (assignments ?? []).filter((a) => activeStatuses.includes(a.status)),
+    [assignments],
+  )
+  const pastAssignments = useMemo(
+    () => (assignments ?? []).filter((a) => !activeStatuses.includes(a.status)),
+    [assignments],
+  )
+
+  const openImmersive = (assignmentId: string) => {
+    window.dispatchEvent(
+      new CustomEvent('faro:open-immersive-mission', { detail: { assignmentId } }),
+    )
+  }
 
   if (isLoading) {
     return (
@@ -378,10 +411,6 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
       </GlassCard>
     )
   }
-
-  const activeStatuses: string[] = ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress', 'completed']
-  const activeAssignments = assignments.filter((a) => activeStatuses.includes(a.status))
-  const pastAssignments = assignments.filter((a) => !activeStatuses.includes(a.status))
 
   if (showPastOnly && pastAssignments.length === 0) {
     return (
@@ -406,7 +435,7 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
               requiredSkills: [],
               requiredPeople: 1,
               assignedPeople: 1,
-              status: a.status as any,
+              status: a.status as Mission['status'],
               centerId: '',
               location: { lat: 0, lng: 0, zone: '' },
               createdBy: '',
@@ -424,17 +453,30 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
               { id: 'completed', label: 'Esperando verificación', completed: ['completed', 'verified'].includes(a.status), active: a.status === 'completed' },
               { id: 'verified', label: 'Completada', completed: a.status === 'verified', active: a.status === 'verified' },
             ]
+            const isImmersive = (IMMERSIVE_MISSION_STATUSES as readonly string[]).includes(a.status)
             return (
               <div key={a.id}>
-                <button onClick={() => setExpandedMissionId(isExpanded ? null : a.id)} className="w-full text-left">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isImmersive || a.status === 'completed') {
+                      openImmersive(a.id)
+                      return
+                    }
+                    setExpandedMissionId(isExpanded ? null : a.id)
+                  }}
+                  className="w-full text-left"
+                >
                   <VolunteerMissionCard
                     mission={realMission}
                     assignment={a}
                     onUpdateStatus={(status) => {
+                      openImmersive(a.id)
                       updateStatus.mutate({ assignmentId: a.id, status })
                     }}
                     onAccept={() => {
                       if (!user?.id) return
+                      openImmersive(a.id)
                       respondMission.mutate({ assignmentId: a.id, action: 'accept', volunteerId: user.id })
                     }}
                     onReject={() => {
@@ -442,27 +484,36 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
                       respondMission.mutate({ assignmentId: a.id, action: 'reject', volunteerId: user.id })
                     }}
                     onEvidenceSubmit={(evidenceUrls) => {
-                      submitEvidence.mutate({ assignmentId: a.id, missionId: a.missionId, volunteerId: user?.id ?? '', evidenceUrls })
+                      submitEvidence.mutate({
+                        assignmentId: a.id,
+                        missionId: a.missionId,
+                        volunteerId: user?.id ?? '',
+                        evidenceUrls,
+                      })
                     }}
                   />
                 </button>
-                {isExpanded && (
+                {isExpanded && !isImmersive && (
                   <div className="space-y-3 px-1 pt-2 pb-4">
                     <LiveTrackingCard
                       missionLat={realMission.location.lat}
                       missionLng={realMission.location.lng}
-                      missionAddress={realMission.location.zone ?? `${realMission.location.lat.toFixed(4)}, ${realMission.location.lng.toFixed(4)}`}
+                      missionAddress={
+                        realMission.location.zone ??
+                        `${realMission.location.lat.toFixed(4)}, ${realMission.location.lng.toFixed(4)}`
+                      }
                       volunteerUserId={user?.id}
                     />
-                    <div className="bg-white/[0.03] rounded-2xl p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Progreso</p>
+                    <div className="rounded-2xl bg-white/[0.03] p-3">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-subtle">Progreso</p>
                       <OperationalTimeline steps={timelineSteps} />
                     </div>
                     <button
-                      onClick={() => setActiveMissionViewId(a.id)}
-                      className="w-full rounded-2xl bg-info/15 py-3 text-sm font-semibold text-info hover:bg-info/25 transition-all"
+                      type="button"
+                      onClick={() => openImmersive(a.id)}
+                      className="w-full rounded-2xl bg-info/15 py-3 text-sm font-semibold text-info transition-all hover:bg-info/25"
                     >
-                      Vista completa
+                      Abrir experiencia de misión
                     </button>
                   </div>
                 )}
@@ -490,20 +541,6 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
           })}
         </div>
       )}
-
-      {activeMissionViewId && (() => {
-        const a = assignments?.find((x) => x.id === activeMissionViewId)
-        const m = a ? (missionMap.get(a.missionId) ?? null) : null
-        if (!a || !m || !user?.id) return null
-        return (
-          <ActiveMissionView
-            mission={m}
-            assignment={a}
-            volunteerId={user.id}
-            onClose={() => setActiveMissionViewId(null)}
-          />
-        )
-      })()}
     </div>
   )
 }
@@ -615,6 +652,82 @@ const TABS: Array<{ id: VolunteerTab; label: string }> = [
   { id: 'profile', label: 'Perfil' },
 ]
 
+/**
+ * Overlay global: si hay misión en curso, invade toda la app del voluntario
+ * sin importar la pestaña activa.
+ */
+function ImmersiveMissionGate() {
+  const { user } = useAuth()
+  const { data: profile } = useVolunteerProfile()
+  const { data: assignments } = useVolunteerMissions(profile?.id ?? '')
+  const { data: allMissions } = useMissions()
+  const [dismissedCompletedId, setDismissedCompletedId] = useState<string | null>(null)
+  const [forcedOpenId, setForcedOpenId] = useState<string | null>(null)
+
+  const missionMap = useMemo(() => {
+    const map = new Map<string, Mission>()
+    for (const m of allMissions ?? []) map.set(m.id, m)
+    return map
+  }, [allMissions])
+
+  const target = useMemo(() => {
+    const list = assignments ?? []
+    const immersive = list.find((a) =>
+      (IMMERSIVE_MISSION_STATUSES as readonly string[]).includes(a.status),
+    )
+    if (immersive) return immersive
+    if (forcedOpenId) {
+      const forced = list.find((a) => a.id === forcedOpenId)
+      if (forced) return forced
+    }
+    return list.find((a) => a.status === 'completed' && a.id !== dismissedCompletedId) ?? null
+  }, [assignments, dismissedCompletedId, forcedOpenId])
+
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ assignmentId?: string }>).detail
+      if (detail?.assignmentId) {
+        setDismissedCompletedId(null)
+        setForcedOpenId(detail.assignmentId)
+      }
+    }
+    window.addEventListener('faro:open-immersive-mission', open)
+    return () => window.removeEventListener('faro:open-immersive-mission', open)
+  }, [])
+
+  if (!target || !user?.id) return null
+
+  const mission = missionMap.get(target.missionId) ?? {
+    id: target.missionId,
+    title: 'Misión activa',
+    description: '',
+    priority: 'medium' as const,
+    requiredSkills: [],
+    requiredPeople: 1,
+    assignedPeople: 1,
+    status: target.status as Mission['status'],
+    centerId: 'volunteer_pool',
+    location: { lat: 0, lng: 0, zone: '' },
+    createdBy: '',
+    createdAt: target.assignedAt,
+    updatedAt: target.assignedAt,
+  }
+
+  return (
+    <ActiveMissionView
+      mission={mission}
+      assignment={target}
+      volunteerId={user.id}
+      onClose={() => {
+        if (target.status === 'completed' || target.status === 'verified') {
+          setDismissedCompletedId(target.id)
+        }
+        setForcedOpenId(null)
+      }}
+    />
+  )
+}
+
 export function VolunteerWorkspace({
   initialTab = 'available',
 }: {
@@ -695,6 +808,8 @@ export function VolunteerWorkspace({
         {tab === 'history' && <div className="pt-2"><MyMissions showPastOnly /></div>}
         {tab === 'profile' && <div className="pt-2"><ProfileSection /></div>}
       </div>
+
+      <ImmersiveMissionGate />
     </div>
   )
 }
