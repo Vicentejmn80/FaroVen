@@ -18,6 +18,7 @@ export function useCaseApplications(caseId: string | undefined) {
     queryKey: [FARO_QUERY_KEYS.caseApplications, caseId],
     queryFn: () => caseApplicationService.listByCase(caseId!),
     enabled: !!caseId,
+    refetchInterval: 5_000,
   })
 }
 

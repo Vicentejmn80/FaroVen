@@ -20,6 +20,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { useAuth } from '@/store/auth-context'
 import { useExpressInterest } from '@/hooks/useVolunteerInterests'
+import { caseApplicationService } from '@/services/case-application-service'
 import { openExternalNavigation, buildGoogleMapsViewLink, cn, timeAgo, isValidCoord } from '@/lib/utils'
 import {
   label,
@@ -179,6 +180,15 @@ export function MissionDetailSheet({
         message: `Quiero ayudar con: ${title}`,
         needId: mission.id,
       })
+
+      // Also create a case_application if this mission corresponds to an open case
+      caseApplicationService.apply(mission.id, volunteerId, {
+        message: `Quiero ayudar: ${title}`,
+        skills: [],
+      }).catch(() => {
+        // mission.id might not be a case — that's fine
+      })
+
       setPhase('submitted')
     } catch (err) {
       setPhase('error')
@@ -375,7 +385,10 @@ export function MissionDetailSheet({
       <div className="shrink-0 space-y-2 border-t border-white/[0.06] bg-base-900/80 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
         <div className="grid grid-cols-2 gap-2">
           {phase === 'submitted' ? (
-            <EmergencyButton variant="glass" size="md" className="w-full" onClick={onClose}>
+            <EmergencyButton variant="glass" size="md" className="w-full" onClick={() => {
+              window.dispatchEvent(new CustomEvent('faro:nav-volunteer-missions'))
+              onClose()
+            }}>
               Ver seguimiento
             </EmergencyButton>
           ) : (

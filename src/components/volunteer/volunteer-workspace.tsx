@@ -601,6 +601,13 @@ export function VolunteerWorkspace({
     setTab(initialTab)
   }, [initialTab])
 
+  // Listen for navigation events from mission-detail-sheet
+  useEffect(() => {
+    const handler = () => setTab('my-missions')
+    window.addEventListener('faro:nav-volunteer-missions', handler)
+    return () => window.removeEventListener('faro:nav-volunteer-missions', handler)
+  }, [])
+
   useRealtimeSync({
     channelName: 'volunteer-missions',
     tables: [

@@ -481,14 +481,14 @@ export function CaseManagerWorkspace() {
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
 
-                      {/* Actions for cases that can open for applications */}
-                      {(c.pipelineStage === 'pending_review' || c.pipelineStage === 'validating' || c.pipelineStage === 'awaiting_info') && (
+                      {/* Actions for cases that can open for applications or are already open */}
+                      {(c.pipelineStage === 'pending_review' || c.pipelineStage === 'validating' || c.pipelineStage === 'awaiting_info' || c.pipelineStage === 'open_for_applications') && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => setEsperandoCasoId(c.id)}
                           className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
                         >
-                          <p className="font-medium text-ink">Esperar postulante</p>
+                          <p className="font-medium text-ink">{c.pipelineStage === 'open_for_applications' ? 'Reabrir radar' : 'Esperar postulantes'}</p>
                           <p className="text-ink-faint mt-0.5">Espera postulaciones con radar de tiempo</p>
                         </button>
                         <button

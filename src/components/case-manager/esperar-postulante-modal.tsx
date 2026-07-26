@@ -67,22 +67,28 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
     setTimeLeft(selectedTime)
     setStep('waiting')
 
-    // Transition case to open_for_applications + notify volunteers
-    openForApps.mutate(
-      { caseId: caseData.id, actorId, comment: 'Caso abierto a postulaciones voluntarias' },
-      {
-        onSuccess: () => {
-          caseApplicationService.notifyVolunteersAboutCase(caseData)
-          qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
-          qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+    // If case is already open_for_applications, skip transition and just notify
+    if (caseData.pipelineStage === 'open_for_applications') {
+      caseApplicationService.notifyVolunteersAboutCase(caseData)
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+    } else {
+      openForApps.mutate(
+        { caseId: caseData.id, actorId, comment: 'Caso abierto a postulaciones voluntarias' },
+        {
+          onSuccess: () => {
+            caseApplicationService.notifyVolunteersAboutCase(caseData)
+            qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+            qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+          },
+          onError: (err) => {
+            setApiError(`Error al abrir el caso: ${err.message}`)
+            startedRef.current = false
+            setStep('select-time')
+          },
         },
-        onError: (err) => {
-          setApiError(`Error al abrir el caso: ${err.message}`)
-          startedRef.current = false
-          setStep('select-time')
-        },
-      },
-    )
+      )
+    }
 
     if (selectedTime === Infinity) return
 
@@ -279,13 +285,20 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
 
               {pendingApps.length === 0 && (
                 <div className="flex gap-2">
-                  <EmergencyButton variant="primary" size="sm" className="flex-1" onClick={() => setStep('select-time')}>
+                  <EmergencyButton variant="primary" size="sm" className="flex-1" onClick={() => { startedRef.current = false; setStep('select-time') }}>
                     Intentar de nuevo
                   </EmergencyButton>
                   <EmergencyButton variant="glass" size="sm" className="flex-1" onClick={onClose}>
                     Cerrar
                   </EmergencyButton>
                 </div>
+              )}
+
+              {/* Even after timer, show new applicants arriving */}
+              {pendingApps.length === 0 && historyApps.length === 0 && (
+                <GlassCard className="p-3 text-center">
+                  <p className="text-xs text-ink-muted">Sin postulaciones hasta ahora. Puedes intentar de nuevo o cerrar.</p>
+                </GlassCard>
               )}
 
               {pendingApps.map((app) => (
