@@ -26,30 +26,40 @@ export const caseApplicationService = {
     if (existing) return existing
 
     const app = await caseApplicationRepository.apply(caseId, applicantId, params)
-    const caseData = await caseService.getById(caseId)
-    if (caseData) {
-      const managers = await getActiveManagers()
-      for (const m of managers) {
-        await notifyUser(
-          m.id,
-          'Nuevo postulante',
-          `Un voluntario se postuló al caso "${caseData.title}"`,
-          { caseId, applicationId: app.id, type: 'case_application' },
-        )
+    try {
+      const caseData = await caseService.getById(caseId)
+      if (caseData) {
+        const managers = await getActiveManagers()
+        for (const m of managers) {
+          await notifyUser(
+            m.id,
+            'Nuevo postulante',
+            `Un voluntario se postuló al caso "${caseData.title}"`,
+            'case_application',
+            { caseId, applicationId: app.id },
+          )
+        }
       }
+    } catch {
+      console.warn('[CASE_APPLICATION] Failed to notify managers after apply')
     }
     return app
   },
 
   async notifyVolunteersAboutCase(caseData: CaseDomain) {
-    const volunteers = await getActiveVolunteersNear(caseData.location.lat, caseData.location.lng, 25)
-    for (const v of volunteers) {
-      await notifyUser(
-        v.userId,
-        'Nuevo caso cerca de ti',
-        `Se abrió "${caseData.title}" en ${caseData.zone} — ¿quieres postularte?`,
-        { caseId: caseData.id, type: 'case_open', lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
-      )
+    try {
+      const volunteers = await getActiveVolunteersNear(caseData.location.lat, caseData.location.lng, 25)
+      for (const v of volunteers) {
+        await notifyUser(
+          v.userId,
+          'Nuevo caso cerca de ti',
+          `Se abrió "${caseData.title}" en ${caseData.zone} — ¿quieres postularte?`,
+          'case_open',
+          { caseId: caseData.id, lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
+        )
+      }
+    } catch {
+      console.warn('[CASE_APPLICATION] Failed to notify volunteers about case')
     }
   },
 
@@ -86,7 +96,8 @@ export const caseApplicationService = {
       app.applicantId,
       'Tu postulación fue aceptada',
       `Fuiste asignado a "${caseData.title}". Abre la misión para comenzar.`,
-      { caseId: app.caseId, missionId: created.mission.id, type: 'case_approved' },
+      'case_approved',
+      { caseId: app.caseId, missionId: created.mission.id },
     )
   },
 
@@ -100,7 +111,7 @@ export const caseApplicationService = {
 
     const applicant = await getProfileName(app.applicantId)
     if (applicant) {
-      await notifyUser(app.applicantId, 'Postulación rechazada', 'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.', { caseId: app.caseId, type: 'case_rejected' })
+      await notifyUser(app.applicantId, 'Postulación rechazada', 'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.', 'case_rejected', { caseId: app.caseId })
     }
   },
 }

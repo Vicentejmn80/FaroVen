@@ -73,11 +73,8 @@ export async function verifyPublicNeedEntry(input: {
           String(recipient.id),
           'Nueva necesidad pública',
           `${updated.title} está disponible para cobertura.`,
-          {
-            type: 'public_need_published',
-            publicNeedId: updated.id,
-            priority: updated.priority,
-          },
+          'public_need_published',
+          { publicNeedId: updated.id, priority: updated.priority },
         ),
       ),
     )
@@ -119,8 +116,8 @@ export async function reserveNeedCoverage(input: {
         String(operator.id),
         'Nueva postulación de cobertura',
         `Hay un nuevo interesado para cubrir una necesidad pública.`,
+        'coverage_interest_submitted',
         {
-          type: 'coverage_interest_submitted',
           publicNeedId: input.publicNeedId,
           reservationId: reservation.id,
           collaboratorType: reservation.collaboratorType,
@@ -241,8 +238,8 @@ export async function approveNeedInterest(input: {
       reservation.collaboratorUserId,
       'Postulación aprobada',
       `Tu postulación fue aprobada y se creó una misión operativa.`,
+      'coverage_interest_approved',
       {
-        type: 'coverage_interest_approved',
         reservationId: reservation.id,
         publicNeedId: reservation.publicNeedId,
         missionId,
@@ -254,8 +251,8 @@ export async function approveNeedInterest(input: {
       reservation.collaboratorUserId,
       'Postulación aprobada',
       `Tu postulación fue aprobada por el gestor.`,
+      'coverage_interest_approved',
       {
-        type: 'coverage_interest_approved',
         reservationId: reservation.id,
         publicNeedId: reservation.publicNeedId,
       },
@@ -308,8 +305,8 @@ export async function rejectNeedInterest(input: {
       reservation.collaboratorUserId,
       'Postulación no aprobada',
       'Tu postulación no fue aprobada en esta ocasión.',
+      'coverage_interest_rejected',
       {
-        type: 'coverage_interest_rejected',
         reservationId: reservation.id,
         publicNeedId: reservation.publicNeedId,
       },

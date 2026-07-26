@@ -4,6 +4,7 @@ export async function notifyUser(
   userId: string,
   title: string,
   message: string,
+  type: string = 'system',
   data?: Record<string, unknown>,
 ) {
   try {
@@ -11,7 +12,7 @@ export async function notifyUser(
       p_user_id: userId,
       p_title: title,
       p_message: message,
-      p_type: 'system',
+      p_type: type,
       p_priority: 'normal',
       p_metadata: (data ?? {}) as Record<string, unknown>,
     })

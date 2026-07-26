@@ -13,24 +13,30 @@ export const volunteerInterestService = {
       input.volunteerId,
       'Interés expresado',
       input.message ?? 'Quiero ayudar',
-      { type: 'volunteer_interest', needId: input.needId, status: 'pending' },
+      'volunteer_interest',
+      { needId: input.needId, status: 'pending' },
     )
 
-    const { data: caseManagers } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('role', 'case_manager')
-      .eq('status', 'active')
+    try {
+      const { data: caseManagers } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'case_manager')
+        .eq('status', 'active')
 
-    if (caseManagers) {
-      for (const cm of caseManagers) {
-        await notifyUser(
-          cm.id,
-          'Voluntario interesado',
-          `${input.volunteerName} quiere ayudar`,
-          { type: 'volunteer_interest', volunteerId: input.volunteerId, needId: input.needId },
-        )
+      if (caseManagers) {
+        for (const cm of caseManagers) {
+          await notifyUser(
+            cm.id,
+            'Voluntario interesado',
+            `${input.volunteerName} quiere ayudar`,
+            'volunteer_interest',
+            { volunteerId: input.volunteerId, needId: input.needId },
+          )
+        }
       }
+    } catch {
+      console.warn('[VOLUNTEER_INTEREST] Failed to notify case managers')
     }
   },
 
