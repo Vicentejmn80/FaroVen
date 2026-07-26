@@ -15,6 +15,23 @@ interface CaseApplicationRow {
   updated_at: string
 }
 
+interface ProfileEmbed {
+  id: string
+  full_name: string | null
+  phone: string | null
+}
+
+interface VolunteerMetricsRow {
+  user_id: string
+  total_missions: number | null
+  completed_missions: number | null
+  service_hours: number | null
+  trust_score: number | null
+  avg_response_minutes: number | null
+  specialties: string[] | null
+  last_activity_at: string | null
+}
+
 function mapRow(row: CaseApplicationRow): CaseApplication {
   return {
     id: row.id,
@@ -31,6 +48,13 @@ function mapRow(row: CaseApplicationRow): CaseApplication {
   }
 }
 
+/**
+ * Modelo Operations Hub:
+ * - case_applications.applicant_id → profiles.id  (identidad del postulante)
+ * - métricas operativas viven en volunteers.user_id (= profiles.id)
+ *
+ * Nunca embeber columnas de volunteers dentro de profiles: PostgREST responde 400.
+ */
 export const caseApplicationRepository = {
   async findById(applicationId: string): Promise<CaseApplication | null> {
     const { data, error } = await supabase.from('case_applications').select('*').eq('id', applicationId).maybeSingle()
@@ -50,28 +74,51 @@ export const caseApplicationRepository = {
   },
 
   async listByCase(caseId: string): Promise<CaseApplicationWithApplicant[]> {
+    // FK real: case_applications_applicant_id_fkey → profiles(id)
+    // Solo columnas que existen en profiles (evidencia: information_schema).
     const { data, error } = await supabase
       .from('case_applications')
-      .select('*, profiles!inner(id, full_name, phone, avatar_url, total_missions, completed_missions, service_hours, trust_score, avg_response_minutes, specialties, last_activity_at)')
+      .select('*, profiles!case_applications_applicant_id_fkey(id, full_name, phone)')
       .eq('case_id', caseId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return (data ?? []).map((row: Record<string, unknown>) => {
-      const app = mapRow(row as unknown as CaseApplicationRow)
-      const p = row.profiles as Record<string, unknown> | undefined
+
+    const rows = (data ?? []) as Array<CaseApplicationRow & { profiles: ProfileEmbed | ProfileEmbed[] | null }>
+    const applicantIds = [...new Set(rows.map((row) => row.applicant_id).filter(Boolean))]
+
+    const metricsByUserId = new Map<string, VolunteerMetricsRow>()
+    if (applicantIds.length > 0) {
+      const { data: volunteers, error: volunteersError } = await supabase
+        .from('volunteers')
+        .select(
+          'user_id, total_missions, completed_missions, service_hours, trust_score, avg_response_minutes, specialties, last_activity_at',
+        )
+        .in('user_id', applicantIds)
+
+      if (volunteersError) throw volunteersError
+      for (const volunteer of (volunteers ?? []) as VolunteerMetricsRow[]) {
+        metricsByUserId.set(volunteer.user_id, volunteer)
+      }
+    }
+
+    return rows.map((row) => {
+      const app = mapRow(row)
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+      const metrics = metricsByUserId.get(row.applicant_id)
+
       return {
         ...app,
-        applicantName: String(p?.full_name ?? ''),
-        applicantPhone: p?.phone ? String(p.phone) : undefined,
-        applicantPhoto: p?.avatar_url ? String(p.avatar_url) : undefined,
-        totalMissions: p?.total_missions ? Number(p.total_missions) : undefined,
-        completedMissions: p?.completed_missions ? Number(p.completed_missions) : undefined,
-        serviceHours: p?.service_hours ? Number(p.service_hours) : undefined,
-        trustScore: p?.trust_score ? Number(p.trust_score) : undefined,
-        avgResponseMin: p?.avg_response_minutes ? Number(p.avg_response_minutes) : undefined,
-        specialties: p?.specialties ? (p.specialties as string[]) : undefined,
-        lastActivity: p?.last_activity_at ? new Date(String(p.last_activity_at)) : undefined,
+        applicantName: profile?.full_name?.trim() || 'Voluntario',
+        applicantPhone: profile?.phone ?? undefined,
+        applicantPhoto: undefined,
+        totalMissions: metrics?.total_missions ?? undefined,
+        completedMissions: metrics?.completed_missions ?? undefined,
+        serviceHours: metrics?.service_hours ?? undefined,
+        trustScore: metrics?.trust_score ?? undefined,
+        avgResponseMin: metrics?.avg_response_minutes ?? undefined,
+        specialties: metrics?.specialties ?? undefined,
+        lastActivity: metrics?.last_activity_at ? new Date(metrics.last_activity_at) : undefined,
       }
     })
   },

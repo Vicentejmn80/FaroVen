@@ -15,6 +15,7 @@ export function useRealtimeSync({ channelName = 'faro-realtime', tables, invalid
 
   useEffect(() => {
     if (!isSupabaseEnabled) return
+    if (tables.length === 0 || invalidateKeys.length === 0) return
 
     const channel = supabase.channel(channelName)
 
@@ -35,5 +36,5 @@ export function useRealtimeSync({ channelName = 'faro-realtime', tables, invalid
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [channelName, tablesKey, keysKey, queryClient])
+  }, [channelName, tablesKey, keysKey, queryClient, tables.length, invalidateKeys.length])
 }
