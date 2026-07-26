@@ -18,9 +18,19 @@ const STATUS_CONFIG = {
     class: 'bg-warning-soft text-warning',
     icon: Clock,
   },
+  reviewing: {
+    label: 'En revision',
+    class: 'bg-info/15 text-info',
+    icon: Clock,
+  },
   verified: {
     label: 'Aprobado',
     class: 'bg-operational-soft text-operational',
+    icon: CheckCircle2,
+  },
+  converted: {
+    label: 'Convertido en caso',
+    class: 'bg-info/15 text-info',
     icon: CheckCircle2,
   },
   discarded: {
@@ -28,12 +38,12 @@ const STATUS_CONFIG = {
     class: 'bg-white/[0.06] text-ink-subtle',
     icon: XCircle,
   },
-}
+} satisfies Record<Report['status'], { label: string; class: string; icon: typeof Clock }>
 
 export function ReportCard({ report, onView, onApprove, onDismiss }: ReportCardProps) {
   const config = STATUS_CONFIG[report.status]
   const Icon = config.icon
-  const isPending = report.status === 'new'
+  const isPending = report.status === 'new' || report.status === 'reviewing'
 
   return (
     <GlassCard className="space-y-2.5">

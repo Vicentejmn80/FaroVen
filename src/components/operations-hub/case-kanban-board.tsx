@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import type { PublicNeed } from '@/domain/public-need.types'
 
 /** Columnas del pipeline operativo (agrupa etapas del dominio). */
 export const KANBAN_COLUMNS = [
@@ -56,6 +57,7 @@ export type KanbanColumnId = (typeof KANBAN_COLUMNS)[number]['id']
 
 interface CaseKanbanBoardProps {
   cases: CaseDomain[]
+  needs?: PublicNeed[]
   selectedId: string | null
   onSelect: (c: CaseDomain) => void
   className?: string
@@ -84,7 +86,7 @@ const PRIORITY_STYLE: Record<string, { bar: string; chip: string; label: string 
   },
 }
 
-export function CaseKanbanBoard({ cases, selectedId, onSelect, className }: CaseKanbanBoardProps) {
+export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, className }: CaseKanbanBoardProps) {
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
@@ -109,6 +111,31 @@ export function CaseKanbanBoard({ cases, selectedId, onSelect, className }: Case
     }
     return map
   }, [filtered])
+
+  const metricsByCase = useMemo(() => {
+    const map = new Map<string, CaseCardMetrics>()
+    for (const need of needs) {
+      if (!need.caseId) continue
+      const current = map.get(need.caseId) ?? {
+        needs: 0,
+        covered: 0,
+        pending: 0,
+        volunteersAccepted: 0,
+        volunteersRequired: 0,
+        callStatus: 'closed',
+      }
+      current.needs += 1
+      const isCovered = need.status === 'completed' || need.remainingQuantity <= 0
+      if (isCovered) current.covered += 1
+      else current.pending += 1
+      current.volunteersAccepted += Number(need.coveredQuantity || 0)
+      current.volunteersRequired += Number(need.requiredQuantity || 0)
+      if (need.callStatus === 'open') current.callStatus = 'open'
+      if (need.callStatus === 'complete' && current.callStatus !== 'open') current.callStatus = 'complete'
+      map.set(need.caseId, current)
+    }
+    return map
+  }, [needs])
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
@@ -151,6 +178,7 @@ export function CaseKanbanBoard({ cases, selectedId, onSelect, className }: Case
                       <KanbanCard
                         key={c.id}
                         caseItem={c}
+                        metrics={metricsByCase.get(c.id)}
                         selected={c.id === selectedId}
                         onSelect={() => onSelect(c)}
                         index={i}
@@ -174,11 +202,13 @@ export function CaseKanbanBoard({ cases, selectedId, onSelect, className }: Case
 
 function KanbanCard({
   caseItem,
+  metrics,
   selected,
   onSelect,
   index,
 }: {
   caseItem: CaseDomain
+  metrics?: CaseCardMetrics
   selected: boolean
   onSelect: () => void
   index: number
@@ -218,6 +248,23 @@ function KanbanCard({
       </div>
 
       <div className="mt-2 space-y-1 pl-1 text-[11px] text-ink-muted">
+        <div className="grid grid-cols-3 gap-1">
+          <MiniMetric label="Necesidades" value={String(metrics?.needs ?? 0)} />
+          <MiniMetric label="Cubiertas" value={String(metrics?.covered ?? 0)} />
+          <MiniMetric label="Pendientes" value={String(metrics?.pending ?? 0)} />
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2 py-1">
+          <span className="text-[10px] text-ink-faint">Convocatoria</span>
+          <span className={cn('text-[10px] font-semibold', callStatusClass(metrics?.callStatus))}>
+            {callStatusLabel(metrics?.callStatus)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2 py-1">
+          <span className="text-[10px] text-ink-faint">Voluntarios</span>
+          <span className="text-[10px] font-semibold text-ink">
+            {metrics?.volunteersAccepted ?? 0} / {metrics?.volunteersRequired ?? 0}
+          </span>
+        </div>
         <p className="flex items-center gap-1.5 min-w-0">
           <MapPin className="h-3 w-3 shrink-0 opacity-70" />
           <span className="truncate">
@@ -244,6 +291,36 @@ function KanbanCard({
       )}
     </motion.button>
   )
+}
+
+interface CaseCardMetrics {
+  needs: number
+  covered: number
+  pending: number
+  volunteersAccepted: number
+  volunteersRequired: number
+  callStatus: PublicNeed['callStatus']
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-lg bg-white/[0.03] px-1.5 py-1">
+      <span className="block text-[9px] text-ink-faint">{label}</span>
+      <span className="block text-[11px] font-semibold text-ink">{value}</span>
+    </span>
+  )
+}
+
+function callStatusLabel(status?: PublicNeed['callStatus']) {
+  if (status === 'open') return 'Abierta'
+  if (status === 'complete') return 'Completa'
+  return 'Cerrada'
+}
+
+function callStatusClass(status?: PublicNeed['callStatus']) {
+  if (status === 'open') return 'text-info'
+  if (status === 'complete') return 'text-operational'
+  return 'text-ink-faint'
 }
 
 function formatTimeAgo(date: Date): string {

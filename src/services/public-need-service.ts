@@ -264,6 +264,14 @@ export async function approveNeedInterest(input: {
     status: 'confirmed',
   })
 
+  const refreshedNeed = await publicNeedRepository.findById(reservation.publicNeedId)
+  if (refreshedNeed && refreshedNeed.remainingQuantity <= 0) {
+    await publicNeedRepository.updateCallStatus({
+      publicNeedId: refreshedNeed.id,
+      callStatus: 'complete',
+    })
+  }
+
   await operationalIntelligenceService.emitTimelineEvent({
     type: 'event',
     title: 'Postulación aprobada',
@@ -283,6 +291,41 @@ export async function approveNeedInterest(input: {
   })
 
   return { reservation: confirmed, missionId, assignmentId }
+}
+
+export async function openNeedCall(input: {
+  publicNeedId: string
+  operatorId: string
+}): Promise<PublicNeed> {
+  const updated = await publicNeedRepository.updateCallStatus({
+    publicNeedId: input.publicNeedId,
+    callStatus: 'open',
+  })
+
+  await operationalIntelligenceService.emitTimelineEvent({
+    type: 'event',
+    title: 'Convocatoria abierta',
+    description: 'La necesidad quedó visible para voluntarios',
+    severity: updated.priority === 'critical' ? 'critical' : 'info',
+    entityId: updated.id,
+    metadata: {
+      event_kind: 'need_call_opened',
+      public_need_id: updated.id,
+      operator_id: input.operatorId,
+    },
+  })
+
+  return updated
+}
+
+export async function closeNeedCall(input: {
+  publicNeedId: string
+  operatorId: string
+}): Promise<PublicNeed> {
+  return publicNeedRepository.updateCallStatus({
+    publicNeedId: input.publicNeedId,
+    callStatus: 'closed',
+  })
 }
 
 export async function rejectNeedInterest(input: {
@@ -341,4 +384,3 @@ export async function fetchNeedVerifications(publicNeedId: string): Promise<Need
 export async function fetchSuccessCases(limit = 20): Promise<SuccessCase[]> {
   return publicNeedRepository.listSuccessCases(limit)
 }
-

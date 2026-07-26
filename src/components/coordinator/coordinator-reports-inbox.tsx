@@ -89,6 +89,20 @@ export function CoordinatorReportsInbox({
 }
 
 function StatusChip({ status }: { status: Report['status'] }) {
+  if (status === 'converted') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-info/15 px-2 py-0.5 text-[11px] text-info">
+        Convertido en caso
+      </span>
+    )
+  }
+  if (status === 'reviewing') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-info/10 px-2 py-0.5 text-[11px] text-info">
+        En revision
+      </span>
+    )
+  }
   if (status === 'verified') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-operational-soft px-2 py-0.5 text-[11px] text-operational">
@@ -114,7 +128,7 @@ function ReportReviewSheet({ report, onClose }: { report: Report; onClose: () =>
   const { reviewReport } = useCoordinatorMutations()
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const isPending = report.status === 'new'
+  const isPending = report.status === 'new' || report.status === 'reviewing'
 
   const review = async (status: 'verified' | 'dismissed') => {
     setError(null)

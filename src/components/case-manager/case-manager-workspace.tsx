@@ -20,7 +20,7 @@ import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS, SKILL_LABELS, COLLABORATOR_TYPE_LABELS, MISSION_EVENT_LABELS } from '@/lib/labels'
 import { useAuth, usePermissions } from '@/store/auth-context'
-import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
+import { useApproveNeedInterest, useCloseNeedCall, useNeedInterests, useOpenNeedCall, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
 import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplication } from '@/hooks/useCaseApplications'
 import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
@@ -265,6 +265,8 @@ export function CaseManagerWorkspace() {
   const { user } = useAuth()
   const { data: publicNeeds = [], isLoading: publicNeedsLoading } = useOperationalPublicNeeds()
   const verifyPublicNeed = useVerifyPublicNeedEntry()
+  const openNeedCall = useOpenNeedCall()
+  const closeNeedCall = useCloseNeedCall()
   const deleteReport = useDeleteReport()
   const archiveCase = useArchiveCase()
   const [esperandoCasoId, setEsperandoCasoId] = useState<string | null>(null)
@@ -642,6 +644,26 @@ export function CaseManagerWorkspace() {
                       <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
                       <span>{label(PUBLIC_NEED_STATUS_LABELS, need.status, label(NEED_STATUS_LABELS, need.status))}</span>
                     </div>
+                    <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10px]">
+                      <span className="rounded-lg bg-white/[0.03] px-2 py-1">
+                        <span className="block text-ink-faint">Necesario</span>
+                        <span className="font-semibold text-ink">{need.requiredQuantity} {need.unit}</span>
+                      </span>
+                      <span className="rounded-lg bg-white/[0.03] px-2 py-1">
+                        <span className="block text-ink-faint">Recibido</span>
+                        <span className="font-semibold text-ink">{need.coveredQuantity} {need.unit}</span>
+                      </span>
+                      <span className="rounded-lg bg-white/[0.03] px-2 py-1">
+                        <span className="block text-ink-faint">Faltan</span>
+                        <span className="font-semibold text-ink">{need.remainingQuantity} {need.unit}</span>
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-white/[0.03] px-2.5 py-2 text-[11px]">
+                      <span className="text-ink-faint">Convocatoria</span>
+                      <span className={cn('font-semibold', need.callStatus === 'open' ? 'text-info' : need.callStatus === 'complete' ? 'text-operational' : 'text-ink-muted')}>
+                        {need.callStatus === 'open' ? 'Abierta' : need.callStatus === 'complete' ? 'Completa' : 'Cerrada'}
+                      </span>
+                    </div>
                     <div className="mt-2 flex gap-2">
                       <EmergencyButton
                         variant="glass"
@@ -665,6 +687,32 @@ export function CaseManagerWorkspace() {
                       >
                         Publicar necesidad
                       </EmergencyButton>
+                      {need.verificationStatus === 'approved_entry' && need.callStatus !== 'open' && need.callStatus !== 'complete' && (
+                        <EmergencyButton
+                          variant="primary"
+                          size="sm"
+                          disabled={openNeedCall.isPending || !user?.id}
+                          onClick={() => {
+                            if (!user?.id) return
+                            openNeedCall.mutate({ publicNeedId: need.id, operatorId: user.id })
+                          }}
+                        >
+                          Solicitar voluntarios
+                        </EmergencyButton>
+                      )}
+                      {need.callStatus === 'open' && (
+                        <EmergencyButton
+                          variant="glass"
+                          size="sm"
+                          disabled={closeNeedCall.isPending || !user?.id}
+                          onClick={() => {
+                            if (!user?.id) return
+                            closeNeedCall.mutate({ publicNeedId: need.id, operatorId: user.id })
+                          }}
+                        >
+                          Cerrar convocatoria
+                        </EmergencyButton>
+                      )}
                     </div>
                     <div className="mt-2">
                       <NeedInterestsPanel publicNeedId={need.id} operatorId={user?.id} />

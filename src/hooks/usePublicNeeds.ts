@@ -21,6 +21,8 @@ import {
   reserveNeedCoverage,
   updateNeedReservationStatus,
   verifyPublicNeedEntry,
+  openNeedCall,
+  closeNeedCall,
 } from '@/services/public-need-service'
 import { FARO_QUERY_KEYS } from './query-keys'
 
@@ -142,6 +144,27 @@ export function useVerifyPublicNeedEntry() {
   })
 }
 
+export function useOpenNeedCall() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { publicNeedId: string; operatorId: string }) => openNeedCall(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.operationalTimeline] })
+    },
+  })
+}
+
+export function useCloseNeedCall() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { publicNeedId: string; operatorId: string }) => closeNeedCall(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+    },
+  })
+}
+
 export function useApproveNeedInterest() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -171,4 +194,3 @@ export function useRejectNeedInterest() {
     },
   })
 }
-

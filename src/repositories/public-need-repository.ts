@@ -28,6 +28,7 @@ function toPublicNeed(row: AnyRow): PublicNeed {
     unit: String(row.unit ?? 'unidad'),
     verificationStatus: (row.verification_status as PublicNeed['verificationStatus']) ?? 'pending_entry',
     visibilityStatus: (row.visibility_status as PublicNeed['visibilityStatus']) ?? 'hidden',
+    callStatus: (row.call_status as PublicNeed['callStatus']) ?? 'closed',
     operationalDestination: (row.operational_destination as PublicNeed['operationalDestination']) ?? 'public_call',
     institutionType: (row.institution_type as PublicNeed['institutionType']) ?? null,
     institutionName: (row.institution_name as string | null) ?? null,
@@ -118,6 +119,7 @@ export class PublicNeedRepository {
       .from('public_needs')
       .select('*')
       .eq('visibility_status', 'public')
+      .eq('call_status', 'open')
       .in('status', ['active', 'reserved', 'in_progress', 'completed'])
       .order('created_at', { ascending: false })
     if (error) {
@@ -164,6 +166,7 @@ export class PublicNeedRepository {
         required_quantity: input.requiredQuantity,
         unit: input.unit,
         visibility_status: 'hidden',
+        call_status: 'closed',
         status: 'pending',
         expires_at: input.expiresAt ?? undefined,
       })
@@ -200,6 +203,7 @@ export class PublicNeedRepository {
           zone: input.zone,
         },
         visibility_status: 'public',
+        call_status: 'closed',
         verification_status: 'approved_entry',
         status: 'active',
         verified_by: input.actorId ?? null,
@@ -262,6 +266,11 @@ export class PublicNeedRepository {
     collaboratorType?: CoverageReservation['collaboratorType']
     quantity: number
   }): Promise<CoverageReservation> {
+    const need = await this.findById(input.publicNeedId)
+    if (!need || need.callStatus !== 'open' || need.remainingQuantity <= 0) {
+      throw new Error('La convocatoria está cerrada o completa')
+    }
+
     const { data: userData } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('coverage_reservations')
@@ -276,6 +285,26 @@ export class PublicNeedRepository {
       .single()
     if (error) throw error
     return toCoverageReservation(data as AnyRow)
+  }
+
+  async updateCallStatus(input: {
+    publicNeedId: string
+    callStatus: PublicNeed['callStatus']
+  }): Promise<PublicNeed> {
+    const patch: Record<string, unknown> = {
+      call_status: input.callStatus,
+      visibility_status: input.callStatus === 'open' ? 'public' : 'hidden',
+    }
+    if (input.callStatus === 'complete') patch.status = 'completed'
+
+    const { data, error } = await supabase
+      .from('public_needs')
+      .update(patch)
+      .eq('id', input.publicNeedId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return toPublicNeed(data as AnyRow)
   }
 
   async listCoverageReservationsByNeed(publicNeedId: string): Promise<CoverageReservation[]> {
@@ -351,4 +380,3 @@ export class PublicNeedRepository {
 }
 
 export const publicNeedRepository = new PublicNeedRepository()
-

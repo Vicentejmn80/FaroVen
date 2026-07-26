@@ -9,7 +9,7 @@ export type OperationalStatus = 'critical' | 'warning' | 'operational' | 'info'
 export type PriorityLevel = 'critical' | 'high' | 'medium' | 'low'
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 export type NeedStatus = 'active' | 'pending_closure' | 'resolved' | 'reopened'
-export type ReportStatus = 'new' | 'verified' | 'discarded'
+export type ReportStatus = 'new' | 'reviewing' | 'verified' | 'discarded' | 'converted'
 export type ReportType =
   | 'inventory'
   | 'saturation'

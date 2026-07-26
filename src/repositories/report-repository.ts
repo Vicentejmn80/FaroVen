@@ -135,6 +135,25 @@ export class ReportRepository {
     return reportRowToReport(data as ReportRow)
   }
 
+  async markConverted(input: {
+    id: string
+    caseId: string
+  }): Promise<Report> {
+    const { data, error } = await supabase
+      .from('reports')
+      .update({
+        status: 'converted',
+        review_notes: `Convertido en caso operativo ${input.caseId}`,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', input.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return reportRowToReport(data as ReportRow)
+  }
+
   async delete(id: string): Promise<void> {
     const { error } = await supabase.rpc('delete_report', { p_report_id: id })
     if (error) throw error

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
+import { useOperationalPublicNeeds } from '@/hooks/usePublicNeeds'
 import { useTransitionCase, useAssignCase } from '@/hooks/useCaseMutations'
 import { useFaro } from '@/store/faro-context'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
@@ -18,6 +19,7 @@ type WorkspaceMode = 'pipeline' | 'map'
 export function OperationsHub() {
   const { state } = useFaro()
   const { data: opsCases = [] } = useCases()
+  const { data: operationalNeeds = [] } = useOperationalPublicNeeds()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
@@ -147,6 +149,7 @@ export function OperationsHub() {
             <div className="min-w-0 flex-1">
               <CaseKanbanBoard
                 cases={sortedCases}
+                needs={operationalNeeds}
                 selectedId={selectedId}
                 onSelect={handleSelect}
               />

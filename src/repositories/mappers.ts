@@ -227,7 +227,16 @@ export function reportRowToReport(row: ReportRow): Report {
     userId: row.reported_by ?? 'anonymous',
     source: row.source ?? row.contact_info ?? 'Sin fuente',
     createdAt: toDate(row.created_at),
-    status: row.status === 'verified' ? 'verified' : row.status === 'dismissed' ? 'discarded' : 'new',
+    status:
+      row.status === 'verified'
+        ? 'verified'
+        : row.status === 'dismissed' || row.status === 'discarded'
+          ? 'discarded'
+          : row.status === 'converted'
+            ? 'converted'
+            : row.status === 'reviewing'
+              ? 'reviewing'
+              : 'new',
     confidence: 'medium',
     photoUrls: [],
     location: {

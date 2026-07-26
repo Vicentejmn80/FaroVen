@@ -8,14 +8,14 @@ interface CaseStatusBadgeProps {
 
 const STAGE_META: Record<PipelineStage, { label: string; color: string; bg: string }> = {
   nuevo: { label: 'Nuevo', color: 'text-info', bg: 'bg-info/10' },
-  pending_review: { label: 'Pendiente', color: 'text-warning', bg: 'bg-warning/10' },
-  validating: { label: 'Validando', color: 'text-warning', bg: 'bg-warning/10' },
-  awaiting_info: { label: 'Espera info', color: 'text-ink-muted', bg: 'bg-white/[0.06]' },
-  open_for_applications: { label: 'Postulaciones', color: 'text-info', bg: 'bg-info/10' },
-  assigned: { label: 'Asignado', color: 'text-info', bg: 'bg-info/10' },
-  accepted: { label: 'Aceptado', color: 'text-operational', bg: 'bg-operational/10' },
-  in_attention: { label: 'En atención', color: 'text-operational', bg: 'bg-operational/10' },
-  resolved: { label: 'Resuelto', color: 'text-operational', bg: 'bg-operational/10' },
+  pending_review: { label: 'Analizando', color: 'text-warning', bg: 'bg-warning/10' },
+  validating: { label: 'Planificando', color: 'text-warning', bg: 'bg-warning/10' },
+  awaiting_info: { label: 'Monitoreando', color: 'text-ink-muted', bg: 'bg-white/[0.06]' },
+  open_for_applications: { label: 'Convocatoria', color: 'text-info', bg: 'bg-info/10' },
+  assigned: { label: 'Asignando', color: 'text-info', bg: 'bg-info/10' },
+  accepted: { label: 'Ejecucion', color: 'text-operational', bg: 'bg-operational/10' },
+  in_attention: { label: 'Ejecucion', color: 'text-operational', bg: 'bg-operational/10' },
+  resolved: { label: 'Completado', color: 'text-operational', bg: 'bg-operational/10' },
   archived: { label: 'Archivado', color: 'text-ink-muted', bg: 'bg-white/[0.04]' },
 }
 

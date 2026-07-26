@@ -1,6 +1,5 @@
 import { reportRepository } from '@/repositories/report-repository'
 import { caseService } from './case-service'
-import { publicNeedRepository } from '@/repositories/public-need-repository'
 import type { Report } from '@/domain/models'
 import type { CasePriority } from '@/domain/case-lifecycle.types'
 import { supabase } from '@/lib/supabase'
@@ -169,22 +168,16 @@ export const caseManagerService = {
       actorId,
     })
 
-    const transitioned = await caseService.transition(result.case.id, 'pending_review', actorId, 'Caso abierto desde reporte ciudadano — pasa a revisión')
-
-    await publicNeedRepository.createFromCase({
-      caseId: transitioned.case.id,
-      title: data.title,
-      summary: data.description,
-      category: data.category,
-      priority: data.priority,
-      zone: data.zone,
-      location: {
-        lat,
-        lng,
-        address: report?.location.address,
-        zone: data.zone,
-      },
+    const transitioned = await caseService.transition(
+      result.case.id,
+      'pending_review',
       actorId,
+      'Caso operativo creado desde reporte ciudadano',
+    )
+
+    await reportRepository.markConverted({
+      id: data.reportId,
+      caseId: transitioned.case.id,
     })
 
     return transitioned

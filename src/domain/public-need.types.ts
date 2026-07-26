@@ -42,6 +42,14 @@ export const COVERAGE_RESERVATION_STATUS = {
 export type CoverageReservationStatus =
   typeof COVERAGE_RESERVATION_STATUS[keyof typeof COVERAGE_RESERVATION_STATUS]
 
+export const NEED_CALL_STATUS = {
+  OPEN: 'open',
+  CLOSED: 'closed',
+  COMPLETE: 'complete',
+} as const
+
+export type NeedCallStatus = typeof NEED_CALL_STATUS[keyof typeof NEED_CALL_STATUS]
+
 /**
  * Vía por la que se cubre una necesidad. Las necesidades institucionales no
  * admiten voluntarios: se derivan al organismo responsable.
@@ -100,6 +108,7 @@ export interface PublicNeed {
   unit: string
   verificationStatus: NeedVerificationStatus
   visibilityStatus: NeedVisibilityStatus
+  callStatus: NeedCallStatus
   operationalDestination: OperationalDestination
   institutionType: InstitutionType | null
   institutionName: string | null
@@ -182,4 +191,3 @@ export interface SuccessCase {
   totalDurationMinutes: number | null
   createdAt: Date
 }
-
