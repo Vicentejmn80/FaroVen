@@ -48,11 +48,17 @@ export const caseApplicationService = {
 
   async notifyVolunteersAboutCase(caseData: CaseDomain) {
     try {
-      const volunteers = await getActiveVolunteersNear(caseData.location.lat, caseData.location.lng, 25)
-      for (const v of volunteers) {
+      // Unir cercanos + todos los perfiles volunteer (lat=0 no debe excluir a Valeria)
+      const nearby = await getActiveVolunteersNear(caseData.location.lat, caseData.location.lng, 50)
+      const roster = await getAllActiveVolunteerProfiles()
+      const seen = new Set<string>()
+
+      for (const v of [...nearby, ...roster]) {
+        if (!v.userId || seen.has(v.userId)) continue
+        seen.add(v.userId)
         await notifyUser(
           v.userId,
-          'Nuevo caso cerca de ti',
+          'Nueva misión detectada',
           `Se abrió "${caseData.title}" en ${caseData.zone} — ¿quieres postularte?`,
           'case_open',
           { caseId: caseData.id, lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
@@ -140,6 +146,23 @@ async function getActiveVolunteersNear(lat: number, lng: number, radiusKm: numbe
         phone: row.phone ?? undefined,
         distanceKm: row.distance_km,
       }))
+  } catch {
+    return []
+  }
+}
+
+async function getAllActiveVolunteerProfiles(): Promise<NearbyVolunteer[]> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('role', 'volunteer')
+      .eq('status', 'active')
+    return ((data ?? []) as { id: string; full_name: string | null }[]).map((row) => ({
+      userId: row.id,
+      fullName: row.full_name ?? 'Voluntario',
+      distanceKm: 0,
+    }))
   } catch {
     return []
   }

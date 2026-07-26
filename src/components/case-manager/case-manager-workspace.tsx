@@ -310,7 +310,10 @@ export function CaseManagerWorkspace() {
   const { data: requests } = useRoleRequests()
 
   const pendingRequests = useMemo(() => requests?.filter((r) => r.status === 'pending' || r.status === 'under_review') ?? [], [requests])
-  const pendingReports = useMemo(() => reports?.filter((r) => r.status === 'new') ?? [], [reports])
+  const pendingReports = useMemo(
+    () => reports?.filter((r) => r.status === 'new' || r.status === 'reviewing') ?? [],
+    [reports],
+  )
   const activeCases = useMemo(() => allCases?.filter((c) => c.pipelineStage !== 'archived') ?? [], [allCases])
   const pendingPublicNeeds = useMemo(
     () => publicNeeds.filter((n) => n.verificationStatus === 'pending_entry' || n.status === 'pending'),
@@ -490,8 +493,8 @@ export function CaseManagerWorkspace() {
                           onClick={() => setEsperandoCasoId(c.id)}
                           className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
                         >
-                          <p className="font-medium text-ink">{c.pipelineStage === 'open_for_applications' ? 'Reabrir radar' : 'Esperar postulantes'}</p>
-                          <p className="text-ink-faint mt-0.5">Espera postulaciones con radar de tiempo</p>
+                          <p className="font-medium text-ink">{c.pipelineStage === 'open_for_applications' ? 'Reabrir convocatoria' : 'Solicitar voluntarios'}</p>
+                          <p className="text-ink-faint mt-0.5">Abre la convocatoria y recibe postulaciones en el mapa</p>
                         </button>
                         <button
                           onClick={() => setAsignandoCasoId(c.id)}

@@ -1,7 +1,11 @@
 import { reportRepository } from '@/repositories/report-repository'
+import { publicNeedRepository } from '@/repositories/public-need-repository'
 import { caseService } from './case-service'
+import { caseApplicationService } from './case-application-service'
+import { openNeedCall } from './public-need-service'
 import type { Report } from '@/domain/models'
-import type { CasePriority } from '@/domain/case-lifecycle.types'
+import type { CaseDomain, CasePriority } from '@/domain/case-lifecycle.types'
+import type { PublicNeed } from '@/domain/public-need.types'
 import { supabase } from '@/lib/supabase'
 
 const EARTH_RADIUS_KM = 6371
@@ -180,7 +184,83 @@ export const caseManagerService = {
       caseId: transitioned.case.id,
     })
 
+    // Necesidad borrador (convocatoria cerrada): el reporte ya no vive en bandeja;
+    // el gestor abre voluntarios después con "Solicitar voluntarios".
+    await publicNeedRepository.createFromCase({
+      caseId: transitioned.case.id,
+      title: data.title,
+      summary: data.description,
+      category: data.category,
+      priority: data.priority,
+      zone: data.zone,
+      location: {
+        lat,
+        lng,
+        address: report?.location.address,
+        zone: data.zone,
+      },
+      actorId,
+    })
+
     return transitioned
+  },
+
+  /**
+   * Abre la convocatoria operativa de un caso:
+   * caso → open_for_applications, necesidad visible, call_status=open, avisos a voluntarios.
+   */
+  async openVolunteerCall(caseId: string, actorId?: string): Promise<{
+    case: CaseDomain
+    need: PublicNeed
+  }> {
+    const caseData = await caseService.getById(caseId)
+    if (!caseData) throw new Error('Caso no encontrado')
+
+    let opened = caseData
+    if (caseData.pipelineStage !== 'open_for_applications') {
+      const result = await caseService.transition(
+        caseId,
+        'open_for_applications',
+        actorId,
+        'Convocatoria abierta — solicitando apoyo voluntario',
+      )
+      opened = result.case
+    }
+
+    const existing = await publicNeedRepository.listByCaseId(caseId)
+    let need =
+      existing.find((n) => n.status !== 'archived' && n.status !== 'expired' && n.status !== 'closed') ??
+      existing[0]
+
+    if (!need) {
+      need = await publicNeedRepository.createFromCase({
+        caseId,
+        title: opened.title,
+        summary: opened.description,
+        category: opened.category ?? 'humanitarian',
+        priority: opened.priority,
+        zone: opened.zone,
+        location: {
+          lat: opened.location.lat,
+          lng: opened.location.lng,
+          address: opened.location.address,
+          zone: opened.zone,
+        },
+        actorId,
+      })
+    }
+
+    if (need.callStatus !== 'open') {
+      need = await openNeedCall({
+        publicNeedId: need.id,
+        operatorId: actorId ?? 'system',
+      })
+    } else {
+      // Ya estaba abierta: reavisar a la red de voluntarios
+      await caseApplicationService.notifyVolunteersAboutCase(opened)
+    }
+
+    return { case: opened, need }
   },
 }
 

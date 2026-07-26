@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils'
 import { label, SKILL_LABELS } from '@/lib/labels'
 import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplication } from '@/hooks/useCaseApplications'
 import { useOpenCaseForApplications } from '@/hooks/useCases'
-import { caseApplicationService } from '@/services/case-application-service'
 import { useQueryClient } from '@tanstack/react-query'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
@@ -67,28 +66,22 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
     setTimeLeft(selectedTime)
     setStep('waiting')
 
-    // If case is already open_for_applications, skip transition and just notify
-    if (caseData.pipelineStage === 'open_for_applications') {
-      caseApplicationService.notifyVolunteersAboutCase(caseData)
-      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
-      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
-    } else {
-      openForApps.mutate(
-        { caseId: caseData.id, actorId, comment: 'Caso abierto a postulaciones voluntarias' },
-        {
-          onSuccess: () => {
-            caseApplicationService.notifyVolunteersAboutCase(caseData)
-            qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
-            qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
-          },
-          onError: (err) => {
-            setApiError(`Error al abrir el caso: ${err.message}`)
-            startedRef.current = false
-            setStep('select-time')
-          },
+    // Abre convocatoria: caso + necesidad pública + call_status=open + avisos
+    openForApps.mutate(
+      { caseId: caseData.id, actorId, comment: 'Convocatoria abierta — solicitando apoyo voluntario' },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+          qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+          qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
         },
-      )
-    }
+        onError: (err) => {
+          setApiError(`Error al abrir la convocatoria: ${err.message}`)
+          startedRef.current = false
+          setStep('select-time')
+        },
+      },
+    )
 
     if (selectedTime === Infinity) return
 
@@ -120,7 +113,7 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-info/20">
               <Users className="h-3.5 w-3.5 text-info" />
             </div>
-            <h2 className="text-sm font-semibold text-ink">Esperar postulante</h2>
+            <h2 className="text-sm font-semibold text-ink">Solicitar voluntarios</h2>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-ink-faint hover:bg-white/[0.06] hover:text-ink">
             <X className="h-4 w-4" />

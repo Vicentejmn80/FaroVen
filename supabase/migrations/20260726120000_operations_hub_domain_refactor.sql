@@ -1,89 +1,138 @@
 -- Operations Hub domain refactor:
 -- report -> case -> need -> call -> application -> mission.
+--
+-- NOTE: report_status enum values 'reviewing' / 'converted' must be added in a
+-- prior migration (or a separate transaction) before indexes that reference them.
+-- Production applied as:
+--   1) report_status_converted_reviewing
+--   2) operations_hub_call_status_and_volunteer_rls
 
-alter table public.reports
-  drop constraint if exists reports_status_check;
+ALTER TABLE public.reports
+  DROP CONSTRAINT IF EXISTS reports_status_check;
 
-create index if not exists idx_reports_converted_created
-  on public.reports (created_at desc)
-  where status = 'converted';
+CREATE INDEX IF NOT EXISTS idx_reports_converted_created
+  ON public.reports (created_at DESC)
+  WHERE status = 'converted';
 
-alter table public.public_needs
-  add column if not exists call_status text not null default 'closed'
-    check (call_status in ('open', 'closed', 'complete'));
+CREATE INDEX IF NOT EXISTS idx_reports_pending_inbox
+  ON public.reports (created_at DESC)
+  WHERE status IN ('pending', 'under_review', 'reviewing');
 
-comment on column public.public_needs.call_status is
-  'Convocatoria: open allows volunteer applications, closed hides it from volunteers, complete stops new applications.';
+ALTER TABLE public.public_needs
+  ADD COLUMN IF NOT EXISTS call_status TEXT NOT NULL DEFAULT 'closed';
 
-create index if not exists idx_public_needs_call_status
-  on public.public_needs (call_status, status, created_at desc);
+ALTER TABLE public.public_needs
+  DROP CONSTRAINT IF EXISTS public_needs_call_status_check;
 
-drop policy if exists public_needs_select_public on public.public_needs;
-create policy public_needs_select_public on public.public_needs
-for select
-to anon, authenticated
-using (
+ALTER TABLE public.public_needs
+  ADD CONSTRAINT public_needs_call_status_check
+  CHECK (call_status IN ('open', 'closed', 'complete'));
+
+COMMENT ON COLUMN public.public_needs.call_status IS
+  'Convocatoria: open = voluntarios pueden postularse; closed = oculta; complete = cupo lleno';
+
+CREATE INDEX IF NOT EXISTS idx_public_needs_call_status
+  ON public.public_needs (call_status, status, created_at DESC);
+
+DROP POLICY IF EXISTS public_needs_select_public ON public.public_needs;
+CREATE POLICY public_needs_select_public ON public.public_needs
+FOR SELECT
+TO anon, authenticated
+USING (
   visibility_status = 'public'
-  and call_status = 'open'
-  and status in ('active', 'reserved', 'in_progress')
-  and expires_at > (now() - interval '24 hours')
+  AND call_status = 'open'
+  AND status IN ('active', 'reserved', 'in_progress')
+  AND expires_at > (now() - interval '24 hours')
 );
 
-drop policy if exists coverage_reservations_insert_public on public.coverage_reservations;
-create policy coverage_reservations_insert_public on public.coverage_reservations
-for insert
-to anon, authenticated
-with check (
-  exists (
-    select 1
-    from public.public_needs n
-    where n.id = public_need_id
-      and n.visibility_status = 'public'
-      and n.call_status = 'open'
-      and n.status in ('active', 'reserved', 'in_progress')
-      and n.remaining_quantity > 0
-      and n.expires_at > now()
+DROP POLICY IF EXISTS public_needs_select_operators ON public.public_needs;
+CREATE POLICY public_needs_select_operators ON public.public_needs
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND role IN ('case_manager', 'coordinator', 'regional_admin', 'super_admin')
   )
 );
 
-create or replace function public.sync_public_need_coverage()
-returns trigger
-language plpgsql
-as $$
-declare
+DROP POLICY IF EXISTS coverage_reservations_insert_public ON public.coverage_reservations;
+CREATE POLICY coverage_reservations_insert_public ON public.coverage_reservations
+FOR INSERT
+TO anon, authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.public_needs n
+    WHERE n.id = public_need_id
+      AND n.visibility_status = 'public'
+      AND n.call_status = 'open'
+      AND n.status IN ('active', 'reserved', 'in_progress')
+      AND n.remaining_quantity > 0
+      AND n.expires_at > now()
+  )
+);
+
+CREATE OR REPLACE FUNCTION public.sync_public_need_coverage()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
   target_need uuid;
   confirmed_qty numeric(12,2);
-begin
+BEGIN
   target_need := coalesce(new.public_need_id, old.public_need_id);
 
-  select coalesce(sum(quantity), 0)
-    into confirmed_qty
-  from public.coverage_reservations
-  where public_need_id = target_need
-    and status = 'confirmed';
+  SELECT coalesce(sum(quantity), 0)
+    INTO confirmed_qty
+  FROM public.coverage_reservations
+  WHERE public_need_id = target_need
+    AND status = 'confirmed';
 
-  update public.public_needs
-  set
+  UPDATE public.public_needs
+  SET
     covered_quantity = confirmed_qty,
-    call_status = case
-      when status in ('closed', 'archived') then call_status
-      when confirmed_qty >= required_quantity then 'complete'
-      else call_status
-    end,
-    visibility_status = case
-      when confirmed_qty >= required_quantity then 'hidden'
-      else visibility_status
-    end,
-    status = case
-      when status in ('closed', 'archived') then status
-      when expires_at < now() then 'expired'
-      when confirmed_qty >= required_quantity then 'completed'
-      when confirmed_qty > 0 then 'in_progress'
-      else 'active'
-    end,
+    call_status = CASE
+      WHEN status IN ('closed', 'archived') THEN call_status
+      WHEN confirmed_qty >= required_quantity THEN 'complete'
+      ELSE call_status
+    END,
+    visibility_status = CASE
+      WHEN confirmed_qty >= required_quantity THEN 'hidden'
+      ELSE visibility_status
+    END,
+    status = CASE
+      WHEN status IN ('closed', 'archived') THEN status
+      WHEN expires_at < now() THEN 'expired'
+      WHEN confirmed_qty >= required_quantity THEN 'completed'
+      WHEN confirmed_qty > 0 THEN 'in_progress'
+      ELSE 'active'
+    END,
     updated_at = now()
-  where id = target_need;
+  WHERE id = target_need;
 
-  return coalesce(new, old);
-end;
+  RETURN coalesce(new, old);
+END;
 $$;
+
+DROP POLICY IF EXISTS cases_select_volunteers_open ON public.cases;
+CREATE POLICY cases_select_volunteers_open ON public.cases
+FOR SELECT
+TO authenticated
+USING (
+  pipeline_stage = 'open_for_applications'
+  AND EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND role = 'volunteer'
+      AND status = 'active'
+  )
+);
+
+INSERT INTO volunteers (user_id, full_name, availability)
+SELECT p.id, COALESCE(NULLIF(p.full_name, ''), 'Voluntario'), 'available'
+FROM profiles p
+WHERE p.role = 'volunteer'
+  AND p.status = 'active'
+  AND NOT EXISTS (SELECT 1 FROM volunteers v WHERE v.user_id = p.id);

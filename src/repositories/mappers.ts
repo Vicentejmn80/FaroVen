@@ -234,7 +234,7 @@ export function reportRowToReport(row: ReportRow): Report {
           ? 'discarded'
           : row.status === 'converted'
             ? 'converted'
-            : row.status === 'reviewing'
+            : row.status === 'reviewing' || row.status === 'under_review'
               ? 'reviewing'
               : 'new',
     confidence: 'medium',

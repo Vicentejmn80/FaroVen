@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { caseService } from '@/services/case-service'
+import { caseManagerService } from '@/services/case-manager-service'
 import { FARO_QUERY_KEYS } from './query-keys'
 import type { CaseFilters } from '@/repositories/case-repository'
 
@@ -54,15 +55,16 @@ export function useOpenCaseForApplications() {
     mutationFn: ({
       caseId,
       actorId,
-      comment,
     }: {
       caseId: string
       actorId?: string
       comment?: string
-    }) => caseService.transition(caseId, 'open_for_applications', actorId, comment ?? 'Caso abierto a postulaciones'),
+    }) => caseManagerService.openVolunteerCall(caseId, actorId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
     },
   })
 }

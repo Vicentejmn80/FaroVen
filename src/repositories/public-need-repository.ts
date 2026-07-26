@@ -141,6 +141,19 @@ export class PublicNeedRepository {
     return ((data ?? []) as AnyRow[]).map(toPublicNeed)
   }
 
+  async listByCaseId(caseId: string): Promise<PublicNeed[]> {
+    const { data, error } = await supabase
+      .from('public_needs')
+      .select('*')
+      .eq('case_id', caseId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      if (isMissingTableError(error)) return []
+      throw error
+    }
+    return ((data ?? []) as AnyRow[]).map(toPublicNeed)
+  }
+
   async createFromReport(input: {
     reportId: string | null
     caseId?: string | null

@@ -302,6 +302,36 @@ export async function openNeedCall(input: {
     callStatus: 'open',
   })
 
+  // Avisar a voluntarios activos (incluye perfiles sin fila en volunteers)
+  try {
+    const { data: volunteers } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'volunteer')
+      .eq('status', 'active')
+
+    const zone = updated.locationPublic.zone ?? 'tu zona'
+    await Promise.all(
+      (volunteers ?? []).map((volunteer) =>
+        notifyUser(
+          String(volunteer.id),
+          'Nueva misión detectada',
+          `"${updated.title}" en ${zone} — convocatoria abierta. ¿Quieres ayudar?`,
+          'need_call_opened',
+          {
+            publicNeedId: updated.id,
+            caseId: updated.caseId,
+            priority: updated.priority,
+            lat: updated.locationPublic.lat,
+            lng: updated.locationPublic.lng,
+          },
+        ),
+      ),
+    )
+  } catch {
+    console.warn('[PUBLIC_NEED] Failed to notify volunteers about open call')
+  }
+
   await operationalIntelligenceService.emitTimelineEvent({
     type: 'event',
     title: 'Convocatoria abierta',
