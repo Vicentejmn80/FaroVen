@@ -5,6 +5,7 @@ import { useUpdateMissionAssignment, useRespondMission, useSubmitEvidence } from
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { VolunteerMissionCard } from './volunteer-mission-card'
+import { ActiveMissionView } from './active-mission-view'
 import { GlassCard } from '@/components/ui/glass-card'
 import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
@@ -325,6 +326,7 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
   const respondMission = useRespondMission()
   const submitEvidence = useSubmitEvidence()
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
+  const [activeMissionViewId, setActiveMissionViewId] = useState<string | null>(null)
 
   const missionMap = useMemo(() => {
     const map = new Map<string, Mission>()
@@ -431,6 +433,12 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
                       <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Progreso</p>
                       <OperationalTimeline steps={timelineSteps} />
                     </div>
+                    <button
+                      onClick={() => setActiveMissionViewId(a.id)}
+                      className="w-full rounded-2xl bg-info/15 py-3 text-sm font-semibold text-info hover:bg-info/25 transition-all"
+                    >
+                      Vista completa
+                    </button>
                   </div>
                 )}
               </div>
@@ -457,6 +465,20 @@ function MyMissions({ showPastOnly }: { showPastOnly?: boolean }) {
           })}
         </div>
       )}
+
+      {activeMissionViewId && (() => {
+        const a = assignments?.find((x) => x.id === activeMissionViewId)
+        const m = a ? (missionMap.get(a.missionId) ?? null) : null
+        if (!a || !m || !user?.id) return null
+        return (
+          <ActiveMissionView
+            mission={m}
+            assignment={a}
+            volunteerId={user.id}
+            onClose={() => setActiveMissionViewId(null)}
+          />
+        )
+      })()}
     </div>
   )
 }
