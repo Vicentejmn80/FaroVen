@@ -567,14 +567,14 @@ export function CaseManagerWorkspace() {
                                         <div className="flex gap-2 pt-1">
                                           <button
                                             onClick={() => approveApp.mutate({ applicationId: app.id, operatorId: user?.id ?? '' })}
-                                            disabled={approveApp.isPending}
+                                            disabled={approveApp.isPending || !user?.id}
                                             className="flex-1 rounded-lg bg-operational/15 py-1.5 text-xs font-medium text-operational hover:bg-operational/25 transition-colors"
                                           >
                                             Aprobar
                                           </button>
                                           <button
                                             onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: user?.id ?? '' })}
-                                            disabled={rejectApp.isPending}
+                                            disabled={rejectApp.isPending || !user?.id}
                                             className="flex-1 rounded-lg bg-critical/15 py-1.5 text-xs font-medium text-critical hover:bg-critical/25 transition-colors"
                                           >
                                             Rechazar

@@ -1,11 +1,15 @@
 import { supabase } from '@/lib/supabase'
+import { asOptionalUuid } from '@/lib/utils'
 import { caseApplicationRepository } from '@/repositories/case-application-repository'
+import { caseRepository } from '@/repositories/case-repository'
+import { missionRepository } from '@/repositories/mission-repository'
 import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { caseService } from '@/services/case-service'
 import { missionService } from '@/services/mission-service'
 import { notifyUser } from '@/lib/notify'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
+import type { Mission } from '@/domain/mission.types'
 
 export const caseApplicationService = {
   async listByCase(caseId: string): Promise<CaseApplicationWithApplicant[]> {
@@ -69,57 +73,147 @@ export const caseApplicationService = {
     }
   },
 
+  /**
+   * Aprobar postulación → caso assigned → misión + assignment → notificación.
+   * Idempotente: si un intento previo dejó el caso assigned sin misión
+   * (p.ej. 400 en case_events por actor_id vacío), reintentar completa el flujo.
+   */
   async approve(applicationId: string, operatorId: string) {
+    const actorId = asOptionalUuid(operatorId)
+    if (!actorId) {
+      throw new Error('Se requiere un operador autenticado para aprobar la postulación')
+    }
+
     const app = await caseApplicationRepository.findById(applicationId)
     if (!app) throw new Error('Postulación no encontrada')
+    if (app.status === 'rejected' || app.status === 'withdrawn' || app.status === 'expired') {
+      throw new Error('Esta postulación no se puede aprobar')
+    }
 
-    await caseApplicationRepository.updateStatus(applicationId, 'approved')
+    if (app.status !== 'approved') {
+      await caseApplicationRepository.updateStatus(applicationId, 'approved')
+    }
 
     const caseData = await caseService.getById(app.caseId)
     if (!caseData) throw new Error('Caso no encontrado')
 
-    await caseService.transition(app.caseId, 'assigned', operatorId, `Postulación aprobada — voluntario asignado al caso`)
+    if (caseData.pipelineStage === 'open_for_applications') {
+      await caseService.transition(
+        app.caseId,
+        'assigned',
+        actorId,
+        'Postulación aprobada — voluntario asignado al caso',
+      )
+    } else if (
+      caseData.pipelineStage === 'assigned' ||
+      caseData.pipelineStage === 'accepted' ||
+      caseData.pipelineStage === 'in_attention'
+    ) {
+      // Recuperación: el caso ya avanzó pero pudo faltar el event / misión.
+      await ensureAssignedEvent(app.caseId, actorId)
+    } else {
+      throw new Error(
+        `El caso está en "${caseData.pipelineStage}" y no puede asignarse desde una postulación`,
+      )
+    }
 
-    // Create mission linked to case and assign the approved volunteer
-    const created = await missionService.create({
-      centerId: 'volunteer_pool',
-      title: caseData.title,
-      description: caseData.description,
-      priority: caseData.priority,
-      requiredSkills: app.skills ?? [],
-      requiredPeople: 1,
-      location: { lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
-      caseId: app.caseId,
-      createdBy: operatorId,
+    const mission = await ensureMissionForApprovedApplication({
+      caseData,
+      skills: app.skills ?? [],
+      actorId,
+      applicantProfileId: app.applicantId,
     })
-
-    // Las postulaciones guardan un profiles(id), pero mission_assignments
-    // referencia volunteers(id): sin este puente la asignación viola la FK.
-    const volunteerId = await volunteerRepository.ensureIdForUser(app.applicantId)
-    await missionService.assignVolunteer(created.mission.id, volunteerId, operatorId)
 
     await notifyUser(
       app.applicantId,
       'Tu postulación fue aceptada',
       `Fuiste asignado a "${caseData.title}". Abre la misión para comenzar.`,
       'case_approved',
-      { caseId: app.caseId, missionId: created.mission.id },
+      { caseId: app.caseId, missionId: mission.id },
     )
+
+    return { caseId: app.caseId, missionId: mission.id }
   },
 
   async reject(applicationId: string, operatorId: string) {
+    const actorId = asOptionalUuid(operatorId)
+    if (!actorId) {
+      throw new Error('Se requiere un operador autenticado para rechazar la postulación')
+    }
+
     const app = await caseApplicationRepository.findById(applicationId)
     if (!app) throw new Error('Postulación no encontrada')
 
     await caseApplicationRepository.updateStatus(applicationId, 'rejected')
 
-    await caseService.transition(app.caseId, 'open_for_applications', operatorId, 'Postulación rechazada — el caso sigue abierto a otras postulaciones')
-
-    const applicant = await getProfileName(app.applicantId)
-    if (applicant) {
-      await notifyUser(app.applicantId, 'Postulación rechazada', 'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.', 'case_rejected', { caseId: app.caseId })
-    }
+    // Sin transition: el grafo no permite open_for_applications → open_for_applications
+    // ni assigned → open_for_applications. El rechazo solo afecta la postulación.
+    await notifyUser(
+      app.applicantId,
+      'Postulación rechazada',
+      'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.',
+      'case_rejected',
+      { caseId: app.caseId, rejectedBy: actorId },
+    )
   },
+}
+
+async function ensureAssignedEvent(caseId: string, actorId: string) {
+  try {
+    const events = await caseRepository.listEvents(caseId)
+    const hasAssigned = events.some(
+      (e) => e.eventType === 'case_assigned' || (e.toStage === 'assigned' && e.eventType !== 'case_submitted'),
+    )
+    if (hasAssigned) return
+    await caseRepository.addEvent({
+      caseId,
+      eventType: 'case_assigned',
+      fromStage: 'open_for_applications',
+      toStage: 'assigned',
+      actorId,
+      comment: 'Postulación aprobada — voluntario asignado al caso',
+    })
+  } catch (err) {
+    console.warn('[CASE_APPLICATION] No se pudo registrar case_assigned en recuperación', err)
+  }
+}
+
+async function ensureMissionForApprovedApplication(input: {
+  caseData: CaseDomain
+  skills: string[]
+  actorId: string
+  applicantProfileId: string
+}): Promise<Mission> {
+  const existing = await missionRepository.findByCaseId(input.caseData.id)
+  const volunteerId = await volunteerRepository.ensureIdForUser(input.applicantProfileId)
+
+  if (existing) {
+    const assignments = await missionRepository.listAssignments(existing.id)
+    const alreadyAssigned = assignments.some((a) => a.volunteerId === volunteerId)
+    if (!alreadyAssigned) {
+      await missionService.assignVolunteer(existing.id, volunteerId, input.actorId)
+    }
+    return existing
+  }
+
+  const created = await missionService.create({
+    centerId: 'volunteer_pool',
+    title: input.caseData.title,
+    description: input.caseData.description,
+    priority: input.caseData.priority,
+    requiredSkills: input.skills,
+    requiredPeople: 1,
+    location: {
+      lat: input.caseData.location.lat,
+      lng: input.caseData.location.lng,
+      zone: input.caseData.zone,
+    },
+    caseId: input.caseData.id,
+    createdBy: input.actorId,
+  })
+
+  await missionService.assignVolunteer(created.mission.id, volunteerId, input.actorId)
+  return created.mission
 }
 
 interface NearbyVolunteer {
@@ -177,14 +271,5 @@ async function getActiveManagers() {
     return (data ?? []) as { id: string }[]
   } catch {
     return []
-  }
-}
-
-async function getProfileName(userId: string): Promise<string | null> {
-  try {
-    const { data } = await supabase.from('profiles').select('full_name').eq('id', userId).maybeSingle()
-    return data?.full_name ?? null
-  } catch {
-    return null
   }
 }

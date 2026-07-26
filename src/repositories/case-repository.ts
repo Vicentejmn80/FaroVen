@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { asOptionalUuid } from '@/lib/utils'
 import type { CaseAssignment, CaseDomain, CaseDomainEvent } from '@/domain/case-lifecycle.types'
 import type { CaseAssignmentRow, CaseEventRow, CaseRow } from '@/types/supabase'
 import { caseAssignmentRowToDomain, caseDomainToRow, caseEventRowToDomain, caseRowToDomain } from './mappers'
@@ -142,7 +143,8 @@ export class CaseRepository {
         event_type: input.eventType,
         from_stage: input.fromStage ?? null,
         to_stage: input.toStage ?? null,
-        actor_id: input.actorId ?? null,
+        // '' no es UUID: PostgREST responde 400 y corta el approve a mitad.
+        actor_id: asOptionalUuid(input.actorId) ?? null,
         comment: input.comment ?? null,
       })
       .select('*')

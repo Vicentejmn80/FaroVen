@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { asOptionalUuid } from '@/lib/utils'
 import { isMissingTableError } from '@/lib/supabase-errors'
 import type { Mission, MissionAssignment, MissionEvent, MissionStage, MissionEventType } from '@/domain/mission.types'
 import type { MissionRow, MissionAssignmentRow, MissionEventRow } from '@/types/supabase'
@@ -129,6 +130,21 @@ export class MissionRepository {
     return data ? mapMissionRow(data as MissionRow) : null
   }
 
+  async findByCaseId(caseId: string): Promise<Mission | null> {
+    const { data, error } = await supabase
+      .from('missions')
+      .select('*')
+      .eq('case_id', caseId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      if (isMissingTableError(error)) return null
+      throw error
+    }
+    return data ? mapMissionRow(data as MissionRow) : null
+  }
+
   async create(input: {
     centerId: string
     title: string
@@ -186,7 +202,7 @@ export class MissionRepository {
       .insert({
         mission_id: input.missionId,
         event_type: input.eventType,
-        actor_id: input.actorId ?? null,
+        actor_id: asOptionalUuid(input.actorId) ?? null,
         actor_name: input.actorName ?? null,
         description: input.description ?? null,
         metadata: input.metadata ?? null,

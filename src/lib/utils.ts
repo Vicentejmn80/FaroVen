@@ -5,6 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/** Vacío o basura → undefined. Evita 400 de PostgREST al insertar UUID `''`. */
+export function asOptionalUuid(value?: string | null): string | undefined {
+  if (value == null) return undefined
+  const trimmed = value.trim()
+  if (!trimmed || !UUID_RE.test(trimmed)) return undefined
+  return trimmed
+}
+
 /** "Buenos días" / "Buenas tardes" / "Buenas noches" según la hora local. */
 export function greeting(date = new Date()): string {
   const h = date.getHours()

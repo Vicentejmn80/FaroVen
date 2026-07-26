@@ -228,15 +228,15 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
                       )}
                       <div className="mt-2 flex gap-2">
                         <button
-                          onClick={() => approveApp.mutate({ applicationId: app.id, operatorId: '' })}
-                          disabled={approveApp.isPending}
+                          onClick={() => approveApp.mutate({ applicationId: app.id, operatorId: actorId ?? '' })}
+                          disabled={approveApp.isPending || !actorId}
                           className="flex-1 rounded-lg bg-operational/15 py-1.5 text-xs font-medium text-operational hover:bg-operational/25"
                         >
                           Aprobar
                         </button>
                         <button
-                          onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: '' })}
-                          disabled={rejectApp.isPending}
+                          onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: actorId ?? '' })}
+                          disabled={rejectApp.isPending || !actorId}
                           className="flex-1 rounded-lg bg-critical/15 py-1.5 text-xs font-medium text-critical hover:bg-critical/25"
                         >
                           Rechazar
@@ -318,15 +318,15 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
                   )}
                   <div className="mt-2 flex gap-2">
                     <button
-                      onClick={() => approveApp.mutate({ applicationId: app.id, operatorId: '' })}
-                      disabled={approveApp.isPending}
+                      onClick={() => approveApp.mutate({ applicationId: app.id, operatorId: actorId ?? '' })}
+                      disabled={approveApp.isPending || !actorId}
                       className="flex-1 rounded-lg bg-operational/15 py-1.5 text-xs font-medium text-operational hover:bg-operational/25"
                     >
                       Aprobar
                     </button>
                     <button
-                      onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: '' })}
-                      disabled={rejectApp.isPending}
+                      onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: actorId ?? '' })}
+                      disabled={rejectApp.isPending || !actorId}
                       className="flex-1 rounded-lg bg-critical/15 py-1.5 text-xs font-medium text-critical hover:bg-critical/25"
                     >
                       Rechazar
