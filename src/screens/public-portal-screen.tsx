@@ -27,11 +27,11 @@ export function PublicPortalScreen({
   const handleReportDone = () => setTab('home')
 
   return (
-    <div className="faro-canvas flex min-h-screen w-full bg-[#0B1626] text-ink lg:flex">
+    <div className="faro-canvas flex h-dvh max-h-dvh w-full overflow-hidden bg-[#0B1626] text-ink lg:flex">
       <PublicPortalDesktopNav active={tab} onChange={setTab} />
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col pb-28 lg:pb-10">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/[0.06] bg-[#0B1626]/95 px-4 py-3 pt-safe backdrop-blur-sm lg:px-8">
+      <div className="relative mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden">
+        <header className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-white/[0.06] bg-[#0B1626]/95 px-4 py-3 pt-safe backdrop-blur-sm lg:px-8">
           <FaroIcon size={40} title="FARO" />
           <div className="min-w-0 flex-1">
             <p className="text-[17px] font-semibold tracking-tight text-ink">FARO</p>
@@ -48,37 +48,43 @@ export function PublicPortalScreen({
           )}
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {tab === 'home' && (
-            <CitizenHome onNavigate={setTab} onJoinNetwork={onJoinNetwork} />
+            <div className="faro-scroll">
+              <CitizenHome onNavigate={setTab} onJoinNetwork={onJoinNetwork} />
+            </div>
           )}
 
           {tab === 'map' && (
-            <CitizenMapView
-              onReport={() => setTab('report')}
-              onViewResources={() => setTab('resources')}
-            />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <CitizenMapView
+                onReport={() => setTab('report')}
+                onViewResources={() => setTab('resources')}
+              />
+            </div>
           )}
 
           {tab === 'resources' && (
-            <CitizenResources onJoinNetwork={onJoinNetwork} />
+            <div className="faro-scroll">
+              <CitizenResources onJoinNetwork={onJoinNetwork} />
+            </div>
           )}
 
           {tab === 'report' && (
-            <div className="flex-1 overflow-y-auto">
+            <div className="faro-scroll">
               <CitizenReport onDone={handleReportDone} />
             </div>
           )}
 
           {tab === 'guide' && (
-            <div className="flex-1 overflow-y-auto">
+            <div className="faro-scroll">
               <CitizenGuide />
             </div>
           )}
         </main>
-      </div>
 
-      <PublicPortalNav active={tab} onChange={setTab} />
+        <PublicPortalNav active={tab} onChange={setTab} />
+      </div>
     </div>
   )
 }

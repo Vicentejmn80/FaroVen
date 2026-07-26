@@ -113,6 +113,6 @@ export class ScreenErrorBoundary extends Component<Props, State> {
         </div>
       )
     }
-    return this.props.children
+    return <div className="flex h-full min-h-0 flex-col">{this.props.children}</div>
   }
 }

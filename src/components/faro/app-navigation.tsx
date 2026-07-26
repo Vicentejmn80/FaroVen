@@ -142,7 +142,7 @@ interface NavigationProps {
   mobileTabs?: NavTab[]
 }
 
-/** Mobile — barra inferior pegada al borde, safe-area integrada */
+/** Mobile — barra inferior en el flujo del layout (evita saltos de 100vh / URL bar) */
 export function BottomNavigation({
   active,
   onChange,
@@ -157,16 +157,17 @@ export function BottomNavigation({
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 lg:hidden"
+      className="relative z-50 w-full shrink-0 lg:hidden"
       aria-label="Navegación principal"
     >
       <div className="border-t border-white/[0.1] bg-[#060b16]/98 backdrop-blur-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]">
-        <div className="flex items-end justify-between px-1 pt-1 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
-          <div className="flex flex-1 justify-around">
+        <div className="flex w-full items-end justify-between gap-0.5 overflow-x-auto no-scrollbar px-1 pt-1 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+          <div className="flex min-w-0 flex-1 justify-around">
             {left.map((t) => (
               <NavButton
                 key={t.id}
                 {...t}
+                label={shortMobileLabel(t)}
                 active={activeView === t.id}
                 onClick={() => onChange(t.id)}
                 compact
@@ -184,7 +185,7 @@ export function BottomNavigation({
             aria-hidden={!onCreate}
             tabIndex={onCreate ? 0 : -1}
             className={cn(
-              'relative mx-1.5 mb-0.5 flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full',
+              'relative mx-1 mb-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-full sm:h-[52px] sm:w-[52px]',
               'bg-gradient-to-b from-[#3d9bff] to-[#0a84ff] text-white',
               'shadow-[0_4px_20px_rgba(10,132,255,0.45)] ring-2 ring-[#060b16]',
               !onCreate && 'pointer-events-none invisible',
@@ -193,11 +194,12 @@ export function BottomNavigation({
             <Plus className="h-6 w-6" strokeWidth={2.25} />
           </motion.button>
 
-          <div className="flex flex-1 justify-around">
+          <div className="flex min-w-0 flex-1 justify-around">
             {right.map((t) => (
               <NavButton
                 key={t.id}
                 {...t}
+                label={shortMobileLabel(t)}
                 active={activeView === t.id}
                 onClick={() => onChange(t.id)}
                 compact
@@ -208,6 +210,23 @@ export function BottomNavigation({
       </div>
     </nav>
   )
+}
+
+function shortMobileLabel(tab: NavTab): string {
+  switch (tab.id) {
+    case 'needs':
+      return 'Ayuda'
+    case 'collaborations':
+      return 'Mías'
+    case 'activity':
+      return 'Guía'
+    case 'case-manager':
+      return 'Gestor'
+    case 'reports':
+      return 'Reportar'
+    default:
+      return tab.label
+  }
 }
 
 /** Desktop — rail lateral estático */
@@ -297,10 +316,11 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'relative flex h-[52px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40',
+        'relative flex h-[52px] min-w-0 max-w-[4.75rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 sm:max-w-none sm:min-w-[56px] sm:px-1',
         active && 'bg-white/[0.08]',
       )}
       aria-current={active ? 'page' : undefined}
+      title={label}
     >
       <span className="relative">
         <Icon
@@ -313,7 +333,12 @@ function NavButton({
           </span>
         )}
       </span>
-      <span className={cn('text-[10px] font-medium transition-colors', active ? 'text-info' : 'text-ink-muted')}>
+      <span
+        className={cn(
+          'w-full truncate text-center text-[10px] font-medium leading-tight transition-colors',
+          active ? 'text-info' : 'text-ink-muted',
+        )}
+      >
         {label}
       </span>
     </button>

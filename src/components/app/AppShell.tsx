@@ -465,10 +465,10 @@ export function AppShell() {
   const openRoleRequest = () => openFlow('role-request')
 
   return (
-    <div className="faro-canvas min-h-screen w-full bg-[#050A14] lg:p-5">
+    <div className="faro-canvas h-dvh max-h-dvh w-full overflow-hidden bg-[#050A14] lg:p-5">
       <div
         id="faro-shell"
-        className="faro-shell relative mx-auto flex h-screen w-full max-w-[1480px] flex-col overflow-hidden bg-base-900 lg:h-[calc(100vh-2.5rem)] lg:flex-row lg:rounded-2xl lg:border lg:border-white/[0.06] lg:shadow-2xl lg:shadow-black/40"
+        className="faro-shell relative mx-auto flex h-full max-h-full w-full max-w-[1480px] flex-col overflow-hidden bg-base-900 lg:h-[calc(100dvh-2.5rem)] lg:max-h-[calc(100dvh-2.5rem)] lg:flex-row lg:rounded-2xl lg:border lg:border-white/[0.06] lg:shadow-2xl lg:shadow-black/40"
       >
         <div id="faro-portals" aria-hidden="false" />
 
@@ -505,7 +505,7 @@ export function AppShell() {
             </div>
           )}
 
-          <main className="relative min-h-0 flex-1 overflow-hidden">
+          <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={viewKey}
@@ -513,7 +513,7 @@ export function AppShell() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
-                className="h-full min-h-0"
+                className="flex h-full min-h-0 flex-col"
               >
                 <ScreenErrorBoundary screenName="la pantalla" resetKey={viewKey}>
                   <Suspense fallback={<ScreenLoading />}>
@@ -586,44 +586,44 @@ export function AppShell() {
             </Suspense>
           )}
           {flow === 'auth' && (
-            <div key="auth" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+            <div key="auth" className="absolute inset-0 z-[60] overflow-y-auto overscroll-contain bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <AuthScreen onClose={closeFlow} />
               </Suspense>
             </div>
           )}
           {flow === 'coordinator-request' && (
-            <div key="coordinator-request" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+            <div key="coordinator-request" className="absolute inset-0 z-[60] overflow-y-auto overscroll-contain bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <CoordinatorRequestScreen onNeedAuth={openAuth} onClose={closeFlow} />
               </Suspense>
             </div>
           )}
           {flow === 'role-request' && (
-            <div key="role-request" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+            <div key="role-request" className="absolute inset-0 z-[60] overflow-y-auto overscroll-contain bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
-                <div className="mx-auto max-w-lg px-4 py-8">
+                <div className="mx-auto max-w-lg px-4 py-8 pb-safe">
                   <RoleRequestForm onDone={closeFlow} />
                 </div>
               </Suspense>
             </div>
           )}
           {flow === 'legal-terms' && (
-            <div key="legal-terms" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+            <div key="legal-terms" className="absolute inset-0 z-[60] overflow-y-auto overscroll-contain bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <LegalTermsScreen onBack={closeFlow} />
               </Suspense>
             </div>
           )}
           {flow === 'legal-privacy' && (
-            <div key="legal-privacy" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+            <div key="legal-privacy" className="absolute inset-0 z-[60] overflow-y-auto overscroll-contain bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <LegalPrivacyScreen onBack={closeFlow} />
               </Suspense>
             </div>
           )}
           {flow === 'legal-notice' && (
-            <div key="legal-notice" className="absolute inset-0 z-[60] overflow-y-auto bg-base-900">
+            <div key="legal-notice" className="absolute inset-0 z-[60] overflow-y-auto overscroll-contain bg-base-900">
               <Suspense fallback={<ScreenLoading />}>
                 <LegalNoticeScreen onBack={closeFlow} />
               </Suspense>

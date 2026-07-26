@@ -15,6 +15,9 @@
   body,
   #root {
     height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
   }
 
   body {
@@ -27,12 +30,14 @@
     text-rendering: optimizeLegibility;
     overscroll-behavior-y: none;
     overscroll-behavior-x: none;
+    /* iOS Safari: evita el salto de URL bar con 100vh */
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 
-  @supports (-webkit-touch-callout: none) {
-    body {
-      min-height: -webkit-fill-available;
-    }
+  #root {
+    display: flex;
+    flex-direction: column;
   }
 
   /* Ambient wash inside mobile viewport */
@@ -91,8 +96,20 @@
   .pb-safe {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
+  /*
+   * Bottom nav is in-flow (not fixed) on mobile, so content only needs
+   * modest padding. Keep a larger fallback when overlays/sheets still float.
+   */
   .pb-nav {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4.75rem);
+    padding-bottom: 1.25rem;
+  }
+  @media (min-width: 1024px) {
+    .pb-nav {
+      padding-bottom: 2rem;
+    }
+  }
+  .pb-nav-overlay {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
   }
   .pt-safe {
     padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
@@ -104,6 +121,15 @@
   .tap-target {
     min-width: 44px;
     min-height: 44px;
+  }
+  /* Mobile scroll region inside the shell */
+  .faro-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 }
 

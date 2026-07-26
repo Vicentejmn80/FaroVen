@@ -321,16 +321,16 @@ export function CaseManagerWorkspace() {
   ]
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between px-4 pt-safe pb-3 lg:px-8">
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex shrink-0 items-center justify-between px-4 pt-safe pb-3 lg:px-8">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO</p>
           <h1 className="text-lg font-semibold text-ink">Centro de Operaciones</h1>
         </div>
       </header>
 
-      <div className="px-4 pb-2">
-        <div className="flex gap-2 overflow-x-auto">
+      <div className="shrink-0 px-4 pb-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {tabs.map((t) => (
             <button key={t.id} onClick={() => { setTab(t.id); setSelectedReportId(null) }}
               className={cn('shrink-0 relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors', tab === t.id ? 'border-info/50 bg-info/15 text-ink' : 'border border-white/10 text-ink-subtle hover:bg-white/[0.04]')}
@@ -344,7 +344,7 @@ export function CaseManagerWorkspace() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'inbox' && (
           <div className="flex h-full">
             <div className={cn('flex flex-col overflow-y-auto', selectedReportId ? 'hidden lg:flex lg:w-72 xl:w-80' : 'flex-1')}>

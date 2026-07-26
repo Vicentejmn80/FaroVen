@@ -37,7 +37,7 @@ export function EmergencyHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 flex items-center justify-between px-5 pt-safe pb-3 lg:px-8',
+        'sticky top-0 z-40 flex shrink-0 items-center justify-between px-4 pt-safe pb-3 sm:px-5 lg:px-8',
         className,
       )}
     >

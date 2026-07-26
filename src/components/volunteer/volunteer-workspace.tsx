@@ -602,16 +602,16 @@ export function VolunteerWorkspace({
   })
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between px-4 pt-safe pb-3 lg:px-8">
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex shrink-0 items-center justify-between px-4 pt-safe pb-3 lg:px-8">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO</p>
           <h1 className="text-lg font-semibold text-ink">Voluntarios</h1>
         </div>
       </header>
 
-      <div className="px-4 pb-2">
-        <div className="flex gap-2 overflow-x-auto">
+      <div className="shrink-0 px-4 pb-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -629,7 +629,7 @@ export function VolunteerWorkspace({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-32 lg:pb-8">
+      <div className="faro-scroll px-4 pb-6 lg:pb-8">
         {tab === 'available' && (
           <div className="space-y-4 pt-2">
             <h2 className="text-sm font-semibold text-ink">Necesidades disponibles</h2>

@@ -110,8 +110,8 @@ export function CoordinatorWorkspace({
   if (!assignment || !site || !dashboard) return null
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between gap-3 px-4 pt-safe pb-3 lg:px-8">
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-safe pb-3 lg:px-8">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO</p>
           <h1 className="truncate text-lg font-semibold text-ink">{dashboard.siteName}</h1>
@@ -125,7 +125,7 @@ export function CoordinatorWorkspace({
         </div>
       </header>
 
-      <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-32 lg:px-8 lg:pb-8">
+      <div className="faro-scroll no-scrollbar px-4 pb-6 lg:px-8 lg:pb-8">
         <div className="space-y-4 pt-2">
           <ContextualHelpCard moduleId="ops" />
 

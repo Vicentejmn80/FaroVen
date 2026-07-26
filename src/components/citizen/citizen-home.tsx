@@ -18,7 +18,7 @@ const ACTIONS = [
 
 export function CitizenHome({ onNavigate, onJoinNetwork }: CitizenHomeProps) {
   return (
-    <div className="flex min-h-full flex-col px-4 pt-12 lg:px-8 lg:pt-20">
+    <div className="flex min-h-full flex-col px-4 pt-8 pb-6 lg:px-8 lg:pt-20 lg:pb-8">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

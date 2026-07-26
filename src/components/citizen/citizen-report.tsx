@@ -210,7 +210,7 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
   }
 
   return (
-    <div className="space-y-5 px-4 pt-4 lg:px-8 lg:pt-6">
+    <div className="space-y-5 px-4 pt-4 pb-6 lg:px-8 lg:pt-6 lg:pb-8">
       {/* Step indicator */}
       <div className="flex gap-1.5">
         {[1, 2, 3, 4, 5].map((s) => {

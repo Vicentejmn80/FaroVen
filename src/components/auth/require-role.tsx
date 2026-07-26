@@ -17,7 +17,7 @@ export function RequireRole({ allowed, children, fallback, onRequestAuth }: Requ
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-sm text-ink-muted">
+      <div className="flex h-full min-h-0 items-center justify-center px-6 text-sm text-ink-muted">
         Verificando permisos…
       </div>
     )
@@ -27,7 +27,7 @@ export function RequireRole({ allowed, children, fallback, onRequestAuth }: Requ
     if (fallback) return <>{fallback}</>
 
     return (
-      <div className="px-4 pt-6">
+      <div className="faro-scroll px-4 pt-6 pb-6">
         <GlassCard className="space-y-3 text-center">
           <ShieldAlert className="mx-auto h-8 w-8 text-warning" />
           <p className="text-[15px] font-medium text-ink">Acceso restringido</p>
@@ -46,5 +46,5 @@ export function RequireRole({ allowed, children, fallback, onRequestAuth }: Requ
     )
   }
 
-  return <>{children}</>
+  return <div className="flex h-full min-h-0 flex-col">{children}</div>
 }
