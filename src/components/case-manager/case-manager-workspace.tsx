@@ -280,6 +280,7 @@ export function CaseManagerWorkspace() {
       'reports',
       'cases',
       'case_events',
+      'case_applications',
       'missions',
       'mission_applications',
       'mission_assignments',
@@ -290,6 +291,8 @@ export function CaseManagerWorkspace() {
     invalidateKeys: [
       FARO_QUERY_KEYS.reports,
       FARO_QUERY_KEYS.cases,
+      FARO_QUERY_KEYS.caseEvents,
+      FARO_QUERY_KEYS.caseApplications,
       FARO_QUERY_KEYS.missions,
       FARO_QUERY_KEYS.missionApplications,
       FARO_QUERY_KEYS.missionAssignments,
@@ -478,8 +481,8 @@ export function CaseManagerWorkspace() {
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
 
-                      {/* Actions for cases not yet open to applications */}
-                      {c.pipelineStage !== 'open_for_applications' && c.pipelineStage !== 'assigned' && c.pipelineStage !== 'archived' && (
+                      {/* Actions for cases that can open for applications */}
+                      {(c.pipelineStage === 'pending_review' || c.pipelineStage === 'validating' || c.pipelineStage === 'awaiting_info') && (
                       <div className="flex gap-2">
                         <button
                           onClick={() => setEsperandoCasoId(c.id)}
@@ -720,23 +723,32 @@ export function CaseManagerWorkspace() {
         )}
       </div>
 
-      {esperandoCasoId && (
-        <EsperarPostulanteModal
-          caseData={allCases?.find((c) => c.id === esperandoCasoId) ?? ({} as any)}
-          open={!!esperandoCasoId}
-          onClose={() => setEsperandoCasoId(null)}
-          onTimeUp={() => setEsperandoCasoId(null)}
-        />
-      )}
+      {esperandoCasoId && (() => {
+        const found = allCases?.find((c) => c.id === esperandoCasoId)
+        if (!found) return null
+        return (
+          <EsperarPostulanteModal
+            caseData={found}
+            open={true}
+            onClose={() => setEsperandoCasoId(null)}
+            onTimeUp={() => setEsperandoCasoId(null)}
+            actorId={user?.id}
+          />
+        )
+      })()}
 
-      {asignandoCasoId && (
-        <AsignarCentroModal
-          caseData={allCases?.find((c) => c.id === asignandoCasoId) ?? ({} as any)}
-          open={!!asignandoCasoId}
-          onClose={() => setAsignandoCasoId(null)}
-          actorId={user?.id}
-        />
-      )}
+      {asignandoCasoId && (() => {
+        const found = allCases?.find((c) => c.id === asignandoCasoId)
+        if (!found) return null
+        return (
+          <AsignarCentroModal
+            caseData={found}
+            open={true}
+            onClose={() => setAsignandoCasoId(null)}
+            actorId={user?.id}
+          />
+        )
+      })()}
     </div>
   )
 }

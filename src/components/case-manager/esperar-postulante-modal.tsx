@@ -16,6 +16,7 @@ interface EsperarPostulanteModalProps {
   open: boolean
   onClose: () => void
   onTimeUp: () => void
+  actorId?: string
 }
 
 const TIME_OPTIONS = [
@@ -32,10 +33,11 @@ function formatTime(seconds: number): string {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
-export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp }: EsperarPostulanteModalProps) {
+export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, actorId }: EsperarPostulanteModalProps) {
   const [step, setStep] = useState<'select-time' | 'waiting' | 'results'>('select-time')
   const [selectedTime, setSelectedTime] = useState<number>(300)
   const [timeLeft, setTimeLeft] = useState<number>(300)
+  const [apiError, setApiError] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { data: applications = [] } = useCaseApplications(open ? caseData.id : undefined)
   const approveApp = useApproveCaseApplication()
@@ -50,6 +52,8 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp }: Es
   useEffect(() => {
     if (!open) {
       setStep('select-time')
+      startedRef.current = false
+      setApiError(null)
       if (timerRef.current) clearInterval(timerRef.current)
       return
     }
@@ -58,18 +62,24 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp }: Es
   const startWaiting = () => {
     if (startedRef.current) return
     startedRef.current = true
+    setApiError(null)
 
     setTimeLeft(selectedTime)
     setStep('waiting')
 
     // Transition case to open_for_applications + notify volunteers
     openForApps.mutate(
-      { caseId: caseData.id, comment: 'Caso abierto a postulaciones voluntarias' },
+      { caseId: caseData.id, actorId, comment: 'Caso abierto a postulaciones voluntarias' },
       {
         onSuccess: () => {
           caseApplicationService.notifyVolunteersAboutCase(caseData)
           qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
           qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+        },
+        onError: (err) => {
+          setApiError(`Error al abrir el caso: ${err.message}`)
+          startedRef.current = false
+          setStep('select-time')
         },
       },
     )
@@ -187,6 +197,9 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp }: Es
                     ? 'Esperando postulantes...'
                     : `${pendingApps.length} postulante${pendingApps.length === 1 ? '' : 's'} recibido${pendingApps.length === 1 ? '' : 's'}`}
                 </p>
+                {apiError && (
+                  <p className="mt-2 text-xs text-critical bg-critical/10 rounded-lg px-3 py-2">{apiError}</p>
+                )}
               </div>
 
               {/* Live applicants */}
