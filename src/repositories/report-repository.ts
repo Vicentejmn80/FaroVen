@@ -139,17 +139,12 @@ export class ReportRepository {
     id: string
     caseId: string
   }): Promise<Report> {
-    const { data, error } = await supabase
-      .from('reports')
-      .update({
-        status: 'converted',
-        review_notes: `Convertido en caso operativo ${input.caseId}`,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq('id', input.id)
-      .select('*')
-      .single()
-
+    // RPC SECURITY DEFINER: el gestor no tenía policy UPDATE para status=converted
+    // y el PATCH + select devolvía 406, dejando el reporte en bandeja.
+    const { data, error } = await supabase.rpc('mark_report_converted', {
+      p_report_id: input.id,
+      p_case_id: input.caseId,
+    })
     if (error) throw error
     return reportRowToReport(data as ReportRow)
   }

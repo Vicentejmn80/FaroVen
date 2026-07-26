@@ -25,6 +25,7 @@ export interface CreateCaseInput {
   affectedCount?: number
   reporterInfo?: { name?: string; phone?: string; email?: string; relationship?: string }
   category?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface CreateEventInput {
@@ -113,6 +114,7 @@ export class CaseRepository {
       reporter_email: input.reporterInfo?.email ?? null,
       reporter_relationship: input.reporterInfo?.relationship ?? null,
       category: input.category ?? null,
+      metadata: input.metadata ?? {},
     }
 
     const { data, error } = await supabase.from('cases').insert(row).select('*').single()

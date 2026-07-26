@@ -137,8 +137,14 @@ export const caseManagerService = {
 
   async convertReportToCase(data: ConvertReportWizardData, actorId?: string) {
     const report = data.reportId ? await reportRepository.findWithAnalysis(data.reportId) : null
-    const lat = report?.location.coordinates.lat ?? 0
-    const lng = report?.location.coordinates.lng ?? 0
+    if (!report) throw new Error('Reporte no encontrado')
+
+    if (report.status === 'converted' || report.status === 'discarded') {
+      throw new Error('Este reporte ya fue procesado y no puede convertirse de nuevo.')
+    }
+
+    const lat = report.location.coordinates.lat ?? 0
+    const lng = report.location.coordinates.lng ?? 0
     const hasValidCoords =
       Number.isFinite(lat) &&
       Number.isFinite(lng) &&
@@ -152,6 +158,25 @@ export const caseManagerService = {
       )
     }
 
+    // Evitar duplicados: si ya hay un caso abierto ligado a este reporte, reutilizarlo
+    const existingCaseId = await findOpenCaseForReport(data.reportId)
+    if (existingCaseId) {
+      await reportRepository.markConverted({ id: data.reportId, caseId: existingCaseId })
+      const existing = await caseService.getById(existingCaseId)
+      if (!existing) throw new Error('Caso existente no encontrado')
+      return {
+        case: existing,
+        event: {
+          id: crypto.randomUUID(),
+          caseId: existing.id,
+          eventType: 'case_review_started' as const,
+          toStage: existing.pipelineStage,
+          actorId,
+          createdAt: new Date(),
+        },
+      }
+    }
+
     const result = await caseService.create({
       title: data.title,
       description: data.description,
@@ -162,7 +187,7 @@ export const caseManagerService = {
       location: {
         lat,
         lng,
-        address: report?.location.address,
+        address: report.location.address,
       },
       reporterInfo: {
         name: data.reporterName ?? undefined,
@@ -170,6 +195,7 @@ export const caseManagerService = {
         email: data.reporterEmail ?? undefined,
       },
       actorId,
+      reportId: data.reportId,
     })
 
     const transitioned = await caseService.transition(
@@ -179,13 +205,14 @@ export const caseManagerService = {
       'Caso operativo creado desde reporte ciudadano',
     )
 
+    // Marcar convertido ANTES de crear la necesidad: si falla, no debe quedar
+    // el reporte en bandeja con casos huérfanos (era el bug del 406).
     await reportRepository.markConverted({
       id: data.reportId,
       caseId: transitioned.case.id,
     })
 
-    // Necesidad borrador (convocatoria cerrada): el reporte ya no vive en bandeja;
-    // el gestor abre voluntarios después con "Solicitar voluntarios".
+    // Necesidad borrador (convocatoria cerrada). El gestor abre voluntarios después.
     await publicNeedRepository.createFromCase({
       caseId: transitioned.case.id,
       title: data.title,
@@ -196,7 +223,7 @@ export const caseManagerService = {
       location: {
         lat,
         lng,
-        address: report?.location.address,
+        address: report.location.address,
         zone: data.zone,
       },
       actorId,
@@ -262,6 +289,22 @@ export const caseManagerService = {
 
     return { case: opened, need }
   },
+}
+
+async function findOpenCaseForReport(reportId: string): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from('cases')
+      .select('id')
+      .contains('metadata', { report_id: reportId })
+      .not('pipeline_stage', 'in', '("archived","resolved")')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return (data as { id: string } | null)?.id ?? null
+  } catch {
+    return null
+  }
 }
 
 function descriptionSimilarity(a: string, b: string): number {

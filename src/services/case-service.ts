@@ -12,6 +12,8 @@ export interface CreateCaseParams {
   reporterInfo?: { name?: string; phone?: string; email?: string; relationship?: string }
   category?: string
   actorId?: string
+  /** Origen del caso (evita duplicar al reintentar convertir el mismo reporte). */
+  reportId?: string
 }
 
 export const caseService = {
@@ -26,6 +28,7 @@ export const caseService = {
       affectedCount: params.affectedCount,
       reporterInfo: params.reporterInfo,
       category: params.category,
+      metadata: params.reportId ? { report_id: params.reportId } : undefined,
     })
 
     const domain: CaseDomain = {

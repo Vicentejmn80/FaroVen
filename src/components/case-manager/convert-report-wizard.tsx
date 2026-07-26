@@ -267,7 +267,7 @@ export function ConvertReportWizard({ reportId, onDone, onCancel }: ConvertRepor
               onClick={handleConvert}
               disabled={converting || !hasGps}
             >
-              {converting ? 'Creando...' : 'Crear caso y publicar necesidad'}
+              {converting ? 'Creando...' : 'Crear caso operativo'}
             </EmergencyButton>
           </div>
         </GlassCard>

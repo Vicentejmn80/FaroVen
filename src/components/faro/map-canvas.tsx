@@ -115,6 +115,9 @@ function FitToSitesOnce({ sites }: { sites: Site[] }) {
     if (!bounds.isValid()) return
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 13 })
     fittedRef.current = true
+    return () => {
+      try { map.stop() } catch { /* mapa desmontado */ }
+    }
   }, [map, sites])
 
   return null
@@ -133,6 +136,10 @@ function FocusActiveSite({ sites, activeId }: { sites: Site[]; activeId?: string
       duration: 0.24,
       context: { entityId: site.id, entityType: 'site', title: site.name, action: 'FocusActiveSite' },
     })
+    return () => {
+      // Evita crash Leaflet _leaflet_pos al desmontar durante zoom/flyTo
+      try { map.stop() } catch { /* mapa desmontado */ }
+    }
   }, [activeId, map, sites])
 
   return null
