@@ -246,7 +246,7 @@ export interface MissionRow {
   required_skills: string[]
   required_people: number
   assigned_people: number
-  status: 'created' | 'matching' | 'assigned' | 'accepted' | 'en_route' | 'on_site' | 'in_progress' | 'completed' | 'verified' | 'archived'
+  status: 'created' | 'matching' | 'assigned' | 'accepted' | 'en_route' | 'on_site' | 'in_progress' | 'completed' | 'verified' | 'cancelled' | 'archived'
   /** Columnas reales en Postgres: lat / lng (no latitude/longitude). */
   lat: number
   lng: number

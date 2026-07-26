@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION delete_report(p_report_id UUID)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 AS $$
 BEGIN
   IF NOT EXISTS (
@@ -18,7 +18,10 @@ BEGIN
 END;
 $$;
 
--- RPC: get_volunteers_near_location — obtiene voluntarios activos cerca de una ubicación
+-- RPC: get_volunteers_near_location — voluntarios activos cerca de una ubicación.
+-- Las columnas reales de `volunteers` son lat/lng y availability (no
+-- latitude/longitude/status), y acos() se acota para evitar errores de dominio
+-- por redondeo en distancias muy cortas.
 CREATE OR REPLACE FUNCTION get_volunteers_near_location(
   p_lat DOUBLE PRECISION,
   p_lng DOUBLE PRECISION,
@@ -32,7 +35,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 AS $$
 BEGIN
   RETURN QUERY
@@ -42,20 +45,24 @@ BEGIN
     v.phone,
     (
       6371 * acos(
-        cos(radians(p_lat)) * cos(radians(v.latitude)) *
-        cos(radians(v.longitude) - radians(p_lng)) +
-        sin(radians(p_lat)) * sin(radians(v.latitude))
+        LEAST(1.0, GREATEST(-1.0,
+          cos(radians(p_lat)) * cos(radians(v.lat)) *
+          cos(radians(v.lng) - radians(p_lng)) +
+          sin(radians(p_lat)) * sin(radians(v.lat))
+        ))
       )
     )::DOUBLE PRECISION AS distance_km
   FROM volunteers v
-  WHERE v.latitude IS NOT NULL
-    AND v.longitude IS NOT NULL
-    AND v.status = 'active'
+  WHERE v.lat IS NOT NULL
+    AND v.lng IS NOT NULL
+    AND v.availability IN ('available', 'busy', 'on_mission')
     AND (
       6371 * acos(
-        cos(radians(p_lat)) * cos(radians(v.latitude)) *
-        cos(radians(v.longitude) - radians(p_lng)) +
-        sin(radians(p_lat)) * sin(radians(v.latitude))
+        LEAST(1.0, GREATEST(-1.0,
+          cos(radians(p_lat)) * cos(radians(v.lat)) *
+          cos(radians(v.lng) - radians(p_lng)) +
+          sin(radians(p_lat)) * sin(radians(v.lat))
+        ))
       )
     ) <= p_radius_km
   ORDER BY distance_km ASC;

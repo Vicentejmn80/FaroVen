@@ -140,9 +140,10 @@ describe('isValidMissionTransition', () => {
 })
 
 describe('getValidMissionTargets', () => {
-  it('created tiene 2 targets', () => {
-    expect(getValidMissionTargets(S.CREATED)).toHaveLength(2)
+  it('created tiene 3 targets (matching, assigned, archived)', () => {
+    expect(getValidMissionTargets(S.CREATED)).toHaveLength(3)
     expect(getValidMissionTargets(S.CREATED)).toContain(S.MATCHING)
+    expect(getValidMissionTargets(S.CREATED)).toContain(S.ASSIGNED)
     expect(getValidMissionTargets(S.CREATED)).toContain(S.ARCHIVED)
   })
 

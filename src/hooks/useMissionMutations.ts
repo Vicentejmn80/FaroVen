@@ -2,8 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FARO_QUERY_KEYS } from './query-keys'
 import { missionService } from '@/services/mission-service'
 import { matchingService } from '@/services/matching-service'
-import { notifyUser } from '@/lib/notify'
-import { notifyVolunteer } from '@/services/mission-notification-service'
 import type { MissionStage } from '@/domain/mission.types'
 
 function invalidateMissionData(qc: ReturnType<typeof useQueryClient>, missionId?: string) {
@@ -76,15 +74,8 @@ export function useAssignVolunteer() {
       volunteerId: string
       actorId?: string
     }) => missionService.assignVolunteer(missionId, volunteerId, actorId),
-    onSuccess: (_, { missionId, volunteerId }) => {
+    onSuccess: (_, { missionId }) => {
       invalidateMissionData(qc, missionId)
-      notifyVolunteer({
-        volunteerId,
-        volunteerName: '',
-        missionId,
-        missionTitle: '',
-        event: 'volunteer_assigned',
-      })
     },
   })
 }
@@ -104,12 +95,9 @@ export function useRespondMission() {
       action === 'accept'
         ? missionService.acceptAssignment(assignmentId, volunteerId)
         : missionService.rejectAssignment(assignmentId, volunteerId),
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
-      if (variables.action === 'accept') {
-        notifyUser(variables.volunteerId, 'Misión aceptada', 'Has aceptado la misión. Dirígete al punto de encuentro.')
-      }
     },
   })
 }
@@ -163,12 +151,18 @@ export function useVerifyAssignment() {
   return useMutation({
     mutationFn: ({
       assignmentId,
+      verifiedBy,
     }: {
       assignmentId: string
-    }) => missionService.verifyAssignment(assignmentId),
+      /** Usuario gestor que valida la evidencia. */
+      verifiedBy: string
+    }) => missionService.verifyAssignment(assignmentId, verifiedBy),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionEvents] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.successCases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
     },
   })
 }

@@ -332,6 +332,105 @@ export const APPLICATION_STATUS_LABELS: Record<string, string> = {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Mission Execution Engine (ÉPICA 10)                                */
+/* ------------------------------------------------------------------ */
+
+/** Etapa de ejecución tal como la ve el gestor y el voluntario. */
+export const MISSION_EXECUTION_LABELS: Record<string, string> = {
+  assigned: 'Asignada',
+  accepted: 'Aceptada',
+  preparing: 'Preparándose',
+  en_route: 'En camino',
+  on_site: 'Llegó al lugar',
+  in_progress: 'Ayuda en proceso',
+  completed: 'Esperando validación',
+  verified: 'Finalizada',
+  archived: 'Archivada',
+  rejected: 'Rechazada',
+  cancelled: 'Cancelada',
+}
+
+/** Texto explicativo bajo cada etapa. */
+export const MISSION_EXECUTION_HINTS: Record<string, string> = {
+  assigned: 'El voluntario aún no confirma la misión',
+  accepted: 'El voluntario confirmó y va a movilizarse',
+  preparing: 'El voluntario está alistando materiales',
+  en_route: 'El voluntario se dirige al punto de ayuda',
+  on_site: 'El voluntario llegó al punto de ayuda',
+  in_progress: 'La ayuda se está entregando en este momento',
+  completed: 'El gestor debe revisar la evidencia',
+  verified: 'Ayuda validada por el gestor',
+  archived: 'Misión cerrada y archivada',
+  rejected: 'El voluntario no pudo tomar la misión',
+  cancelled: 'La misión fue cancelada',
+}
+
+/** Botón principal del voluntario en cada etapa. */
+export const MISSION_EXECUTION_ACTION_LABELS: Record<string, string> = {
+  assigned: 'Aceptar misión',
+  accepted: 'Iniciar misión',
+  preparing: 'Iniciar misión',
+  en_route: 'He llegado',
+  on_site: 'Iniciar ayuda',
+  in_progress: 'Finalizar ayuda',
+}
+
+/** Eventos del timeline operativo, en lenguaje natural. */
+export const MISSION_EVENT_LABELS: Record<string, string> = {
+  mission_created: 'Misión creada',
+  application_submitted: 'Nueva postulación recibida',
+  application_approved: 'Postulación aprobada',
+  application_rejected: 'Postulación rechazada',
+  matching_completed: 'Búsqueda de voluntarios completada',
+  volunteer_assigned: 'Voluntario asignado',
+  volunteer_accepted: 'El voluntario aceptó la misión',
+  volunteer_preparing: 'El voluntario se está preparando',
+  volunteer_rejected: 'El voluntario rechazó la misión',
+  volunteer_en_route: 'El voluntario inició la misión',
+  volunteer_on_site: 'El voluntario llegó al lugar',
+  mission_in_progress: 'La ayuda comenzó',
+  evidence_submitted: 'Evidencia entregada',
+  mission_completed: 'Ayuda finalizada',
+  mission_verified: 'Ayuda validada',
+  mission_cancelled: 'Misión cancelada',
+  mission_archived: 'Misión archivada',
+  volunteer_unavailable: 'Voluntario no disponible',
+  needs_info: 'Se solicitó más información',
+}
+
+/** Reglas logísticas: a dónde se despacha una necesidad. */
+export const OPERATIONAL_DESTINATION_LABELS: Record<string, string> = {
+  public_call: 'Convocatoria pública',
+  institution: 'Institución específica',
+  both: 'Convocatoria e institución',
+}
+
+export const OPERATIONAL_DESTINATION_HINTS: Record<string, string> = {
+  public_call: 'Cualquier voluntario cercano puede postularse',
+  institution: 'Solo se deriva al organismo responsable, sin voluntarios',
+  both: 'Se avisa a los voluntarios y al organismo responsable',
+}
+
+export const INSTITUTION_TYPE_LABELS: Record<string, string> = {
+  civil_protection: 'Protección Civil',
+  firefighters: 'Bomberos',
+  hospital: 'Hospital',
+  city_hall: 'Alcaldía',
+  ngo: 'ONG',
+  police: 'Policía',
+  other: 'Otra institución',
+}
+
+/** Quién ofrece la ayuda en una reserva de cobertura. */
+export const COLLABORATOR_TYPE_LABELS: Record<string, string> = {
+  citizen: 'Ciudadano',
+  volunteer: 'Voluntario',
+  organization: 'Organización',
+  coordinator: 'Coordinador',
+  mixed: 'Equipo mixto',
+}
+
+/* ------------------------------------------------------------------ */
 /*  Helper: resolve a label with fallback                             */
 /* ------------------------------------------------------------------ */
 export function label(map: Record<string, string>, key: string | null | undefined, fallback?: string): string {

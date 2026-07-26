@@ -42,6 +42,41 @@ export const COVERAGE_RESERVATION_STATUS = {
 export type CoverageReservationStatus =
   typeof COVERAGE_RESERVATION_STATUS[keyof typeof COVERAGE_RESERVATION_STATUS]
 
+/**
+ * Vía por la que se cubre una necesidad. Las necesidades institucionales no
+ * admiten voluntarios: se derivan al organismo responsable.
+ */
+export const OPERATIONAL_DESTINATION = {
+  PUBLIC_CALL: 'public_call',
+  INSTITUTION: 'institution',
+  BOTH: 'both',
+} as const
+
+export type OperationalDestination =
+  typeof OPERATIONAL_DESTINATION[keyof typeof OPERATIONAL_DESTINATION]
+
+export const INSTITUTION_TYPES = [
+  'civil_protection',
+  'firefighters',
+  'hospital',
+  'city_hall',
+  'ngo',
+  'police',
+  'other',
+] as const
+
+export type InstitutionType = (typeof INSTITUTION_TYPES)[number]
+
+/** Solo una convocatoria abierta habilita la postulación de voluntarios. */
+export function acceptsVolunteers(destination: OperationalDestination): boolean {
+  return destination === OPERATIONAL_DESTINATION.PUBLIC_CALL || destination === OPERATIONAL_DESTINATION.BOTH
+}
+
+/** Indica si hay que derivar la necesidad a una institución. */
+export function requiresInstitution(destination: OperationalDestination): boolean {
+  return destination === OPERATIONAL_DESTINATION.INSTITUTION || destination === OPERATIONAL_DESTINATION.BOTH
+}
+
 export interface PublicNeedLocation {
   lat?: number
   lng?: number
@@ -65,6 +100,9 @@ export interface PublicNeed {
   unit: string
   verificationStatus: NeedVerificationStatus
   visibilityStatus: NeedVisibilityStatus
+  operationalDestination: OperationalDestination
+  institutionType: InstitutionType | null
+  institutionName: string | null
   expiresAt: Date
   status: PublicNeedStatus
   verifiedBy: string | null

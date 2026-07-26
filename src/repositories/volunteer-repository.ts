@@ -50,6 +50,31 @@ export class VolunteerRepository {
     return profile
   }
 
+  /**
+   * Resuelve el `volunteers.id` de un usuario, creando el perfil si no existe.
+   *
+   * `mission_assignments.volunteer_id` referencia `volunteers(id)`, mientras que
+   * las postulaciones a casos guardan un `profiles(id)`. Sin este puente la
+   * asignación viola la clave foránea y la misión nunca llega al voluntario.
+   */
+  async ensureIdForUser(userId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('ensure_volunteer_profile', { p_user_id: userId })
+    if (error) throw error
+    return data as string
+  }
+
+  /** Identidad mínima de un voluntario, sin cargar habilidades ni métricas. */
+  async findIdentity(volunteerId: string): Promise<{ userId: string; fullName: string } | null> {
+    const { data, error } = await supabase
+      .from('volunteers')
+      .select('user_id, full_name')
+      .eq('id', volunteerId)
+      .maybeSingle()
+    if (error || !data) return null
+    const row = data as { user_id: string; full_name: string }
+    return { userId: row.user_id, fullName: row.full_name }
+  }
+
   async list(filters?: { zone?: string; availability?: string; skill?: string }): Promise<VolunteerProfile[]> {
     let query = supabase.from('volunteers').select('*')
 

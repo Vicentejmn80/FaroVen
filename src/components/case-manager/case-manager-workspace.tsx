@@ -18,7 +18,7 @@ import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/op
 import { cn, isValidCoord } from '@/lib/utils'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
-import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS, SKILL_LABELS } from '@/lib/labels'
+import { label, PRIORITY_LABELS, INTEREST_STATUS_LABELS, OP_LABELS, PIPELINE_LABELS, MISSION_STAGE_LABELS, NEED_STATUS_LABELS, PUBLIC_NEED_STATUS_LABELS, COVERAGE_RESERVATION_LABELS, SKILL_LABELS, COLLABORATOR_TYPE_LABELS, MISSION_EVENT_LABELS } from '@/lib/labels'
 import { useAuth, usePermissions } from '@/store/auth-context'
 import { useApproveNeedInterest, useNeedInterests, useOperationalPublicNeeds, useRejectNeedInterest, useVerifyPublicNeedEntry } from '@/hooks/usePublicNeeds'
 import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplication } from '@/hooks/useCaseApplications'
@@ -106,7 +106,7 @@ function NeedInterestsPanel({
                 {interest.collaboratorName ?? 'Colaborador FARO'}
               </p>
               <p className="text-[11px] text-ink-subtle">
-                {interest.collaboratorType} · {label(COVERAGE_RESERVATION_LABELS, interest.status, interest.status)}
+                {label(COLLABORATOR_TYPE_LABELS, interest.collaboratorType)} · {label(COVERAGE_RESERVATION_LABELS, interest.status)}
               </p>
               <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-ink-faint">
                 {interest.distanceKm != null && <span>{interest.distanceKm.toFixed(1)} km</span>}
@@ -163,6 +163,7 @@ function NeedInterestsPanel({
 }
 
 function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: () => void }) {
+  const { user } = useAuth()
   const { data: missionEvents } = useMissionTimeline(mission.id)
   const { data: assignments } = useMissionAssignments(mission.id)
   const verifyAssignment = useVerifyAssignment()
@@ -205,7 +206,7 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
             {missionEvents.map((ev) => (
               <div key={ev.id} className="flex items-center gap-2 text-xs text-ink-muted">
                 <span className="h-1.5 w-1.5 rounded-full bg-info shrink-0" />
-                <span className="text-ink-subtle">{ev.eventType}</span>
+                <span className="text-ink-subtle">{label(MISSION_EVENT_LABELS, ev.eventType)}</span>
                 {ev.description && <span className="text-ink-faint">&middot; {ev.description}</span>}
               </div>
             ))}
@@ -219,7 +220,7 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
           <div className="space-y-2">
             {pendingEvidence.map((a) => (
               <div key={a.id} className="space-y-1.5">
-                <p className="text-[11px] text-ink-muted">Voluntario {a.volunteerId.slice(0, 8)}</p>
+                <p className="text-[11px] text-ink-muted">Evidencia entregada por el voluntario</p>
                 <div className="flex flex-wrap gap-1.5">
                   {a.evidenceUrls?.map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer"
@@ -231,10 +232,13 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
                 <EmergencyButton
                   variant="glass"
                   size="sm"
-                  disabled={verifyAssignment.isPending}
-                  onClick={() => verifyAssignment.mutate({ assignmentId: a.id })}
+                  disabled={!user?.id || verifyAssignment.isPending}
+                  onClick={() => {
+                    if (!user?.id) return
+                    verifyAssignment.mutate({ assignmentId: a.id, verifiedBy: user.id })
+                  }}
                 >
-                  Verificar
+                  Validar ayuda
                 </EmergencyButton>
               </div>
             ))}

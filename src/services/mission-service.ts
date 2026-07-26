@@ -8,6 +8,12 @@ import {
 } from '@/services/operational-intelligence-service'
 import { caseService } from '@/services/case-service'
 import { supabase } from '@/lib/supabase'
+import { volunteerRepository } from '@/repositories/volunteer-repository'
+import {
+  notifyVolunteer,
+  notifyMissionOperators,
+  type MissionNoticeEvent,
+} from '@/services/mission-notification-service'
 
 async function emitAssignmentStatus(
   assignment: MissionAssignment,
@@ -20,6 +26,44 @@ async function emitAssignmentStatus(
     volunteerId: assignment.volunteerId,
     detail,
   })
+}
+
+/**
+ * Avisa a las audiencias de un paso del motor de ejecución. El evento del
+ * timeline lo escribe `advanceMissionStage`; aquí solo se notifica, y un fallo
+ * jamás debe tumbar la transición que lo originó.
+ */
+async function announce(
+  assignment: MissionAssignment,
+  event: MissionNoticeEvent,
+  audience: { volunteer?: boolean; operators?: boolean } = { operators: true },
+) {
+  try {
+    const mission = await missionRepository.findById(assignment.missionId)
+    if (!mission) return
+    const identity = await volunteerRepository.findIdentity(assignment.volunteerId)
+
+    if (audience.volunteer) {
+      await notifyVolunteer({
+        volunteerId: assignment.volunteerId,
+        volunteerName: identity?.fullName,
+        missionId: mission.id,
+        missionTitle: mission.title,
+        event,
+      })
+    }
+    if (audience.operators) {
+      await notifyMissionOperators({
+        missionId: mission.id,
+        missionTitle: mission.title,
+        volunteerName: identity?.fullName,
+        event,
+        excludeUserId: identity?.userId,
+      })
+    }
+  } catch {
+    console.warn('[MISSION_ENGINE] No se pudo publicar el evento', event)
+  }
 }
 
 async function advanceMissionStage(missionId: string, toStage: MissionStage, actorId?: string) {
@@ -113,6 +157,7 @@ export const missionService = {
   async assignVolunteer(missionId: string, volunteerId: string, actorId?: string): Promise<MissionAssignment> {
     const assignment = await missionRepository.createAssignment({ missionId, volunteerId })
     const mission = await missionRepository.findById(missionId)
+    await announce(assignment, 'volunteer_assigned', { volunteer: true, operators: false })
     if (mission) {
       if (mission.status === MISSION_STAGES.CREATED || mission.status === MISSION_STAGES.MATCHING) {
         const result = transitionMission(mission, MISSION_STAGES.ASSIGNED, actorId)
@@ -129,11 +174,13 @@ export const missionService = {
         assignedPeople: (mission.assignedPeople ?? 0) + 1,
       } as Partial<Mission>)
     }
+    const identity = await volunteerRepository.findIdentity(volunteerId)
     await missionRepository.addEvent({
       missionId,
       eventType: 'volunteer_assigned',
       actorId,
-      description: `Voluntario ${volunteerId} asignado a la misión`,
+      actorName: identity?.fullName,
+      description: `${identity?.fullName ?? 'Voluntario'} asignado a la misión`,
     })
     return assignment
   },
@@ -169,6 +216,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'accepted', 'El voluntario aceptó la asignación')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.ACCEPTED, _volunteerId)
+    await announce(updated, 'volunteer_accepted')
     return updated
   },
 
@@ -178,6 +226,13 @@ export const missionService = {
       respondedAt: new Date(),
     })
     await emitAssignmentStatus(updated, 'assignment_rejected', 'El voluntario rechazó la asignación')
+    await missionRepository.addEvent({
+      missionId: updated.missionId,
+      eventType: 'volunteer_rejected',
+      description: 'El voluntario rechazó la misión',
+      metadata: { assignmentId },
+    })
+    await announce(updated, 'volunteer_rejected', { volunteer: true, operators: true })
     return updated
   },
 
@@ -187,6 +242,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'en_route', 'El voluntario está en camino')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.EN_ROUTE)
+    await announce(updated, 'volunteer_en_route', { volunteer: true, operators: true })
     return updated
   },
 
@@ -197,6 +253,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'on_site', 'El voluntario llegó al sitio')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.ON_SITE)
+    await announce(updated, 'volunteer_on_site', { volunteer: true, operators: true })
     return updated
   },
 
@@ -207,6 +264,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'completed', 'El voluntario finalizó la operación')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.COMPLETED)
+    await announce(updated, 'mission_completed', { volunteer: true, operators: true })
     return updated
   },
 
@@ -216,6 +274,13 @@ export const missionService = {
       preparingAt: new Date(),
     })
     await emitAssignmentStatus(updated, 'preparing', 'El voluntario se está preparando')
+    await missionRepository.addEvent({
+      missionId: updated.missionId,
+      eventType: 'volunteer_preparing',
+      description: 'El voluntario se está preparando',
+      metadata: { assignmentId },
+    })
+    await announce(updated, 'volunteer_preparing')
     return updated
   },
 
@@ -225,6 +290,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'in_progress', 'La operación está en progreso')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.IN_PROGRESS)
+    await announce(updated, 'mission_in_progress')
     return updated
   },
 
@@ -245,61 +311,98 @@ export const missionService = {
       metadata: { evidenceUrls, assignmentId },
     })
     await emitAssignmentStatus(updated, 'evidence_submitted', `${evidenceUrls.length} archivo(s) de evidencia`)
+    await announce(updated, 'evidence_submitted')
     return updated
   },
 
-  async verifyAssignment(assignmentId: string): Promise<MissionAssignment> {
+  /**
+   * Cierre de la misión por parte del gestor. `verifiedBy` es el usuario que
+   * valida la evidencia: la auditoría depende de que no sea el propio ejecutor.
+   */
+  async verifyAssignment(assignmentId: string, verifiedBy: string): Promise<MissionAssignment> {
     const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'verified',
       verifiedAt: new Date(),
     })
     await emitAssignmentStatus(updated, 'verified', 'Operación verificada por el coordinador')
-    await advanceMissionStage(updated.missionId, MISSION_STAGES.VERIFIED)
+    await advanceMissionStage(updated.missionId, MISSION_STAGES.VERIFIED, verifiedBy)
+    await announce(updated, 'mission_verified', { volunteer: true, operators: true })
 
-    // If mission is linked to a case, resolve it and record success
     const mission = await missionRepository.findById(updated.missionId)
     if (mission?.caseId) {
       try {
-        await caseService.transition(mission.caseId, 'resolved', updated.volunteerId, 'Misión verificada — caso resuelto')
-        await recordSuccessCase({
-          caseId: mission.caseId,
-          missionId: mission.id,
-          zone: mission.location.zone ?? mission.title,
-          verifiedBy: updated.volunteerId,
-          evidenceUrls: updated.evidenceUrls,
-          durationMinutes: mission.completedAt && mission.createdAt
-            ? Math.round((mission.completedAt.getTime() - mission.createdAt.getTime()) / 60000)
-            : null,
-        })
+        await caseService.transition(mission.caseId, 'resolved', verifiedBy, 'Misión validada — caso resuelto')
       } catch {
-        // Case transition may fail if not allowed, skip silently
+        // La transición puede no estar permitida desde la etapa actual.
       }
+
+      const recorded = await recordSuccessCase({
+        mission,
+        verifiedBy,
+        volunteerId: updated.volunteerId,
+        evidenceUrls: updated.evidenceUrls,
+        durationMinutes: durationInMinutes(mission.createdAt, updated.completedAt ?? mission.completedAt),
+        responseMinutes: durationInMinutes(mission.createdAt, updated.respondedAt),
+      })
+      if (recorded) await announce(updated, 'success_case_created', { volunteer: true, operators: true })
     }
 
     return updated
   },
 }
 
+function durationInMinutes(from?: Date, to?: Date): number | null {
+  if (!from || !to) return null
+  return Math.max(0, Math.round((to.getTime() - from.getTime()) / 60000))
+}
+
+/**
+ * Registra el caso de éxito. `public_need_id` es opcional pero se resuelve a
+ * partir del caso cuando existe, para conservar la trazabilidad completa.
+ */
 async function recordSuccessCase(input: {
-  caseId: string
-  missionId: string
-  zone: string
+  mission: Mission
   verifiedBy: string
+  volunteerId: string
   evidenceUrls: string[]
   durationMinutes: number | null
-}) {
+  responseMinutes: number | null
+}): Promise<boolean> {
+  const { mission } = input
   try {
-    await supabase.from('success_cases').insert({
-      case_id: input.caseId,
-      mission_id: input.missionId,
-      zone: input.zone,
+    const { data: need } = await supabase
+      .from('public_needs')
+      .select('id, category')
+      .eq('case_id', mission.caseId ?? '')
+      .maybeSingle()
+
+    const { error } = await supabase.from('success_cases').insert({
+      public_need_id: (need as { id: string } | null)?.id ?? null,
+      case_id: mission.caseId,
+      mission_id: mission.id,
+      volunteer_id: input.volunteerId,
+      title: mission.title,
+      category: (need as { category: string } | null)?.category ?? 'humanitarian',
+      zone: mission.location.zone || mission.title,
+      help_type: 'humanitarian',
+      collaborator_type: 'volunteer',
+      impact_summary: mission.description,
       verified_by: input.verifiedBy,
       evidence_urls: input.evidenceUrls,
       total_duration_minutes: input.durationMinutes,
-      public_code: `CASO-${input.caseId.slice(0, 8)}`,
+      response_minutes: input.responseMinutes,
+      public_code: buildSuccessCode(mission.id),
       verified_at: new Date().toISOString(),
     })
-  } catch {
-    console.warn('[SUCCESS_CASE] Failed to record success case')
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.warn('[SUCCESS_CASE] No se pudo registrar el caso de éxito', error)
+    return false
   }
+}
+
+function buildSuccessCode(missionId: string): string {
+  const year = new Date().getFullYear()
+  return `FARO-${year}-${missionId.slice(0, 6).toUpperCase()}`
 }

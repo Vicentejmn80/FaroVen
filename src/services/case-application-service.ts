@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { caseApplicationRepository } from '@/repositories/case-application-repository'
+import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { caseService } from '@/services/case-service'
 import { missionService } from '@/services/mission-service'
 import { notifyUser } from '@/lib/notify'
@@ -69,12 +70,17 @@ export const caseApplicationService = {
       createdBy: operatorId,
     })
 
-    await missionService.assignVolunteer(created.mission.id, app.applicantId, operatorId)
+    // Las postulaciones guardan un profiles(id), pero mission_assignments
+    // referencia volunteers(id): sin este puente la asignación viola la FK.
+    const volunteerId = await volunteerRepository.ensureIdForUser(app.applicantId)
+    await missionService.assignVolunteer(created.mission.id, volunteerId, operatorId)
 
-    const applicant = await getProfileName(app.applicantId)
-    if (applicant) {
-      await notifyUser(app.applicantId, 'Postulación aprobada', `Fuiste asignado a "${caseData.title}". Revisa tus misiones activas.`, { caseId: app.caseId, missionId: created.mission.id, type: 'case_approved' })
-    }
+    await notifyUser(
+      app.applicantId,
+      'Tu postulación fue aceptada',
+      `Fuiste asignado a "${caseData.title}". Abre la misión para comenzar.`,
+      { caseId: app.caseId, missionId: created.mission.id, type: 'case_approved' },
+    )
   },
 
   async reject(applicationId: string, operatorId: string) {
@@ -92,14 +98,30 @@ export const caseApplicationService = {
   },
 }
 
-async function getActiveVolunteersNear(lat: number, lng: number, radiusKm: number) {
+interface NearbyVolunteer {
+  userId: string
+  fullName: string
+  phone?: string
+  distanceKm: number
+}
+
+/** El RPC devuelve columnas en snake_case; sin mapearlas el `userId` era undefined. */
+async function getActiveVolunteersNear(lat: number, lng: number, radiusKm: number): Promise<NearbyVolunteer[]> {
   try {
     const { data } = await supabase.rpc('get_volunteers_near_location', {
       p_lat: lat,
       p_lng: lng,
       p_radius_km: radiusKm,
     })
-    return (data ?? []) as { userId: string; fullName: string; phone?: string; distanceKm: number }[]
+    const rows = (data ?? []) as { user_id: string; full_name: string; phone: string | null; distance_km: number }[]
+    return rows
+      .filter((row) => Boolean(row.user_id))
+      .map((row) => ({
+        userId: row.user_id,
+        fullName: row.full_name,
+        phone: row.phone ?? undefined,
+        distanceKm: row.distance_km,
+      }))
   } catch {
     return []
   }
