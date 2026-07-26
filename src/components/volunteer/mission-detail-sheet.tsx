@@ -35,6 +35,7 @@ import {
 
 export interface VolunteerMissionDetail {
   id: string
+  caseId?: string | null
   title: string
   requiredSkill?: string | null
   status: string
@@ -188,8 +189,10 @@ export function MissionDetailSheet({
     try {
       if (!volunteerId) throw new Error('Debes iniciar sesión para ofrecer ayuda.')
 
+      const resolvedCaseId = mission.caseId ?? mission.id
+
       // Check if already applied before doing anything
-      const existing = await caseApplicationService.findByCaseAndApplicant(mission.id, volunteerId)
+      const existing = await caseApplicationService.findByCaseAndApplicant(resolvedCaseId, volunteerId)
       if (existing) {
         setPhase(existing.status === 'approved' ? 'approved' : 'submitted')
         return
@@ -203,7 +206,7 @@ export function MissionDetailSheet({
       })
 
       // Create case_application — will succeed or return existing (handles 409)
-      const app = await caseApplicationService.apply(mission.id, volunteerId, {
+      const app = await caseApplicationService.apply(resolvedCaseId, volunteerId, {
         message: `Quiero ayudar: ${title}`,
         skills: profile?.specialty ? [profile.specialty] : [],
       })

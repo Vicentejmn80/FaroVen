@@ -85,24 +85,24 @@ export const caseApplicationRepository = {
   }): Promise<CaseApplication> {
     const { data, error } = await supabase
       .from('case_applications')
-      .upsert(
-        {
-          case_id: caseId,
-          applicant_id: applicantId,
-          organization: params?.organization ?? null,
-          message: params?.message ?? null,
-          skills: params?.skills ?? null,
-          availability: params?.availability ?? null,
-          distance_km: params?.distanceKm ?? null,
-        },
-        {
-          onConflict: 'case_id, applicant_id',
-          ignoreDuplicates: true,
-        },
-      )
+      .insert({
+        case_id: caseId,
+        applicant_id: applicantId,
+        organization: params?.organization ?? null,
+        message: params?.message ?? null,
+        skills: params?.skills ?? null,
+        availability: params?.availability ?? null,
+        distance_km: params?.distanceKm ?? null,
+      })
       .select('*')
 
-    if (error) throw error
+    if (error) {
+      if (error.code === '23505' || (error.message ?? '').includes('duplicate key')) {
+        const existing = await this.findByCaseAndApplicant(caseId, applicantId)
+        if (existing) return existing
+      }
+      throw error
+    }
 
     const row = data?.[0]
     if (!row) {

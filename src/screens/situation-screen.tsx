@@ -124,6 +124,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
     () =>
       (openCases ?? []).map((c) => ({
         id: c.id,
+        caseId: c.id,
         title: c.title,
         requiredSkill: null,
         status: 'open' as const,
@@ -347,6 +348,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
 }
 
 type VolunteerMission = Mission & {
+  caseId?: string | null
   siteName: string
   zone: string
   distanceKm: string
@@ -417,6 +419,7 @@ function buildMissionsFromPublicNeeds(needs: PublicNeed[]): VolunteerMission[] {
     const distanceKm = (1.1 + (index % 5) * 0.7 + (need.id.charCodeAt(0) % 5) * 0.15).toFixed(1)
     results.push({
       id: need.id,
+      caseId: need.caseId,
       title: humanizeMissionTitle(need.title),
       requiredSkill: null,
       status: 'open',
@@ -464,6 +467,7 @@ function normalizeVolunteerMissions(
 
     results.push({
       ...mission,
+      caseId: (mission as unknown as Record<string, unknown>).caseId as string | null | undefined,
       title: humanizeMissionTitle(mission.title),
       location,
       siteName:
