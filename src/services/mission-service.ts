@@ -1,5 +1,5 @@
 import { missionRepository, type MissionFilters } from '@/repositories/mission-repository'
-import { transitionMission, canTransitionMission, isTerminalMissionStage } from '@/domain/mission.service'
+import { transitionMission, canTransitionMission } from '@/domain/mission.service'
 import type { Mission, MissionAssignment, MissionEvent, MissionStage, TransitionResult } from '@/domain/mission.types'
 import { MISSION_STAGES } from '@/domain/mission.types'
 import {
@@ -66,20 +66,72 @@ async function announce(
   }
 }
 
+const EXECUTION_PATH: MissionStage[] = [
+  MISSION_STAGES.CREATED,
+  MISSION_STAGES.MATCHING,
+  MISSION_STAGES.ASSIGNED,
+  MISSION_STAGES.ACCEPTED,
+  MISSION_STAGES.EN_ROUTE,
+  MISSION_STAGES.ON_SITE,
+  MISSION_STAGES.IN_PROGRESS,
+  MISSION_STAGES.COMPLETED,
+  MISSION_STAGES.VERIFIED,
+]
+
+/**
+ * Avanza la misión hasta `toStage` caminando el grafo.
+ * Si un salto intermedio no es legal (p.ej. assigned→en_route), fuerza el update
+ * para que misión y assignment no queden desfasados.
+ */
 async function advanceMissionStage(missionId: string, toStage: MissionStage, actorId?: string) {
-  const mission = await missionRepository.findById(missionId)
-  if (!mission || mission.status === toStage || isTerminalMissionStage(mission.status)) return
-  try {
-    const result = transitionMission(mission, toStage, actorId)
-    await missionRepository.update(missionId, result.mission)
+  let mission = await missionRepository.findById(missionId)
+  if (!mission || mission.status === toStage) return
+  if (mission.status === MISSION_STAGES.CANCELLED || mission.status === MISSION_STAGES.ARCHIVED) return
+
+  const targetIdx = EXECUTION_PATH.indexOf(toStage)
+  if (targetIdx < 0) return
+
+  let guard = 0
+  while (mission.status !== toStage && guard++ < 12) {
+    const currentIdx = EXECUTION_PATH.indexOf(mission.status)
+    const next: MissionStage =
+      currentIdx >= 0 && currentIdx < targetIdx
+        ? EXECUTION_PATH[currentIdx + 1] === MISSION_STAGES.MATCHING && targetIdx > EXECUTION_PATH.indexOf(MISSION_STAGES.ASSIGNED)
+          ? MISSION_STAGES.ASSIGNED
+          : EXECUTION_PATH[currentIdx + 1]!
+        : toStage
+
+    try {
+      const check = canTransitionMission(mission, next)
+      if (check.allowed) {
+        const result = transitionMission(mission, next, actorId)
+        await missionRepository.update(missionId, result.mission)
+        await missionRepository.addEvent({
+          missionId,
+          eventType: result.event.eventType,
+          actorId,
+          description: result.event.description ?? `Misión avanzó a ${next}`,
+        })
+        mission = result.mission
+        continue
+      }
+    } catch {
+      // fall through to force
+    }
+
+    const forced: Partial<Mission> = {
+      status: next,
+      updatedAt: new Date(),
+    }
+    if (next === MISSION_STAGES.COMPLETED) forced.completedAt = new Date()
+    if (next === MISSION_STAGES.VERIFIED) forced.verifiedAt = new Date()
+    mission = await missionRepository.update(missionId, forced)
     await missionRepository.addEvent({
       missionId,
-      eventType: result.event.eventType,
+      eventType: next === MISSION_STAGES.VERIFIED ? 'mission_verified' : next === MISSION_STAGES.COMPLETED ? 'mission_completed' : 'volunteer_assigned',
       actorId,
-      description: result.event.description ?? `Misión avanzó a ${toStage}`,
+      description: `Misión sincronizada a ${next}`,
     })
-  } catch {
-    // transition not allowed in current state; skip silently
   }
 }
 
@@ -331,7 +383,7 @@ export const missionService = {
     const mission = await missionRepository.findById(updated.missionId)
     if (mission?.caseId) {
       try {
-        await caseService.transition(mission.caseId, 'resolved', verifiedBy, 'Misión validada — caso resuelto')
+        await resolveCaseBestEffort(mission.caseId, verifiedBy, 'Misión validada — caso resuelto')
       } catch {
         // La transición puede no estar permitida desde la etapa actual.
       }
@@ -349,6 +401,82 @@ export const missionService = {
 
     return updated
   },
+
+  /**
+   * Cuando el gestor resuelve el caso desde el hub, cierra assignments/misiones
+   * ligadas para que el modal del voluntario salga de "esperando validación".
+   */
+  async closeForResolvedCase(caseId: string, actorId?: string): Promise<void> {
+    const missions = await missionRepository.listByCaseId(caseId)
+    for (const mission of missions) {
+      if (mission.status === MISSION_STAGES.CANCELLED || mission.status === MISSION_STAGES.ARCHIVED) continue
+
+      const assignments = await missionRepository.listAssignments(mission.id)
+      for (const assignment of assignments) {
+        if (
+          assignment.status === 'verified' ||
+          assignment.status === 'rejected' ||
+          assignment.status === 'cancelled' ||
+          assignment.status === 'archived'
+        ) {
+          continue
+        }
+
+        let current = assignment
+        if (current.status !== 'completed') {
+          current = await missionRepository.updateAssignment(current.id, {
+            status: 'completed',
+            completedAt: current.completedAt ?? new Date(),
+          })
+        }
+
+        current = await missionRepository.updateAssignment(current.id, {
+          status: 'verified',
+          verifiedAt: new Date(),
+        })
+        await announce(current, 'mission_verified', { volunteer: true, operators: true })
+      }
+
+      await advanceMissionStage(mission.id, MISSION_STAGES.VERIFIED, actorId)
+    }
+
+    try {
+      const { data: needs } = await supabase.from('public_needs').select('id, call_status').eq('case_id', caseId)
+      for (const need of needs ?? []) {
+        if ((need as { call_status: string }).call_status === 'open') {
+          await supabase
+            .from('public_needs')
+            .update({ call_status: 'complete', visibility_status: 'hidden', status: 'completed' })
+            .eq('id', (need as { id: string }).id)
+        }
+      }
+    } catch {
+      console.warn('[MISSION_ENGINE] No se pudo cerrar convocatoria al resolver caso')
+    }
+  },
+}
+
+async function resolveCaseBestEffort(caseId: string, actorId: string | undefined, comment: string) {
+  const existing = await caseService.getById(caseId)
+  if (!existing || existing.pipelineStage === 'resolved' || existing.pipelineStage === 'archived') return
+
+  const stage = existing.pipelineStage
+  const paths: Record<string, Array<'assigned' | 'accepted' | 'in_attention' | 'resolved'>> = {
+    assigned: ['accepted', 'in_attention', 'resolved'],
+    accepted: ['in_attention', 'resolved'],
+    in_attention: ['resolved'],
+    open_for_applications: ['assigned', 'accepted', 'in_attention', 'resolved'],
+  }
+  const path = paths[stage]
+  if (!path) return
+
+  for (const next of path) {
+    try {
+      await caseService.transition(caseId, next, actorId, comment)
+    } catch {
+      // Continuar: otra ruta puede haber avanzado el caso.
+    }
+  }
 }
 
 function durationInMinutes(from?: Date, to?: Date): number | null {

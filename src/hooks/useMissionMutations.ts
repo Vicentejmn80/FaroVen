@@ -163,6 +163,8 @@ export function useVerifyAssignment() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionEvents] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.successCases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
     },
   })
 }

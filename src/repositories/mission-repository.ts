@@ -131,18 +131,21 @@ export class MissionRepository {
   }
 
   async findByCaseId(caseId: string): Promise<Mission | null> {
+    const missions = await this.listByCaseId(caseId)
+    return missions[0] ?? null
+  }
+
+  async listByCaseId(caseId: string): Promise<Mission[]> {
     const { data, error } = await supabase
       .from('missions')
       .select('*')
       .eq('case_id', caseId)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
     if (error) {
-      if (isMissingTableError(error)) return null
+      if (isMissingTableError(error)) return []
       throw error
     }
-    return data ? mapMissionRow(data as MissionRow) : null
+    return ((data ?? []) as MissionRow[]).map(mapMissionRow)
   }
 
   async create(input: {

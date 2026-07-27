@@ -60,40 +60,31 @@ export async function verifyPublicNeedEntry(input: {
 }): Promise<PublicNeed> {
   const updated = await publicNeedRepository.verifyEntry(input)
 
-  if (input.decision === 'approved') {
-    const { data: recipients } = await supabase
-      .from('profiles')
-      .select('id')
-      .in('role', ['volunteer', 'coordinator', 'case_manager', 'regional_admin', 'super_admin'])
-      .eq('status', 'active')
+  if (input.decision !== 'approved') return updated
 
-    await Promise.all(
-      (recipients ?? []).map((recipient) =>
-        notifyUser(
-          String(recipient.id),
-          'Nueva necesidad pública',
-          `${updated.title} está disponible para cobertura.`,
-          'public_need_published',
-          { publicNeedId: updated.id, priority: updated.priority },
-        ),
-      ),
-    )
+  // Los voluntarios solo listan call_status=open. "Publicar" debe abrir convocatoria.
+  const published =
+    updated.callStatus === 'open'
+      ? updated
+      : await openNeedCall({
+          publicNeedId: updated.id,
+          operatorId: input.actorId,
+        })
 
-    await operationalIntelligenceService.emitTimelineEvent({
-      type: 'event',
-      title: 'Necesidad publicada',
-      description: 'Una necesidad pública quedó visible para toda la red FARO',
-      severity: updated.priority === 'critical' ? 'critical' : 'info',
-      entityId: updated.id,
-      metadata: {
-        event_kind: 'public_need_published',
-        public_need_id: updated.id,
-        priority: updated.priority,
-      },
-    })
-  }
+  await operationalIntelligenceService.emitTimelineEvent({
+    type: 'event',
+    title: 'Necesidad publicada',
+    description: 'Una necesidad pública quedó visible para toda la red FARO',
+    severity: published.priority === 'critical' ? 'critical' : 'info',
+    entityId: published.id,
+    metadata: {
+      event_kind: 'public_need_published',
+      public_need_id: published.id,
+      priority: published.priority,
+    },
+  })
 
-  return updated
+  return published
 }
 
 export async function reserveNeedCoverage(input: {

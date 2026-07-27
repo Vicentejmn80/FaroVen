@@ -135,6 +135,10 @@ export function useResolveCase() {
     },
     onSuccess: () => {
       invalidateCaseData(queryClient)
+      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
       showToast('Caso resuelto.', 'success')
     },
   })

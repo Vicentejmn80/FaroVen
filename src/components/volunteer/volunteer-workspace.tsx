@@ -79,6 +79,7 @@ function AvailableMissions() {
     () =>
       publicNeeds?.filter((need) =>
         need.visibilityStatus === 'public' &&
+        need.callStatus === 'open' &&
         ['active', 'in_progress', 'reserved'].includes(need.status) &&
         (need.verificationStatus === 'approved_entry' || need.verificationStatus === 'pending_exit' || need.verificationStatus === 'approved_exit'),
       ) ?? [],
@@ -678,9 +679,15 @@ function ImmersiveMissionGate() {
     if (immersive) return immersive
     if (forcedOpenId) {
       const forced = list.find((a) => a.id === forcedOpenId)
-      if (forced) return forced
+      if (forced && forced.status !== 'rejected' && forced.status !== 'cancelled') return forced
     }
-    return list.find((a) => a.status === 'completed' && a.id !== dismissedCompletedId) ?? null
+    // completed o verified: mantener overlay hasta que el voluntario salga
+    return (
+      list.find(
+        (a) =>
+          (a.status === 'completed' || a.status === 'verified') && a.id !== dismissedCompletedId,
+      ) ?? null
+    )
   }, [assignments, dismissedCompletedId, forcedOpenId])
 
   useEffect(() => {

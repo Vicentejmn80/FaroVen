@@ -168,9 +168,10 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
   const { data: assignments } = useMissionAssignments(mission.id)
   const verifyAssignment = useVerifyAssignment()
 
-  const pendingEvidence = useMemo(() => {
+  // Validar aunque no haya evidencias: el voluntario puede finalizar sin adjuntos.
+  const pendingValidation = useMemo(() => {
     if (!assignments) return []
-    return assignments.filter((a) => a.status === 'completed' && a.evidenceUrls && a.evidenceUrls.length > 0)
+    return assignments.filter((a) => a.status === 'completed')
   }, [assignments])
 
   const timelineSteps: TimelineStep[] = [
@@ -214,23 +215,29 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
         </div>
       )}
 
-      {pendingEvidence.length > 0 && (
+      {pendingValidation.length > 0 && (
         <div className="bg-white/[0.03] rounded-2xl p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Evidencia por verificar</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Ayuda por validar</p>
           <div className="space-y-2">
-            {pendingEvidence.map((a) => (
+            {pendingValidation.map((a) => (
               <div key={a.id} className="space-y-1.5">
-                <p className="text-[11px] text-ink-muted">Evidencia entregada por el voluntario</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {a.evidenceUrls?.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                       className="text-xs text-info underline truncate max-w-[200px]">
-                      {url.split('/').pop() ?? `Evidencia ${i + 1}`}
-                    </a>
-                  ))}
-                </div>
+                <p className="text-[11px] text-ink-muted">
+                  {a.evidenceUrls && a.evidenceUrls.length > 0
+                    ? 'El voluntario finalizó y adjuntó evidencia'
+                    : 'El voluntario finalizó — pendiente de validación del gestor'}
+                </p>
+                {a.evidenceUrls && a.evidenceUrls.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {a.evidenceUrls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                         className="text-xs text-info underline truncate max-w-[200px]">
+                        {url.split('/').pop() ?? `Evidencia ${i + 1}`}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 <EmergencyButton
-                  variant="glass"
+                  variant="primary"
                   size="sm"
                   disabled={!user?.id || verifyAssignment.isPending}
                   onClick={() => {
@@ -238,7 +245,7 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
                     verifyAssignment.mutate({ assignmentId: a.id, verifiedBy: user.id })
                   }}
                 >
-                  Validar ayuda
+                  Validar y cerrar misión
                 </EmergencyButton>
               </div>
             ))}
@@ -668,39 +675,33 @@ export function CaseManagerWorkspace() {
                       </span>
                     </div>
                     <div className="mt-2 flex gap-2">
-                      <EmergencyButton
-                        variant="glass"
-                        size="sm"
-                        disabled={verifyPublicNeed.isPending || !user?.id}
-                        onClick={() => {
-                          if (!user?.id) return
-                          verifyPublicNeed.mutate({
-                            publicNeedId: need.id,
-                            actorId: user.id,
-                            decision: 'approved',
-                            checklist: [
-                              'Contacto realizado',
-                              'Cantidad definida',
-                              'Ubicación confirmada',
-                              'Consentimiento registrado',
-                            ],
-                            notes: 'Verificación de entrada aprobada desde panel gestor',
-                          })
-                        }}
-                      >
-                        Publicar necesidad
-                      </EmergencyButton>
-                      {need.verificationStatus === 'approved_entry' && need.callStatus !== 'open' && need.callStatus !== 'complete' && (
+                      {need.callStatus !== 'open' && need.callStatus !== 'complete' && (
                         <EmergencyButton
                           variant="primary"
                           size="sm"
-                          disabled={openNeedCall.isPending || !user?.id}
+                          disabled={verifyPublicNeed.isPending || openNeedCall.isPending || !user?.id}
                           onClick={() => {
                             if (!user?.id) return
+                            // Un solo gesto: verificar entrada (si hace falta) + abrir convocatoria.
+                            if (need.verificationStatus !== 'approved_entry') {
+                              verifyPublicNeed.mutate({
+                                publicNeedId: need.id,
+                                actorId: user.id,
+                                decision: 'approved',
+                                checklist: [
+                                  'Contacto realizado',
+                                  'Cantidad definida',
+                                  'Ubicación confirmada',
+                                  'Consentimiento registrado',
+                                ],
+                                notes: 'Publicada y abierta a voluntarios desde panel gestor',
+                              })
+                              return
+                            }
                             openNeedCall.mutate({ publicNeedId: need.id, operatorId: user.id })
                           }}
                         >
-                          Solicitar voluntarios
+                          Publicar a voluntarios
                         </EmergencyButton>
                       )}
                       {need.callStatus === 'open' && (

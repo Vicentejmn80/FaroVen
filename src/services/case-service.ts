@@ -80,6 +80,16 @@ export const caseService = {
       comment,
     })
 
+    // Resolver caso debe cerrar la misión del voluntario (modal deja de esperar validación).
+    if (toStage === 'resolved') {
+      try {
+        const { missionService } = await import('@/services/mission-service')
+        await missionService.closeForResolvedCase(caseId, actorId)
+      } catch (err) {
+        console.warn('[CASE] No se pudo sincronizar misiones al resolver', err)
+      }
+    }
+
     return result
   },
 
