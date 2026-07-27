@@ -45,6 +45,12 @@ export function useArchiveCase() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.successCases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
     },
   })
 }

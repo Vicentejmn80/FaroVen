@@ -441,17 +441,10 @@ export const missionService = {
     }
 
     try {
-      const { data: needs } = await supabase.from('public_needs').select('id, call_status').eq('case_id', caseId)
-      for (const need of needs ?? []) {
-        if ((need as { call_status: string }).call_status === 'open') {
-          await supabase
-            .from('public_needs')
-            .update({ call_status: 'complete', visibility_status: 'hidden', status: 'completed' })
-            .eq('id', (need as { id: string }).id)
-        }
-      }
+      const { publicNeedRepository } = await import('@/repositories/public-need-repository')
+      await publicNeedRepository.closeAllByCaseId(caseId)
     } catch {
-      console.warn('[MISSION_ENGINE] No se pudo cerrar convocatoria al resolver caso')
+      console.warn('[MISSION_ENGINE] No se pudo cerrar convocatoria al resolver/archivar caso')
     }
   },
 }

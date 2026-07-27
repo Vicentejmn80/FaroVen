@@ -34,7 +34,6 @@ import { useAuth, usePermissions } from '@/store/auth-context'
 import { MissionDetailSheet } from '@/components/volunteer/mission-detail-sheet'
 import { INCIDENT_TYPE_LABELS, label, PRIORITY_SHORT_LABELS } from '@/lib/labels'
 import { useMapData, type Mission } from '@/hooks/useMapData'
-import { useCases } from '@/hooks/useCases'
 import { usePublicNeeds } from '@/hooks/usePublicNeeds'
 import type { PublicNeed } from '@/domain/public-need.types'
 
@@ -52,7 +51,6 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   const { role, isVolunteer } = usePermissions()
   const { user } = useAuth()
   const mapData = useMapData({ userRole: role, userId: user?.id ?? null, location: null })
-  const { data: openCases } = useCases({ stage: 'open_for_applications' })
   const { data: publicNeeds, isLoading: publicNeedsLoading } = usePublicNeeds()
   const { sites, latestActivity, isLoading, loadError, state } = useFaro()
   const needs = state.needs
@@ -120,32 +118,16 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
     return { active, critical, high, covered, recentCovered }
   }, [listSites])
 
-  const openCaseMissions = useMemo(
-    () =>
-      (openCases ?? []).map((c) => ({
-        id: c.id,
-        caseId: c.id,
-        title: c.title,
-        requiredSkill: null,
-        status: 'open' as const,
-        priority: c.priority as 'low' | 'medium' | 'high' | 'critical',
-        location: { lat: c.location.lat, lng: c.location.lng },
-        createdAt: c.createdAt,
-      })),
-    [openCases],
-  )
-
   const publicNeedMissions = useMemo(
     () => buildMissionsFromPublicNeeds(publicNeeds ?? []),
     [publicNeeds],
   )
 
   const volunteerMissions = useMemo(() => {
-    const allMissions = [...mapData.missions, ...openCaseMissions, ...publicNeedMissions]
     return filterMappableMissions(
-      normalizeVolunteerMissions(allMissions, mapData.sites, mapData.needs),
+      normalizeVolunteerMissions(publicNeedMissions, mapData.sites, mapData.needs),
     )
-  }, [mapData.missions, mapData.sites, mapData.needs, openCaseMissions, publicNeedMissions])
+  }, [mapData.sites, mapData.needs, publicNeedMissions])
 
   if (isVolunteer) {
     return (
@@ -407,6 +389,8 @@ function buildMissionsFromPublicNeeds(needs: PublicNeed[]): VolunteerMission[] {
 
   for (const [index, need] of needs.entries()) {
     if (need.visibilityStatus !== 'public') continue
+    if (need.callStatus !== 'open') continue
+    if (need.remainingQuantity <= 0) continue
     if (!['active', 'reserved', 'in_progress'].includes(need.status)) continue
 
     const location = resolveMissionCoordinates(need.locationPublic.lat, need.locationPublic.lng, {
@@ -444,7 +428,9 @@ function normalizeVolunteerMissions(
   missions: Mission[],
   sites: Site[],
   needs: Need[],
+  options?: { mergeSiteNeeds?: boolean },
 ): VolunteerMission[] {
+  const mergeSiteNeeds = options?.mergeSiteNeeds ?? false
   const fromSites = buildVolunteerMissions(sites, needs)
   if (!missions.length) return fromSites
 
@@ -491,9 +477,11 @@ function normalizeVolunteerMissions(
     })
   }
 
-  for (const siteMission of fromSites) {
-    if (seen.has(siteMission.id)) continue
-    results.push(siteMission)
+  if (mergeSiteNeeds) {
+    for (const siteMission of fromSites) {
+      if (seen.has(siteMission.id)) continue
+      results.push(siteMission)
+    }
   }
 
   return results

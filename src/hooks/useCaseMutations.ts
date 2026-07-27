@@ -14,6 +14,15 @@ function invalidateCaseData(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseAssignments] })
 }
 
+function invalidateClosedCaseCaches(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.successCases] })
+  void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
+}
+
 export function useTransitionCase() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -35,8 +44,11 @@ export function useTransitionCase() {
         throw new Error(humanizeSupabaseError(err))
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidateCaseData(queryClient)
+      if (variables.toStage === 'resolved' || variables.toStage === 'archived') {
+        invalidateClosedCaseCaches(queryClient)
+      }
       showToast('Estado actualizado.', 'success')
     },
   })
@@ -135,10 +147,7 @@ export function useResolveCase() {
     },
     onSuccess: () => {
       invalidateCaseData(queryClient)
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      invalidateClosedCaseCaches(queryClient)
       showToast('Caso resuelto.', 'success')
     },
   })

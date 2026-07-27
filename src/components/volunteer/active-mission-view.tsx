@@ -97,6 +97,16 @@ function missionClockStart(assignment: MissionAssignment): Date | null {
   )
 }
 
+/** Al finalizar o validar, el cronómetro debe congelarse — no seguir contando. */
+function missionClockEnd(assignment: MissionAssignment): Date | null {
+  if (assignment.verifiedAt) return assignment.verifiedAt
+  if (assignment.status === 'completed' && assignment.completedAt) return assignment.completedAt
+  if (assignment.status === 'verified' && assignment.completedAt) return assignment.completedAt
+  return null
+}
+
+const TERMINAL_ASSIGNMENT_STATUSES = new Set(['completed', 'verified', 'rejected', 'cancelled', 'archived'])
+
 export function ActiveMissionView({ mission, assignment, volunteerId, onClose }: ActiveMissionViewProps) {
   const { position, error: geoError, requestPermission } = useGeolocation(volunteerId)
   const [evidenceUrls, setEvidenceUrls] = useState<string[]>(assignment.evidenceUrls ?? [])
@@ -114,6 +124,14 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
     : null
   const eta = distance ? estimateTravelTime(distance) : null
   const clockStart = missionClockStart(assignment)
+  const clockEnd = missionClockEnd(assignment)
+  const clockFrozen =
+    TERMINAL_ASSIGNMENT_STATUSES.has(assignment.status) && Boolean(clockEnd ?? clockStart)
+  const frozenEndMs = useMemo(() => {
+    if (clockEnd) return clockEnd.getTime()
+    if (TERMINAL_ASSIGNMENT_STATUSES.has(assignment.status)) return Date.now()
+    return null
+  }, [clockEnd?.getTime(), assignment.status])
 
   // Bloquear scroll del body mientras la experiencia está abierta.
   useEffect(() => {
@@ -124,20 +142,24 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
     }
   }, [])
 
-  // Cronómetro en vivo desde aceptar / iniciar.
+  // Cronómetro: corre en vivo hasta completed/verified; luego congela el tiempo total.
   useEffect(() => {
     if (!clockStart) {
       setElapsedSec(0)
       return
     }
-    const tick = () => {
-      const secs = Math.max(0, Math.floor((Date.now() - clockStart.getTime()) / 1000))
-      setElapsedSec(secs)
+
+    const compute = () => {
+      const endMs = frozenEndMs ?? Date.now()
+      return Math.max(0, Math.floor((endMs - clockStart.getTime()) / 1000))
     }
-    tick()
-    const id = window.setInterval(tick, 1000)
+
+    setElapsedSec(compute())
+    if (frozenEndMs !== null) return
+
+    const id = window.setInterval(() => setElapsedSec(compute()), 1000)
     return () => window.clearInterval(id)
-  }, [clockStart?.getTime(), assignment.status])
+  }, [clockStart?.getTime(), frozenEndMs, assignment.status])
 
   const timelineSteps: TimelineStep[] = [
     {
@@ -284,7 +306,7 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
-                {clockStart ? 'Tiempo en misión' : 'Cronómetro'}
+                {clockFrozen ? 'Tiempo total' : clockStart ? 'Tiempo en misión' : 'Cronómetro'}
               </p>
               <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-ink">
                 {formatElapsed(elapsedSec)}
@@ -292,10 +314,14 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
             </div>
           </div>
           <div className="text-right">
-            {locked ? (
+            {locked && !clockFrozen ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-operational/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-operational">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-operational" />
                 En vivo
+              </span>
+            ) : clockFrozen ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                Finalizada
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">

@@ -1,6 +1,7 @@
 import type { Center, Need, Event, Report } from '@/domain/models'
 import { citizenReportPriority } from '@/lib/report-types'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
+import { isActiveStage } from '@/domain/case-lifecycle.service'
 import type { OpsCaseRecord, PipelineTransition, AssignmentSuggestion, OpsSummaryItem } from '@/types/operations-hub.types'
 import type { CasePriority as LegacyCasePriority } from '@/types/case.types'
 
@@ -245,9 +246,7 @@ export function computeCaseSummary(
   cases: CaseDomain[],
   centers: Center[],
 ): OpsSummaryItem[] {
-  const active = cases.filter(
-    (c) => c.pipelineStage !== 'resolved' && c.pipelineStage !== 'archived',
-  )
+  const active = cases.filter((c) => isActiveStage(c.pipelineStage))
   const critical = active.filter(
     (c) => c.priority === 'critical' || c.priority === 'high',
   ).length

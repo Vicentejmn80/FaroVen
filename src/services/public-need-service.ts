@@ -62,29 +62,20 @@ export async function verifyPublicNeedEntry(input: {
 
   if (input.decision !== 'approved') return updated
 
-  // Los voluntarios solo listan call_status=open. "Publicar" debe abrir convocatoria.
-  const published =
-    updated.callStatus === 'open'
-      ? updated
-      : await openNeedCall({
-          publicNeedId: updated.id,
-          operatorId: input.actorId,
-        })
-
   await operationalIntelligenceService.emitTimelineEvent({
     type: 'event',
-    title: 'Necesidad publicada',
-    description: 'Una necesidad pública quedó visible para toda la red FARO',
-    severity: published.priority === 'critical' ? 'critical' : 'info',
-    entityId: published.id,
+    title: 'Necesidad verificada',
+    description: 'La necesidad quedó lista; abre la convocatoria para que aparezca a voluntarios',
+    severity: updated.priority === 'critical' ? 'critical' : 'info',
+    entityId: updated.id,
     metadata: {
-      event_kind: 'public_need_published',
-      public_need_id: published.id,
-      priority: published.priority,
+      event_kind: 'public_need_verified',
+      public_need_id: updated.id,
+      priority: updated.priority,
     },
   })
 
-  return published
+  return updated
 }
 
 export async function reserveNeedCoverage(input: {

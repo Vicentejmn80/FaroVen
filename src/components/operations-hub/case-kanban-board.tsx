@@ -26,7 +26,11 @@ export const KANBAN_COLUMNS = [
   {
     id: 'asignado',
     label: 'Asignado',
-    stages: [PIPELINE_STAGES.ASSIGNED, PIPELINE_STAGES.ACCEPTED] as PipelineStage[],
+    stages: [
+      PIPELINE_STAGES.ASSIGNED,
+      PIPELINE_STAGES.ACCEPTED,
+      PIPELINE_STAGES.OPEN_FOR_APPLICATIONS,
+    ] as PipelineStage[],
     accent: 'border-t-info',
     header: 'text-info',
   },

@@ -4,6 +4,7 @@ import { MapCanvas } from '@/components/faro/map-canvas'
 import { cn } from '@/lib/utils'
 import { label, PIPELINE_LABELS } from '@/lib/labels'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
+import { isActiveStage } from '@/domain/case-lifecycle.service'
 import type { Site } from '@/lib/types'
 
 interface OpsMapPanelProps {
@@ -48,9 +49,14 @@ export function OpsMapPanel({
   onSelectCase,
   className,
 }: OpsMapPanelProps) {
-  const caseSites = useMemo(
-    () => cases.map(caseToSite).filter((site): site is Site => site !== null),
+  const activeCases = useMemo(
+    () => cases.filter((c) => isActiveStage(c.pipelineStage)),
     [cases],
+  )
+
+  const caseSites = useMemo(
+    () => activeCases.map(caseToSite).filter((site): site is Site => site !== null),
+    [activeCases],
   )
 
   const mapSites = useMemo(() => {
@@ -64,11 +70,11 @@ export function OpsMapPanel({
   const handleSelect = (site: Site) => {
     if (!site.id.startsWith('case-')) return
     const caseId = site.id.replace(/^case-/, '')
-    const match = cases.find((c) => c.id === caseId)
+    const match = activeCases.find((c) => c.id === caseId)
     if (match) onSelectCase?.(match)
   }
 
-  const casesWithoutCoords = cases.filter((c) => c.location.lat == null || c.location.lng == null).length
+  const casesWithoutCoords = activeCases.filter((c) => c.location.lat == null || c.location.lng == null).length
 
   return (
     <div className={cn('relative h-full w-full overflow-hidden', className)}>

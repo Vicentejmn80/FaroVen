@@ -6,6 +6,7 @@ import { useTransitionCase, useAssignCase } from '@/hooks/useCaseMutations'
 import { useFaro } from '@/store/faro-context'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { computeCaseSummary, sortCasesByUrgency, suggestCentersForCase } from '@/services/operations-hub-service'
+import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { CommandKpiBar } from './command-kpi-bar'
@@ -35,6 +36,10 @@ export function OperationsHub() {
   const { data: timeline = [] } = useCaseTimeline(selectedId)
 
   const sortedCases = useMemo(() => sortCasesByUrgency(opsCases), [opsCases])
+  const mapCases = useMemo(
+    () => sortedCases.filter((c) => isActiveStage(c.pipelineStage)),
+    [sortedCases],
+  )
 
   const selectedCase = useMemo(
     () => opsCases.find((c) => c.id === selectedId) ?? null,
@@ -100,10 +105,7 @@ export function OperationsHub() {
   )
 
   const activeCount = useMemo(
-    () =>
-      opsCases.filter(
-        (c) => c.pipelineStage !== 'resolved' && c.pipelineStage !== 'archived',
-      ).length,
+    () => opsCases.filter((c) => isActiveStage(c.pipelineStage)).length,
     [opsCases],
   )
 
@@ -157,7 +159,7 @@ export function OperationsHub() {
             <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
               <OpsMapPanel
                 selectedCase={selectedCase}
-                cases={sortedCases}
+                cases={mapCases}
                 sites={mapSites}
                 onSelectCase={handleSelect}
               />
@@ -166,7 +168,7 @@ export function OperationsHub() {
         ) : (
           <OpsMapPanel
             selectedCase={selectedCase}
-            cases={sortedCases}
+            cases={mapCases}
             sites={mapSites}
             onSelectCase={handleSelect}
             className="h-full"

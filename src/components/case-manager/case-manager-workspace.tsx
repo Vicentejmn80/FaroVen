@@ -25,9 +25,11 @@ import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplicatio
 import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
+import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
+import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { VOLUNTEER_AVAILABILITY_LABELS } from '@/domain/volunteer.types'
 
-type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'solicitudes'
+type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'success' | 'solicitudes'
 
 function InterestsPanel() {
   const { data: interests, isLoading } = useVolunteerInterests()
@@ -321,10 +323,47 @@ export function CaseManagerWorkspace() {
     () => reports?.filter((r) => r.status === 'new' || r.status === 'reviewing') ?? [],
     [reports],
   )
-  const activeCases = useMemo(() => allCases?.filter((c) => c.pipelineStage !== 'archived') ?? [], [allCases])
+  const activeCases = useMemo(
+    () => allCases?.filter((c) => isActiveStage(c.pipelineStage)) ?? [],
+    [allCases],
+  )
+  const openPublicNeeds = useMemo(
+    () =>
+      publicNeeds.filter(
+        (n) =>
+          n.callStatus === 'open' &&
+          n.visibilityStatus === 'public' &&
+          n.status !== 'completed' &&
+          n.status !== 'archived',
+      ),
+    [publicNeeds],
+  )
+  const activeMissions = useMemo(
+    () =>
+      missions?.filter(
+        (m) => !['completed', 'verified', 'archived', 'cancelled'].includes(m.status),
+      ) ?? [],
+    [missions],
+  )
   const pendingPublicNeeds = useMemo(
     () => publicNeeds.filter((n) => n.verificationStatus === 'pending_entry' || n.status === 'pending'),
     [publicNeeds],
+  )
+  const draftPublicNeeds = useMemo(
+    () =>
+      publicNeeds.filter(
+        (n) =>
+          n.callStatus !== 'open' &&
+          n.callStatus !== 'complete' &&
+          n.status !== 'completed' &&
+          n.status !== 'archived',
+      ),
+    [publicNeeds],
+  )
+
+  const manageablePublicNeeds = useMemo(
+    () => [...draftPublicNeeds, ...openPublicNeeds],
+    [draftPublicNeeds, openPublicNeeds],
   )
 
   const selectReport = useCallback((id: string) => {
@@ -335,7 +374,8 @@ export function CaseManagerWorkspace() {
     { id: 'inbox', label: 'Bandeja', badge: pendingReports.length },
     { id: 'public-needs', label: 'Necesidades', badge: pendingPublicNeeds.length },
     { id: 'cases', label: 'Casos', badge: activeCases.length },
-    { id: 'missions', label: 'Misiones' },
+    { id: 'missions', label: 'Misiones', badge: activeMissions.length },
+    { id: 'success', label: 'Casos de éxito' },
     { id: 'solicitudes', label: 'Solicitudes', badge: pendingRequests.length },
   ]
 
@@ -620,12 +660,12 @@ export function CaseManagerWorkspace() {
             </p>
             {publicNeedsLoading ? (
               [1, 2, 3].map((i) => <GlassCard key={i} className="h-24 animate-pulse" />)
-            ) : publicNeeds.length === 0 ? (
+            ) : manageablePublicNeeds.length === 0 ? (
               <GlassCard className="p-4 text-center text-sm text-ink-subtle">
-                No hay necesidades públicas registradas
+                No hay necesidades activas. Convierte un reporte o publica una convocatoria.
               </GlassCard>
             ) : (
-              publicNeeds.map((need) => {
+              manageablePublicNeeds.map((need) => {
                 const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
                 return (
                   <GlassCard key={need.id} className="p-3">
@@ -684,18 +724,28 @@ export function CaseManagerWorkspace() {
                             if (!user?.id) return
                             // Un solo gesto: verificar entrada (si hace falta) + abrir convocatoria.
                             if (need.verificationStatus !== 'approved_entry') {
-                              verifyPublicNeed.mutate({
-                                publicNeedId: need.id,
-                                actorId: user.id,
-                                decision: 'approved',
-                                checklist: [
-                                  'Contacto realizado',
-                                  'Cantidad definida',
-                                  'Ubicación confirmada',
-                                  'Consentimiento registrado',
-                                ],
-                                notes: 'Publicada y abierta a voluntarios desde panel gestor',
-                              })
+                              verifyPublicNeed.mutate(
+                                {
+                                  publicNeedId: need.id,
+                                  actorId: user.id,
+                                  decision: 'approved',
+                                  checklist: [
+                                    'Contacto realizado',
+                                    'Cantidad definida',
+                                    'Ubicación confirmada',
+                                    'Consentimiento registrado',
+                                  ],
+                                  notes: 'Publicada y abierta a voluntarios desde panel gestor',
+                                },
+                                {
+                                  onSuccess: () => {
+                                    openNeedCall.mutate({
+                                      publicNeedId: need.id,
+                                      operatorId: user.id,
+                                    })
+                                  },
+                                },
+                              )
                               return
                             }
                             openNeedCall.mutate({ publicNeedId: need.id, operatorId: user.id })
@@ -738,10 +788,10 @@ export function CaseManagerWorkspace() {
             </section>
             <section>
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Misiones activas</p>
-              {!missions || missions.length === 0 ? (
+              {activeMissions.length === 0 ? (
                 <GlassCard className="p-4 text-center text-sm text-ink-subtle">No hay misiones activas</GlassCard>
               ) : (
-                missions.map((m) => (
+                activeMissions.map((m) => (
                   <div key={m.id}>
                     <button onClick={() => setExpandedMissionId(expandedMissionId === m.id ? null : m.id)} className="w-full text-left">
                       <GlassCard className={cn('p-3 transition-all', expandedMissionId === m.id ? 'ring-1 ring-info/30' : '')}>
@@ -764,6 +814,14 @@ export function CaseManagerWorkspace() {
                 ))
               )}
             </section>
+          </div>
+        )}
+
+        {tab === 'success' && (
+          <div className="h-full overflow-y-auto px-4 pb-nav pt-2">
+            <SuccessCasesPanel
+              emptyDescription="Cuando valides una misión completada, el caso aparecerá aquí como referencia operativa."
+            />
           </div>
         )}
 

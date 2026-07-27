@@ -161,6 +161,7 @@ export function useCloseNeedCall() {
     mutationFn: (input: { publicNeedId: string; operatorId: string }) => closeNeedCall(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
     },
   })
 }

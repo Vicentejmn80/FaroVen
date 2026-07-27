@@ -120,7 +120,7 @@ export class PublicNeedRepository {
       .select('*')
       .eq('visibility_status', 'public')
       .eq('call_status', 'open')
-      .in('status', ['active', 'reserved', 'in_progress', 'completed'])
+      .in('status', ['active', 'reserved', 'in_progress'])
       .order('created_at', { ascending: false })
     if (error) {
       if (isMissingTableError(error)) return []
@@ -215,7 +215,7 @@ export class PublicNeedRepository {
           address: input.location?.address ?? null,
           zone: input.zone,
         },
-        visibility_status: 'public',
+        visibility_status: 'hidden',
         call_status: 'closed',
         verification_status: 'approved_entry',
         status: 'active',
@@ -251,7 +251,7 @@ export class PublicNeedRepository {
       input.decision === 'approved'
         ? {
             verification_status: 'approved_entry',
-            visibility_status: 'public',
+            visibility_status: 'hidden',
             status: 'active',
             verified_by: input.actorId,
           }
@@ -298,6 +298,18 @@ export class PublicNeedRepository {
       .single()
     if (error) throw error
     return toCoverageReservation(data as AnyRow)
+  }
+
+  async closeAllByCaseId(caseId: string): Promise<void> {
+    const { error } = await supabase
+      .from('public_needs')
+      .update({
+        call_status: 'complete',
+        visibility_status: 'hidden',
+        status: 'completed',
+      })
+      .eq('case_id', caseId)
+    if (error) throw error
   }
 
   async updateCallStatus(input: {
