@@ -44,7 +44,7 @@ interface ActionDef {
 
 const COORDINATOR_ACTIONS: ActionDef[] = [
   { id: 'navigate', icon: Building2, label: 'Mi Centro', hint: 'Panel operativo del sitio', accent: 'operational', tab: 'ops' },
-  { id: 'register-need', icon: PackagePlus, label: 'Registrar necesidad', hint: 'Insumos que faltan', accent: 'warning' },
+  { id: 'register-need', icon: PackagePlus, label: 'Solicitar recurso', hint: 'Enviar solicitud al Gestor de Casos', accent: 'warning' },
   { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Necesidades prioritarias', accent: 'critical' },
   { id: 'register-arrival', icon: Truck, label: 'Registrar llegada', hint: 'Donaciones recibidas', accent: 'operational' },
   { id: 'register-dispatch', icon: TruckIcon, label: 'Registrar salida', hint: 'Recursos distribuidos', accent: 'info' },
@@ -52,7 +52,6 @@ const COORDINATOR_ACTIONS: ActionDef[] = [
 
 const CITIZEN_ACTIONS: ActionDef[] = [
   { id: 'report', icon: PenLine, label: 'Reportar emergencia', hint: 'Alerta ciudadana inmediata', accent: 'critical' },
-  { id: 'register-need', icon: PackagePlus, label: 'Registrar nueva necesidad', hint: 'Insumo o apoyo requerido', accent: 'warning' },
 ]
 
 const VOLUNTEER_ACTIONS: ActionDef[] = [
@@ -61,7 +60,7 @@ const VOLUNTEER_ACTIONS: ActionDef[] = [
 ]
 
 const CASE_MANAGER_ACTIONS: ActionDef[] = [
-  { id: 'create-case', icon: ClipboardPlus, label: 'Crear caso manualmente', hint: 'Ingreso directo al flujo operativo', accent: 'info' },
+  { id: 'create-case', icon: ClipboardPlus, label: 'Crear solicitud manual', hint: 'Entra a En revisión del pipeline', accent: 'info' },
   { id: 'assign-resource', icon: UserPlus, label: 'Asignar recurso', hint: 'Abrir comando y asignar centro', accent: 'operational' },
   { id: 'navigate', icon: Building2, label: 'Centro de comando', hint: 'Pipeline operativo', accent: 'info', tab: 'map' },
   { id: 'navigate', icon: ClipboardPlus, label: 'Bandeja gestor', hint: 'Reportes y conversiones', accent: 'warning', tab: 'case-manager' },

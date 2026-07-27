@@ -197,6 +197,9 @@ export const caseManagerService = {
       },
       actorId,
       reportId: data.reportId,
+      requestSource: 'citizen',
+      requestType: 'report',
+      operationType: 'incident',
     })
 
     // Marcar convertido apenas existe el caso — sobrevive fallos posteriores
@@ -206,15 +209,7 @@ export const caseManagerService = {
       caseId: result.case.id,
     })
 
-    const transitioned =
-      result.case.pipelineStage === 'pending_review'
-        ? result
-        : await caseService.transition(
-            result.case.id,
-            'pending_review',
-            actorId,
-            'Caso operativo creado desde reporte ciudadano',
-          )
+    const transitioned = result
 
     // Necesidad borrador (convocatoria cerrada). El gestor abre voluntarios después.
     await publicNeedRepository.createFromCase({
@@ -240,13 +235,30 @@ export const caseManagerService = {
    * Abre la convocatoria operativa de un caso:
    * caso → open_for_applications, necesidad visible, call_status=open, avisos a voluntarios.
    */
-  async openVolunteerCall(caseId: string, actorId?: string): Promise<{
+  async openVolunteerCall(
+    caseId: string,
+    actorId?: string,
+    options?: { skipDecisionLog?: boolean },
+  ): Promise<{
     case: CaseDomain
     need: PublicNeed
   }> {
     const caseData = await caseService.getById(caseId)
     if (!caseData) throw new Error('Caso no encontrado')
 
+    const { assertCaseDomainReadyToPublish } = await import('@/domain/case-publish-validation')
+    assertCaseDomainReadyToPublish(caseData, actorId)
+
+    if (!options?.skipDecisionLog) {
+      const { pipelineLog } = await import('@/lib/operational-log')
+      pipelineLog('gc_decision', {
+        entityId: caseId,
+        actorId,
+        from: caseData.pipelineStage,
+        to: 'open_for_applications',
+        payload: { decision: 'radar', operationType: caseData.operationType },
+      })
+    }
     let opened = caseData
     if (caseData.pipelineStage !== 'open_for_applications') {
       const result = await caseService.transition(
@@ -287,7 +299,6 @@ export const caseManagerService = {
         operatorId: actorId ?? 'system',
       })
     } else {
-      // Ya estaba abierta: reavisar a la red de voluntarios
       await caseApplicationService.notifyVolunteersAboutCase(opened)
     }
 
@@ -300,6 +311,68 @@ export const caseManagerService = {
     })
 
     return { case: opened, need }
+  },
+
+  /**
+   * Confirma transferencia asistida por inventario.
+   * - volunteer → operation_type=transfer + abrir radar
+   * - institution → operation_type=transfer (GC sigue con asignar centro)
+   * - node → operation_type=transfer + awaiting_center_confirmation al nodo origen
+   */
+  async confirmTransferDecision(params: {
+    caseId: string
+    actorId: string
+    executor: 'volunteer' | 'institution' | 'node'
+    originCenterId: string
+    resourceType: string
+  }): Promise<{ case: CaseDomain; next: 'radar' | 'assign_institution' | 'awaiting_node' }> {
+    const { pipelineLog } = await import('@/lib/operational-log')
+    const { assertCaseDomainReadyToPublish } = await import('@/domain/case-publish-validation')
+    const { assignmentService } = await import('@/services/assignment-service')
+
+    const caseData = await caseService.getById(params.caseId)
+    if (!caseData) throw new Error('Caso no encontrado')
+    assertCaseDomainReadyToPublish(caseData, params.actorId)
+
+    await caseService.updateClassification(params.caseId, { operationType: 'transfer' })
+
+    // Persist origin in metadata via repository update of description/metadata isn't on CaseDomain —
+    // store via caseRepository raw if needed; for MVP keep origin in decision log payload.
+    pipelineLog('gc_decision', {
+      entityId: params.caseId,
+      actorId: params.actorId,
+      from: caseData.pipelineStage,
+      to: 'transfer',
+      centerId: params.originCenterId,
+      payload: {
+        decision: 'transfer',
+        executor: params.executor,
+        originCenterId: params.originCenterId,
+        resourceType: params.resourceType,
+      },
+    })
+
+    if (params.executor === 'volunteer') {
+      const result = await caseManagerService.openVolunteerCall(params.caseId, params.actorId, {
+        skipDecisionLog: true,
+      })
+      return { case: result.case, next: 'radar' }
+    }
+
+    if (params.executor === 'node') {
+      await assignmentService.assign(
+        params.caseId,
+        params.originCenterId,
+        params.actorId,
+        undefined,
+        `Transferencia de inventario (${params.resourceType}) desde nodo`,
+      )
+      const updated = await caseService.getById(params.caseId)
+      return { case: updated ?? caseData, next: 'awaiting_node' }
+    }
+
+    // institution: GC continúa con modal de asignación
+    return { case: { ...caseData, operationType: 'transfer' }, next: 'assign_institution' }
   },
 }
 

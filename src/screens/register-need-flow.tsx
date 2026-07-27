@@ -4,7 +4,9 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { FlowSheet, FormField, fieldClassName } from '@/components/faro/flow-sheet'
 import { NeedItemLabel } from '@/components/faro/need-item-label'
-import { useRegisterNeed } from '@/hooks/useFaroMutations'
+import { useCreateCase } from '@/hooks/useCaseMutations'
+import { useAuth } from '@/store/auth-context'
+import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import {
   NEED_CATEGORIES,
   NEED_ITEM_PRESETS,
@@ -12,7 +14,7 @@ import {
   qtyPlaceholderForCategory,
   resolveNeedItemName,
 } from '@/lib/need-catalog'
-import { PRIORITY_OPTIONS, siteToNeedableType } from '@/lib/site-utils'
+import { PRIORITY_OPTIONS } from '@/lib/site-utils'
 import { useFaro } from '@/store/faro-context'
 
 interface RegisterNeedFlowProps {
@@ -20,25 +22,31 @@ interface RegisterNeedFlowProps {
   presetSiteId?: string
 }
 
+/**
+ * Solicitud operativa del coordinador → caso en pending_review del GC.
+ * Ya no escribe en la tabla legacy `needs`.
+ */
 export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProps) {
   const { sites } = useFaro()
-  const registerNeed = useRegisterNeed()
-  const [siteId, setSiteId] = useState(presetSiteId ?? sites[0]?.id ?? '')
+  const { user } = useAuth()
+  const { assignment } = useCoordinatorAssignment()
+  const createCase = useCreateCase()
+  const defaultSiteId = presetSiteId ?? assignment?.siteId ?? sites[0]?.id ?? ''
+  const [siteId, setSiteId] = useState(defaultSiteId)
   useEffect(() => {
     if (presetSiteId) setSiteId(presetSiteId)
-  }, [presetSiteId])
+    else if (assignment?.siteId) setSiteId(assignment.siteId)
+  }, [presetSiteId, assignment?.siteId])
   const [categoryKey, setCategoryKey] = useState<NeedCategoryKey>(NEED_CATEGORIES[0].key)
   const [presetItem, setPresetItem] = useState('')
   const [customLabel, setCustomLabel] = useState('')
   const [priority, setPriority] = useState<'critical' | 'high' | 'medium' | 'low'>('high')
   const [qtyRequired, setQtyRequired] = useState('50')
-  const [qtyReceived, setQtyReceived] = useState('0')
   const [done, setDone] = useState(false)
   const [savedItemName, setSavedItemName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const skipCategoryReset = useRef(false)
 
-  // Prefill desde sugerencia de inventario del Nodo Logístico
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('faro:need-preset')
@@ -94,53 +102,58 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
 
   const handleSubmit = async () => {
     setError(null)
-    if (!selectedSite) {
-      setError('Primero registra un sitio en el mapa.')
+    if (!selectedSite && !assignment?.siteId) {
+      setError('No hay un centro asignado para solicitar recursos.')
       return
     }
     const itemName = resolvedItemName
     if (itemName.length < 2) {
-      setError('Describe el insumo o necesidad.')
+      setError('Describe el recurso o apoyo solicitado.')
       return
     }
+    const centerId = selectedSite?.id ?? assignment?.siteId ?? ''
+    const zone = selectedSite?.name ?? assignment?.siteName ?? 'Centro'
+    const lat = selectedSite?.lat ?? 0
+    const lng = selectedSite?.lng ?? 0
     try {
-      await registerNeed.mutateAsync({
-        needableType: siteToNeedableType(selectedSite),
-        needableId: selectedSite.id,
-        itemName,
+      await createCase.mutateAsync({
+        title: `Solicitud: ${itemName}`,
+        description: `El nodo logístico solicita ${qtyRequired} de ${itemName} (${NEED_CATEGORIES.find((c) => c.key === categoryKey)?.label ?? categoryKey}).`,
         priority,
-        qtyRequired: Number(qtyRequired) || 1,
-        qtyReceived: Number(qtyReceived) || 0,
+        zone,
+        category: itemName,
+        affectedCount: Math.max(1, Number(qtyRequired) || 1),
+        location:
+          Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
+            ? { lat, lng, address: selectedSite?.zone }
+            : undefined,
+        actorId: user?.id,
+        requestingCenterId: centerId,
+        requestSource: 'coordinator',
+        requestType: 'inventory_request',
+        operationType: 'resource_request',
+        responsibleId: user?.id,
+        destination: zone,
       })
       setSavedItemName(itemName)
       setDone(true)
-    } catch {
-      setError('No se pudo registrar la necesidad. Inténtalo nuevamente.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo enviar la solicitud.')
     }
-  }
-
-  if (!sites.length) {
-    return (
-      <FlowSheet title="Registrar necesidad" subtitle="Inventario" onClose={onClose}>
-        <GlassCard className="space-y-3">
-          <p className="text-sm text-ink-muted">Aún no hay sitios en el mapa. Registra uno primero con el botón +.</p>
-          <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onClose}>
-            Entendido
-          </EmergencyButton>
-        </GlassCard>
-      </FlowSheet>
-    )
   }
 
   if (done) {
     return (
-      <FlowSheet title="Necesidad registrada" subtitle="Inventario" onClose={onClose}>
+      <FlowSheet title="Solicitud enviada" subtitle="Bandeja del Gestor de Casos" onClose={onClose}>
         <GlassCard className="space-y-3">
           <div className="flex items-center gap-2 text-operational">
             <CheckCircle2 className="h-5 w-5" />
             <NeedItemLabel name={savedItemName} className="font-semibold text-ink" />
           </div>
-          <p className="text-sm text-ink-muted">Se reflejará en prioridades y en la ficha de {selectedSite?.name}.</p>
+          <p className="text-sm text-ink-muted">
+            Tu solicitud entró a <strong className="text-ink">En revisión</strong>. El Gestor de Casos
+            decidirá si abrir radar, transferir inventario o asignar una institución.
+          </p>
           <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onClose}>
             Listo
           </EmergencyButton>
@@ -150,22 +163,12 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
   }
 
   return (
-    <FlowSheet title="Registrar necesidad" subtitle="Inventario" onClose={onClose}>
+    <FlowSheet title="Solicitar recurso" subtitle="Apoyo operativo al GC" onClose={onClose}>
       <GlassCard className="space-y-4">
-        <FormField label="Sitio">
-          {presetSiteId ? (
-            <div className="flex h-12 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-sm text-ink">
-              {selectedSite?.name ?? 'Centro asignado'}
-            </div>
-          ) : (
-            <select className={fieldClassName} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-              {sites.map((site) => (
-                <option key={site.id} value={site.id} className="bg-base-900">
-                  {site.name}
-                </option>
-              ))}
-            </select>
-          )}
+        <FormField label="Centro solicitante">
+          <div className="flex h-12 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-sm text-ink">
+            {selectedSite?.name ?? assignment?.siteName ?? 'Centro asignado'}
+          </div>
         </FormField>
 
         <FormField label="Categoría">
@@ -183,7 +186,7 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
         </FormField>
 
         {usesPresetList && (
-          <FormField label="Tipo de apoyo">
+          <FormField label="Recurso / apoyo">
             <select
               className={fieldClassName}
               value={presetItem}
@@ -202,16 +205,12 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
         )}
 
         {(usesCustomOnly || presetItem === '__custom__') && (
-          <FormField label={categoryKey === 'otros' ? 'Insumo o necesidad' : 'Especifica la necesidad'}>
+          <FormField label="Especifica el recurso">
             <input
               className={fieldClassName}
               value={customLabel}
               onChange={(e) => setCustomLabel(e.target.value)}
-              placeholder={
-                categoryKey === 'apoyo-psicologico'
-                  ? 'Ej. sesiones psicológicas, voluntarios de apoyo emocional'
-                  : 'Ej. colchonetas, teteros, suero'
-              }
+              placeholder="Ej. colchonetas, agua potable, apoyo psicológico"
             />
           </FormField>
         )}
@@ -241,32 +240,27 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
           </div>
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Cantidad requerida">
-            <input
-              className={fieldClassName}
-              type="number"
-              min={1}
-              value={qtyRequired}
-              onChange={(e) => setQtyRequired(e.target.value)}
-              placeholder={qtyPlaceholder}
-            />
-          </FormField>
-          <FormField label="Ya disponible">
-            <input
-              className={fieldClassName}
-              type="number"
-              min={0}
-              value={qtyReceived}
-              onChange={(e) => setQtyReceived(e.target.value)}
-            />
-          </FormField>
-        </div>
+        <FormField label="Cantidad solicitada">
+          <input
+            className={fieldClassName}
+            type="number"
+            min={1}
+            value={qtyRequired}
+            onChange={(e) => setQtyRequired(e.target.value)}
+            placeholder={qtyPlaceholder}
+          />
+        </FormField>
 
         {error && <p className="text-sm text-critical">{error}</p>}
 
-        <EmergencyButton variant="primary" size="lg" className="w-full" disabled={registerNeed.isPending} onClick={handleSubmit}>
-          {registerNeed.isPending ? 'Guardando…' : 'Publicar necesidad'}
+        <EmergencyButton
+          variant="primary"
+          size="lg"
+          className="w-full"
+          disabled={createCase.isPending}
+          onClick={handleSubmit}
+        >
+          {createCase.isPending ? 'Enviando…' : 'Solicitar apoyo'}
         </EmergencyButton>
       </GlassCard>
     </FlowSheet>

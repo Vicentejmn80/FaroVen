@@ -22,21 +22,26 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-ink">Necesidades del centro</p>
+        <p className="text-sm font-medium text-ink">Solicitudes del centro</p>
         <EmergencyButton variant="primary" size="sm" onClick={onCreateNeed}>
-          Crear necesidad
+          Solicitar recurso
         </EmergencyButton>
       </div>
 
+      <GlassCard className="border-info/20 bg-info/5 text-xs text-ink-muted">
+        Las solicitudes van a la bandeja <span className="text-ink">En revisión</span> del Gestor de Casos.
+        Ya no se publican necesidades operativas desde el nodo.
+      </GlassCard>
+
       {pendingClosures.length > 0 && (
         <GlassCard className="border-warning/30 bg-warning/10 text-sm text-ink">
-          Hay {pendingClosures.length} necesidad(es) pendientes de cierre operativo.
+          Hay {pendingClosures.length} necesidad(es) legacy pendientes de cierre.
         </GlassCard>
       )}
 
       {needs.length === 0 ? (
         <GlassCard className="text-sm text-ink-muted">
-          No hay necesidades registradas. Crea la primera para que los ciudadanos vean qué falta.
+          No hay solicitudes históricas. Usa «Solicitar recurso» para pedir apoyo al GC.
         </GlassCard>
       ) : (
         needs.map((need) => {

@@ -121,6 +121,9 @@ export interface CaseRow {
   reporter_email: string | null
   reporter_relationship: string | null
   category: string | null
+  request_source: 'citizen' | 'coordinator' | 'manual' | 'admin'
+  request_type: 'report' | 'inventory_request' | 'manual_request'
+  operation_type: 'incident' | 'resource_request' | 'transfer' | 'volunteer_mission'
   assigned_to: string | null
   assigned_center_id: string | null
   assigned_at: string | null

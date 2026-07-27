@@ -83,7 +83,7 @@ export function CoordinatorNeedsSmartPanel({ onCreateNeed }: CoordinatorNeedsSma
                   })
                 }
               >
-                Crear necesidad
+                Solicitar recurso
               </EmergencyButton>
             </GlassCard>
           ))}

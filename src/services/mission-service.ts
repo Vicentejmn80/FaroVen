@@ -152,6 +152,12 @@ export interface CreateMissionParams {
 
 export const missionService = {
   async create(params: CreateMissionParams): Promise<TransitionResult> {
+    if (!params.caseId) {
+      throw new Error(
+        'Arquitectura FARO: las misiones solo se crean desde el pipeline del Gestor de Casos (caso vinculado).',
+      )
+    }
+
     const mission = await missionRepository.create(params)
 
     const event = await missionRepository.addEvent({
@@ -454,6 +460,14 @@ export const missionService = {
       actorId: verifiedBy,
       volunteerId: updated.volunteerId,
       payload: { assignmentId },
+    })
+    const { pipelineLog } = await import('@/lib/operational-log')
+    pipelineLog('mission_closed', {
+      entityId: updated.missionId,
+      entityType: 'mission',
+      actorId: verifiedBy,
+      volunteerId: updated.volunteerId,
+      payload: { assignmentId, caseId: mission?.caseId },
     })
 
     return updated

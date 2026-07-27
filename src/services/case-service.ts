@@ -1,7 +1,17 @@
 import { transitionCase, canTransition } from '@/domain/case-lifecycle.service'
-import type { CaseDomain, CaseDomainEvent, CasePriority, PipelineStage, TransitionResult } from '@/domain/case-lifecycle.types'
+import type {
+  CaseDomain,
+  CaseDomainEvent,
+  CasePriority,
+  OperationType,
+  PipelineStage,
+  RequestSource,
+  RequestType,
+  TransitionResult,
+} from '@/domain/case-lifecycle.types'
 import { caseRepository, type CaseFilters } from '@/repositories/case-repository'
-import { operationalLog } from '@/lib/operational-log'
+import { operationalLog, pipelineLog } from '@/lib/operational-log'
+import { assertCaseReadyToPublish } from '@/domain/case-publish-validation'
 
 export interface CreateCaseParams {
   title: string
@@ -15,10 +25,37 @@ export interface CreateCaseParams {
   actorId?: string
   /** Origen del caso (evita duplicar al reintentar convertir el mismo reporte). */
   reportId?: string
+  requestSource?: RequestSource
+  requestType?: RequestType
+  operationType?: OperationType
+  /** Centro que solicita (coordinador / transferencia). */
+  requestingCenterId?: string
+  /** Centro origen con stock (transferencia). */
+  originCenterId?: string
+  /** Si true, valida coords/categoría/prioridad/cantidad antes de crear. */
+  requirePublishReady?: boolean
+  /** Destino / responsable para validación de publicación. */
+  destination?: string
+  responsibleId?: string
 }
 
 export const caseService = {
   async create(params: CreateCaseParams): Promise<TransitionResult> {
+    const requestSource = params.requestSource ?? (params.reportId ? 'citizen' : 'manual')
+    const requestType = params.requestType ?? (params.reportId ? 'report' : 'manual_request')
+    const operationType = params.operationType ?? 'incident'
+
+    if (params.requirePublishReady) {
+      assertCaseReadyToPublish({
+        location: params.location,
+        category: params.category,
+        priority: params.priority,
+        quantity: params.affectedCount,
+        responsibleId: params.responsibleId ?? params.actorId,
+        destination: params.destination ?? params.zone,
+      })
+    }
+
     const caseData = await caseRepository.create({
       title: params.title,
       description: params.description,
@@ -29,7 +66,14 @@ export const caseService = {
       affectedCount: params.affectedCount,
       reporterInfo: params.reporterInfo,
       category: params.category,
-      metadata: params.reportId ? { report_id: params.reportId } : undefined,
+      requestSource,
+      requestType,
+      operationType,
+      metadata: {
+        ...(params.reportId ? { report_id: params.reportId } : {}),
+        ...(params.requestingCenterId ? { requesting_center_id: params.requestingCenterId } : {}),
+        ...(params.originCenterId ? { origin_center_id: params.originCenterId } : {}),
+      },
     })
 
     const domain: CaseDomain = {
@@ -38,20 +82,40 @@ export const caseService = {
       pipelineStage: caseData.pipelineStage as PipelineStage,
     }
 
-    if (params.priority === 'critical') {
-      return caseService.transition(domain.id, 'pending_review', params.actorId, 'Caso crítico — requiere atención inmediata')
-    }
+    // Entrada canónica al pipeline: pending_review
+    const transitioned =
+      domain.pipelineStage === 'pending_review'
+        ? { case: domain, event: {
+            id: crypto.randomUUID(),
+            caseId: domain.id,
+            eventType: 'case_submitted' as const,
+            toStage: 'pending_review' as PipelineStage,
+            actorId: params.actorId,
+            createdAt: new Date(),
+          } }
+        : await caseService.transition(
+            domain.id,
+            'pending_review',
+            params.actorId,
+            params.priority === 'critical'
+              ? 'Caso crítico — requiere atención inmediata'
+              : 'Solicitud operativa creada',
+          )
 
-    const event: CaseDomainEvent = {
-      id: crypto.randomUUID(),
-      caseId: caseData.id,
-      eventType: 'case_submitted',
-      toStage: 'nuevo',
+    pipelineLog('request_created', {
+      entityId: transitioned.case.id,
       actorId: params.actorId,
-      createdAt: new Date(),
-    }
+      to: 'pending_review',
+      payload: {
+        requestSource,
+        requestType,
+        operationType,
+        category: params.category,
+        reportId: params.reportId,
+      },
+    })
 
-    return { case: domain, event }
+    return transitioned
   },
 
   async transition(
@@ -107,8 +171,13 @@ export const caseService = {
       payload: { eventType: result.event.eventType, comment },
     })
 
-    // Al resolver o archivar, cerrar misiones y necesidades públicas asociadas
     if (toStage === 'resolved' || toStage === 'archived') {
+      pipelineLog('case_resolved', {
+        entityId: caseId,
+        actorId,
+        from: result.event.fromStage,
+        to: toStage,
+      })
       try {
         const { missionService } = await import('@/services/mission-service')
         await missionService.closeForResolvedCase(caseId, actorId)
@@ -128,6 +197,13 @@ export const caseService = {
     }
 
     return result
+  },
+
+  async updateClassification(
+    caseId: string,
+    patch: Partial<Pick<CaseDomain, 'operationType' | 'requestType' | 'category' | 'affectedCount'>>,
+  ): Promise<CaseDomain> {
+    return caseRepository.update(caseId, patch)
   },
 
   async list(filters?: CaseFilters): Promise<CaseDomain[]> {

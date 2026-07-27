@@ -95,6 +95,19 @@ export const assignmentService = {
     const caseData = await caseRepository.findById(caseId)
     if (!caseData) throw new Error(`Caso no encontrado: ${caseId}`)
 
+    const { assertCaseDomainReadyToPublish } = await import('@/domain/case-publish-validation')
+    assertCaseDomainReadyToPublish(caseData, assignedBy)
+
+    const { pipelineLog } = await import('@/lib/operational-log')
+    pipelineLog('gc_decision', {
+      entityId: caseId,
+      actorId: assignedBy,
+      from: caseData.pipelineStage,
+      to: 'awaiting_center_confirmation',
+      centerId,
+      payload: { decision: 'assign_center', reason },
+    })
+
     const assignment = await caseRepository.createAssignment({
       caseId,
       centerId,
@@ -153,6 +166,14 @@ export const assignmentService = {
       actorId,
       'Centro confirmó — caso asignado',
     )
+    const { pipelineLog } = await import('@/lib/operational-log')
+    pipelineLog('assignment_confirmed', {
+      entityId: caseId,
+      actorId,
+      from: 'awaiting_center_confirmation',
+      to: 'assigned',
+      centerId: caseData.assignedCenterId ?? null,
+    })
     operationalLog({
       entityType: 'case',
       entityId: caseId,

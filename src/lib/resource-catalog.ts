@@ -161,6 +161,20 @@ export function groupSelectableByCategory(): Array<{
   }))
 }
 
+/** Resuelve clave de catálogo desde texto libre (categoría del caso). */
+export function resolveCatalogKey(input?: string | null): string | null {
+  if (!input?.trim()) return null
+  const n = input.trim().toLowerCase()
+  const byKey = BY_KEY.get(n)
+  if (byKey) return byKey.key
+  const byLabel = RESOURCE_CATALOG.find((item) => item.label.toLowerCase() === n)
+  if (byLabel) return byLabel.key
+  const partial = RESOURCE_CATALOG.find(
+    (item) => n.includes(item.label.toLowerCase()) || n.includes(item.key),
+  )
+  return partial?.key ?? null
+}
+
 /** Mapea clave de catálogo → categoría de necesidad FARO (RegisterNeedFlow). */
 export function catalogKeyToNeedCategory(key: string): string {
   const item = BY_KEY.get(key)

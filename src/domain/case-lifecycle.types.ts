@@ -199,6 +199,46 @@ export interface ReporterInfo {
   relationship?: string
 }
 
+export const REQUEST_SOURCES = {
+  CITIZEN: 'citizen',
+  COORDINATOR: 'coordinator',
+  MANUAL: 'manual',
+  ADMIN: 'admin',
+} as const
+
+export type RequestSource = typeof REQUEST_SOURCES[keyof typeof REQUEST_SOURCES]
+
+export const REQUEST_TYPES = {
+  REPORT: 'report',
+  INVENTORY_REQUEST: 'inventory_request',
+  MANUAL_REQUEST: 'manual_request',
+} as const
+
+export type RequestType = typeof REQUEST_TYPES[keyof typeof REQUEST_TYPES]
+
+export const OPERATION_TYPES = {
+  INCIDENT: 'incident',
+  RESOURCE_REQUEST: 'resource_request',
+  TRANSFER: 'transfer',
+  VOLUNTEER_MISSION: 'volunteer_mission',
+} as const
+
+export type OperationType = typeof OPERATION_TYPES[keyof typeof OPERATION_TYPES]
+
+export const REQUEST_SOURCE_LABELS: Record<RequestSource, string> = {
+  citizen: 'Ciudadano',
+  coordinator: 'Coordinador',
+  manual: 'Manual GC',
+  admin: 'Super Admin',
+}
+
+export const OPERATION_TYPE_LABELS: Record<OperationType, string> = {
+  incident: 'Incidente',
+  resource_request: 'Solicitud de recursos',
+  transfer: 'Traslado entre nodos',
+  volunteer_mission: 'Misión de voluntariado',
+}
+
 export interface CaseDomain {
   id: string
   title: string
@@ -210,6 +250,9 @@ export interface CaseDomain {
   affectedCount: number
   reporterInfo: ReporterInfo
   category?: string
+  requestSource: RequestSource
+  requestType: RequestType
+  operationType: OperationType
   assignedTo?: string
   assignedCenterId?: string
   assignedAt?: Date

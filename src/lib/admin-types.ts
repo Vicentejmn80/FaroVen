@@ -43,7 +43,6 @@ export type SuperAdminModuleId =
   | 'hospitals'
   | 'shelters'
   | 'supply_centers'
-  | 'needs'
   | 'public_needs'
   | 'reports'
   | 'notifications'

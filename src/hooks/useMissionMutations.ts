@@ -14,11 +14,11 @@ function invalidateMissionData(qc: ReturnType<typeof useQueryClient>, missionId?
 }
 
 export function useCreateMission() {
-  const qc = useQueryClient()
   return useMutation({
-    mutationFn: missionService.create,
-    onSuccess: (result) => {
-      invalidateMissionData(qc, result.mission.id)
+    mutationFn: async () => {
+      throw new Error(
+        'Crear misión directa está deshabilitado. Usa el pipeline del Gestor de Casos (Solicitud → GC → Misión).',
+      )
     },
   })
 }

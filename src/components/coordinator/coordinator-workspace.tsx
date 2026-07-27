@@ -42,7 +42,7 @@ import { MISSION_STAGES, type MissionStage } from '@/domain/mission.types'
 const PRIMARY_MODULES: Array<{ id: CoordinatorModuleId; label: string; icon: typeof PackagePlus }> = [
   { id: 'dashboard', label: 'Estado', icon: Zap },
   { id: 'inventory', label: 'Inventario', icon: Package },
-  { id: 'needs', label: 'Necesidades', icon: PackagePlus },
+  { id: 'needs', label: 'Solicitudes', icon: PackagePlus },
   { id: 'missions', label: 'Misiones', icon: Shield },
   { id: 'history', label: 'Historial', icon: History },
 ]

@@ -75,8 +75,8 @@ export function CoordinatorHubScreen({
         <div className="grid grid-cols-2 gap-2.5">
           <ActionCard
             icon={PackagePlus}
-            label="Agregar necesidad"
-            hint="Nuevo faltante"
+            label="Solicitar recurso"
+            hint="Enviar al Gestor de Casos"
             onClick={() => onRegisterNeed?.(site?.id)}
           />
           <ActionCard

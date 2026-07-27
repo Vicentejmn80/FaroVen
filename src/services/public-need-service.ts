@@ -193,6 +193,9 @@ export async function approveNeedInterest(input: {
   if (reservation.collaboratorType === 'volunteer' && reservation.collaboratorUserId) {
     const volunteer = await volunteerRepository.findByUserId(reservation.collaboratorUserId)
     if (!volunteer) throw new Error('No se encontró el perfil de voluntario para esta postulación')
+    if (!need.caseId) {
+      throw new Error('Esta convocatoria no está ligada a un caso del Gestor. No se puede crear la misión.')
+    }
 
     const missionCreation = await missionService.create({
       centerId: 'network_pool',
@@ -208,7 +211,7 @@ export async function approveNeedInterest(input: {
         zone: need.locationPublic.zone,
       },
       supportRequestId: need.id,
-      caseId: need.caseId ?? undefined,
+      caseId: need.caseId,
       createdBy: input.operatorId,
     })
 

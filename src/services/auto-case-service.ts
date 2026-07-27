@@ -25,6 +25,9 @@ export const autoCaseService = {
       category: report.type,
       actorId,
       reportId: report.id,
+      requestSource: 'citizen',
+      requestType: 'report',
+      operationType: 'incident',
     })
 
     if (report.status !== 'converted' && report.status !== 'discarded') {
@@ -34,16 +37,6 @@ export const autoCaseService = {
       })
     }
 
-    const transitioned =
-      result.case.pipelineStage === 'pending_review'
-        ? result
-        : await caseService.transition(
-            result.case.id,
-            'pending_review',
-            actorId,
-            'Caso operativo creado automáticamente desde reporte',
-          )
-
-    return transitioned
+    return result
   },
 }

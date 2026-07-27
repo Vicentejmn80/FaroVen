@@ -279,6 +279,15 @@ async function ensureMissionForApprovedApplication(input: {
     payload: { caseId: input.caseData.id },
   })
 
+  const { pipelineLog } = await import('@/lib/operational-log')
+  pipelineLog('mission_created', {
+    entityId: created.mission.id,
+    entityType: 'mission',
+    actorId: input.actorId,
+    volunteerId: input.applicantProfileId,
+    payload: { caseId: input.caseData.id },
+  })
+
   await missionService.assignVolunteer(created.mission.id, volunteerId, input.actorId)
   return created.mission
 }

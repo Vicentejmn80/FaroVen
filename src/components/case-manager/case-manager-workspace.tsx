@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases, useArchiveCase } from '@/hooks/useCases'
-import { useConfirmCenterAssignment, useRejectCenterAssignment } from '@/hooks/useCaseMutations'
+import { useConfirmCenterAssignment, useRejectCenterAssignment, useConfirmTransferDecision } from '@/hooks/useCaseMutations'
 import { useRoleRequests } from '@/hooks/useRoleRequests'
 import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -11,6 +11,7 @@ import { ReportDetailPanel } from '@/components/case-manager/report-detail-panel
 import { ConvertReportWizard } from '@/components/case-manager/convert-report-wizard'
 import { EsperarPostulanteModal } from '@/components/case-manager/esperar-postulante-modal'
 import { AsignarCentroModal } from '@/components/case-manager/asignar-centro-modal'
+import { GcDecisionPanel } from '@/components/case-manager/gc-decision-panel'
 import { RoleRequestAdminPanel } from '@/components/role-request/role-request-admin-panel'
 import { AvailabilityCalendarCard } from '@/components/availability/availability-calendar-card'
 import { PostulationPanel } from '@/components/dispatch/postulation-panel'
@@ -287,6 +288,7 @@ export function CaseManagerWorkspace() {
   const archiveCase = useArchiveCase()
   const confirmCenter = useConfirmCenterAssignment()
   const rejectCenter = useRejectCenterAssignment()
+  const confirmTransfer = useConfirmTransferDecision()
   const [esperandoCasoId, setEsperandoCasoId] = useState<string | null>(null)
   const [asignandoCasoId, setAsignandoCasoId] = useState<string | null>(null)
   const [applicationCaseId, setApplicationCaseId] = useState<string | undefined>(undefined)
@@ -547,36 +549,40 @@ export function CaseManagerWorkspace() {
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
 
-                      {/* Caso en revisión: SOLO dos acciones */}
+                      {/* Caso en revisión: asistente FARO (stock → transferencia o radar) */}
                       {(c.pipelineStage === 'pending_review' ||
                         c.pipelineStage === 'validating' ||
                         c.pipelineStage === 'awaiting_info') && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEsperandoCasoId(c.id)}
-                            className={cn(
-                              'flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]',
-                              'border-white/[0.08]',
-                            )}
-                          >
-                            <p className="font-medium text-ink">Solicitar postulantes</p>
-                            <p className="text-ink-faint mt-0.5">
-                              Abre el radar y notifica a voluntarios — no asigna a nadie
-                            </p>
-                          </button>
-                          <button
-                            onClick={() => setAsignandoCasoId(c.id)}
-                            className={cn(
-                              'flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]',
-                              'border-white/[0.08]',
-                            )}
-                          >
-                            <p className="font-medium text-ink">Asignar a Centro</p>
-                            <p className="text-ink-faint mt-0.5">
-                              Centro, refugio, ONG o institución — espera confirmación
-                            </p>
-                          </button>
-                        </div>
+                        <GcDecisionPanel
+                          caseData={c}
+                          busy={confirmTransfer.isPending}
+                          onOpenRadar={() => setEsperandoCasoId(c.id)}
+                          onAssignInstitution={() => setAsignandoCasoId(c.id)}
+                          onTransfer={({ executor, originCenterId, resourceType }) => {
+                            if (!user?.id) return
+                            confirmTransfer.mutate(
+                              {
+                                caseId: c.id,
+                                actorId: user.id,
+                                executor,
+                                originCenterId,
+                                resourceType,
+                              },
+                              {
+                                onSuccess: (result) => {
+                                  if (result.next === 'assign_institution') {
+                                    setAsignandoCasoId(c.id)
+                                  } else if (result.next === 'radar') {
+                                    setEsperandoCasoId(c.id)
+                                  }
+                                },
+                                onError: (err) => {
+                                  window.alert(err instanceof Error ? err.message : 'No se pudo confirmar')
+                                },
+                              },
+                            )
+                          }}
+                        />
                       )}
 
                       {c.pipelineStage === 'awaiting_center_confirmation' && (

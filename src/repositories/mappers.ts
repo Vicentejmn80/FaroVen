@@ -281,8 +281,18 @@ export function eventRowToEvent(row: EventRow): Event {
   }
 }
 
-import type { CaseAssignment, CaseDomain, CaseDomainEvent, CasePriority, PipelineStage, CaseEventType } from '@/domain/case-lifecycle.types'
 import type { CaseAssignmentRow, CaseEventRow, CaseRow } from '@/types/supabase'
+import type {
+  CaseAssignment,
+  CaseDomain,
+  CaseDomainEvent,
+  CaseEventType,
+  CasePriority,
+  OperationType,
+  PipelineStage,
+  RequestSource,
+  RequestType,
+} from '@/domain/case-lifecycle.types'
 
 export function caseRowToDomain(row: CaseRow): CaseDomain {
   return {
@@ -306,6 +316,9 @@ export function caseRowToDomain(row: CaseRow): CaseDomain {
       relationship: row.reporter_relationship ?? undefined,
     },
     category: row.category ?? undefined,
+    requestSource: (row.request_source ?? 'manual') as RequestSource,
+    requestType: (row.request_type ?? 'manual_request') as RequestType,
+    operationType: (row.operation_type ?? 'incident') as OperationType,
     assignedTo: row.assigned_to ?? undefined,
     assignedCenterId: row.assigned_center_id ?? undefined,
     assignedAt: row.assigned_at ? new Date(row.assigned_at) : undefined,
@@ -339,6 +352,9 @@ export function caseDomainToRow(domain: Partial<CaseDomain>): Record<string, unk
     row.reporter_relationship = domain.reporterInfo.relationship ?? null
   }
   if (domain.category !== undefined) row.category = domain.category ?? null
+  if (domain.requestSource !== undefined) row.request_source = domain.requestSource
+  if (domain.requestType !== undefined) row.request_type = domain.requestType
+  if (domain.operationType !== undefined) row.operation_type = domain.operationType
   if (domain.assignedTo !== undefined) row.assigned_to = domain.assignedTo ?? null
   if (domain.assignedCenterId !== undefined) row.assigned_center_id = domain.assignedCenterId ?? null
   if (domain.assignedAt !== undefined) row.assigned_at = domain.assignedAt?.toISOString() ?? null

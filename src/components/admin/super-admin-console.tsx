@@ -5,7 +5,6 @@ import {
   Bell,
   Building2,
   Calendar,
-  ClipboardList,
   FileQuestion,
   Flag,
   HeartPulse,
@@ -51,7 +50,6 @@ import { useAuth } from '@/store/auth-context'
 import { useFaro } from '@/store/faro-context'
 import { siteToNeedableType } from '@/lib/site-utils'
 import type { ProfileRow, CoordinatorRequestRow } from '@/repositories/auth-types'
-import type { Site } from '@/lib/types'
 import type { Need, Report } from '@/domain/models'
 import type { Event } from '@/domain/models'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
@@ -77,8 +75,7 @@ const MODULES: { id: SuperAdminModuleId; label: string; icon: typeof Users; desc
   { id: 'hospitals', label: 'Hospitales', icon: HeartPulse, description: 'Registro y mantenimiento' },
   { id: 'shelters', label: 'Refugios', icon: Home, description: 'Registro y mantenimiento' },
   { id: 'supply_centers', label: 'Acopios', icon: Warehouse, description: 'Centros de acopio' },
-  { id: 'needs', label: 'Necesidades', icon: ClipboardList, description: 'CRUD global' },
-  { id: 'public_needs', label: 'Necesidades públicas', icon: Flag, description: 'Radar ciudadano / voluntarios' },
+  { id: 'public_needs', label: 'Radar público', icon: Flag, description: 'Convocatorias ligadas a casos GC' },
   { id: 'reports', label: 'Reportes', icon: ScrollText, description: 'Moderación ciudadana' },
   { id: 'notifications', label: 'Notificaciones', icon: Bell, description: 'Bandeja del sistema' },
   { id: 'inventory', label: 'Inventario', icon: Package, description: 'Stock por centro' },
@@ -106,7 +103,7 @@ export function SuperAdminConsole() {
     activeModule === 'coordinators'
   )
   const loadCoordinators = canAdmin && (activeModule === 'coordinators' || activeModule === 'users')
-  const loadNeeds = canAdmin && (activeModule === 'needs' || activeModule === 'inventory')
+  const loadNeeds = canAdmin && activeModule === 'inventory'
   const loadPublicNeeds = canAdmin && activeModule === 'public_needs'
   const loadReports = canAdmin && activeModule === 'reports'
   const loadEvents = canAdmin && activeModule === 'events'
@@ -382,47 +379,6 @@ export function SuperAdminConsole() {
                 invalidateSitesCache(queryClient)
               } catch (err) {
                 setError(formatAuthError(err instanceof Error ? err.message : 'No se pudo eliminar'))
-              } finally {
-                setBusyId(null)
-              }
-            }}
-          />
-        )}
-
-        {activeModule === 'needs' && (
-          <NeedsModule
-            rows={needs.data ?? []}
-            sites={sites}
-            loading={needs.isLoading}
-            busyId={busyId}
-            onCreate={async (input) => {
-              setBusyId('create-need')
-              try {
-                await mutations.createNeed.mutateAsync(input)
-              } catch (err) {
-                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
-              } finally {
-                setBusyId(null)
-              }
-            }}
-            onMarkCovered={async (id) => {
-              setBusyId(id)
-              try {
-                await mutations.markNeedCovered.mutateAsync(id)
-              } catch (err) {
-                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
-              } finally {
-                setBusyId(null)
-              }
-            }}
-            onDelete={async (id) => {
-              if (!window.confirm('¿Eliminar esta necesidad de centro?')) return
-              setBusyId(id)
-              setError(null)
-              try {
-                await mutations.deleteNeed.mutateAsync(id)
-              } catch (err) {
-                setError(formatAuthError(err instanceof Error ? err.message : 'Error'))
               } finally {
                 setBusyId(null)
               }
@@ -845,114 +801,6 @@ function PublicNeedsModule({
           </EmergencyButton>
         </GlassCard>
       ))}
-    </section>
-  )
-}
-
-function NeedsModule({
-  rows,
-  sites,
-  loading,
-  busyId,
-  onCreate,
-  onMarkCovered,
-  onDelete,
-}: {
-  rows: Need[]
-  sites: Site[]
-  loading: boolean
-  busyId: string | null
-  onCreate: (input: {
-    needableType: 'hospital' | 'shelter' | 'supply_center'
-    needableId: string
-    itemName: string
-    priority: string
-    qtyRequired: number
-  }) => Promise<void>
-  onMarkCovered: (id: string) => Promise<void>
-  onDelete: (id: string) => Promise<void>
-}) {
-  const [itemName, setItemName] = useState('')
-  const [siteId, setSiteId] = useState('')
-  const registeredSites = sites.filter((s) => s.type !== 'organization')
-
-  if (loading) return <p className="text-sm text-ink-subtle">Cargando necesidades…</p>
-
-  return (
-    <section className="space-y-3">
-      <GlassCard className="space-y-2">
-        <p className="text-sm font-medium text-ink">Crear necesidad</p>
-        <input
-          className={fieldClassName}
-          placeholder="Nombre del ítem"
-          value={itemName}
-          onChange={(e) => setItemName(e.target.value)}
-        />
-        <select className={fieldClassName} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-          <option value="">Seleccionar centro</option>
-          {registeredSites.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <EmergencyButton
-          variant="primary"
-          size="sm"
-          className="w-full"
-          disabled={!itemName.trim() || !siteId || busyId === 'create-need'}
-          onClick={() => {
-            const site = registeredSites.find((s) => s.id === siteId)
-            if (!site || site.type === 'organization') return
-            void onCreate({
-              needableType: siteToNeedableType(site),
-              needableId: siteId,
-              itemName: itemName.trim(),
-              priority: 'medium',
-              qtyRequired: 1,
-            }).then(() => {
-              setItemName('')
-              setSiteId('')
-            })
-          }}
-        >
-          Crear
-        </EmergencyButton>
-      </GlassCard>
-
-      {rows.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="Sin necesidades" />
-      ) : (
-        rows.slice(0, 100).map((need) => (
-          <GlassCard key={need.id} className="space-y-2">
-            <div>
-              <NeedItemLabel name={need.type} className="text-sm font-medium text-ink" />
-              <p className="text-xs text-ink-subtle">
-                Prioridad {label(PRIORITY_LABELS, need.priority, need.priority)} · {need.available}/{need.required}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <EmergencyButton
-                variant="glass"
-                size="sm"
-                disabled={busyId === need.id}
-                onClick={() => void onMarkCovered(need.id)}
-              >
-                Marcar cubierta
-              </EmergencyButton>
-              <EmergencyButton
-                variant="glass"
-                size="sm"
-                className="text-critical"
-                disabled={busyId === need.id}
-                onClick={() => void onDelete(need.id)}
-              >
-                Eliminar
-              </EmergencyButton>
-            </div>
-          </GlassCard>
-        ))
-      )}
     </section>
   )
 }

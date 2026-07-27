@@ -93,7 +93,6 @@ export function missionLog(
     payload: extra.payload,
     error: extra.error,
   })
-  // Duplica con prefijo de dominio pedido para filtrar en consola.
   if (extra.error) {
     console.warn('[FARO_MISSION]', action, record)
   } else {
@@ -101,3 +100,36 @@ export function missionLog(
   }
   return record
 }
+
+/** Prefijo estable `[FARO_PIPELINE]` solo en transiciones canónicas. */
+export function pipelineLog(
+  action:
+    | 'request_created'
+    | 'gc_decision'
+    | 'mission_created'
+    | 'assignment_confirmed'
+    | 'mission_closed'
+    | 'case_resolved',
+  extra: Partial<OperationalLogPayload> & { entityId: string },
+): Record<string, unknown> {
+  const record = operationalLog({
+    entityType: extra.entityType ?? 'case',
+    entityId: extra.entityId,
+    action,
+    from: extra.from,
+    to: extra.to,
+    actorId: extra.actorId,
+    volunteerId: extra.volunteerId,
+    centerId: extra.centerId,
+    source: extra.source ?? 'service',
+    payload: extra.payload,
+    error: extra.error,
+  })
+  if (extra.error) {
+    console.warn('[FARO_PIPELINE]', action, record)
+  } else {
+    console.info('[FARO_PIPELINE]', action, record)
+  }
+  return record
+}
+

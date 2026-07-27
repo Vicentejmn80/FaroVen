@@ -26,6 +26,9 @@ export interface CreateCaseInput {
   affectedCount?: number
   reporterInfo?: { name?: string; phone?: string; email?: string; relationship?: string }
   category?: string
+  requestSource?: import('@/domain/case-lifecycle.types').RequestSource
+  requestType?: import('@/domain/case-lifecycle.types').RequestType
+  operationType?: import('@/domain/case-lifecycle.types').OperationType
   metadata?: Record<string, unknown>
 }
 
@@ -115,6 +118,9 @@ export class CaseRepository {
       reporter_email: input.reporterInfo?.email ?? null,
       reporter_relationship: input.reporterInfo?.relationship ?? null,
       category: input.category ?? null,
+      request_source: input.requestSource ?? 'manual',
+      request_type: input.requestType ?? 'manual_request',
+      operation_type: input.operationType ?? 'incident',
       metadata: input.metadata ?? {},
     }
 

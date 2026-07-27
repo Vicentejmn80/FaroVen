@@ -145,7 +145,39 @@ export function useCreateCase() {
     },
     onSuccess: () => {
       invalidateCaseData(queryClient)
-      showToast('Caso creado.', 'success')
+      showToast('Solicitud enviada a En revisión.', 'success')
+    },
+  })
+}
+
+export function useConfirmTransferDecision() {
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (input: {
+      caseId: string
+      actorId: string
+      executor: 'volunteer' | 'institution' | 'node'
+      originCenterId: string
+      resourceType: string
+    }) => {
+      try {
+        const { caseManagerService } = await import('@/services/case-manager-service')
+        return await caseManagerService.confirmTransferDecision(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: (data) => {
+      invalidateCaseData(queryClient)
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      if (data.next === 'radar') {
+        showToast('Transferencia por voluntario: radar abierto.', 'success')
+      } else if (data.next === 'awaiting_node') {
+        showToast('Transferencia al nodo: esperando confirmación.', 'success')
+      } else {
+        showToast('Transferencia: elige la institución destino.', 'info')
+      }
     },
   })
 }

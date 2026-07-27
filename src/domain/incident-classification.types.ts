@@ -16,7 +16,7 @@ export const INCIDENT_CLASSES: IncidentClassConfig[] = [
     type: 'humanitarian',
     label: 'Necesidad humanitaria',
     description: 'Alimentos, medicinas, agua, refugio',
-    actionLabel: 'Crear necesidad',
+    actionLabel: 'Solicitar apoyo',
     requiresCenter: true,
     suggestsHospital: false,
     defaultPriority: 'high',
