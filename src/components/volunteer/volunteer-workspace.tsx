@@ -208,10 +208,13 @@ function SelectedMissionModal({
       <GlassCard className="w-full max-w-sm space-y-4 border-info/20 p-5">
         <div className="space-y-1 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-operational">
-            Selección confirmada
+            Misión asignada
           </p>
-          <h2 className="text-lg font-semibold text-ink">Has sido seleccionado para esta misión</h2>
-          <p className="text-sm text-ink-muted">{missionTitle}</p>
+          <h2 className="text-lg font-semibold text-ink">Misión asignada</h2>
+          <p className="text-sm text-ink-muted">
+            Tu ayuda fue aceptada. Prepárate para iniciar la misión.
+          </p>
+          <p className="pt-1 text-xs text-ink-faint">{missionTitle}</p>
         </div>
         <button
           type="button"
@@ -227,7 +230,7 @@ function SelectedMissionModal({
           disabled={isPending}
           className="w-full rounded-2xl border border-white/[0.1] py-2.5 text-xs font-medium text-ink-muted hover:bg-white/[0.04] disabled:opacity-50"
         >
-          No puedo ahora
+          No disponible
         </button>
       </GlassCard>
     </div>
@@ -530,7 +533,7 @@ const TABS: Array<{ id: VolunteerTab; label: string }> = [
  * Overlay global: si hay misión en curso, invade toda la app del voluntario
  * sin importar la pestaña activa.
  */
-function ImmersiveMissionGate() {
+export function ImmersiveMissionGate() {
   const { user } = useAuth()
   const { data: profile } = useVolunteerProfile()
   const { data: assignments } = useVolunteerMissions(profile?.id ?? '')
@@ -680,6 +683,7 @@ export function VolunteerWorkspace({
       'mission_assignments',
       'mission_events',
       'mission_applications',
+      'case_applications',
     ],
     invalidateKeys: [
       FARO_QUERY_KEYS.publicNeeds,
@@ -690,6 +694,7 @@ export function VolunteerWorkspace({
       FARO_QUERY_KEYS.missionEvents,
       FARO_QUERY_KEYS.missionApplications,
       FARO_QUERY_KEYS.volunteerMissions,
+      FARO_QUERY_KEYS.caseApplications,
     ],
   })
 
@@ -735,8 +740,6 @@ export function VolunteerWorkspace({
         {tab === 'history' && <div className="pt-2"><VolunteerHistory /></div>}
         {tab === 'profile' && <div className="pt-2"><ProfileSection /></div>}
       </div>
-
-      <ImmersiveMissionGate />
     </div>
   )
 }

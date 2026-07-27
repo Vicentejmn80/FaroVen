@@ -62,7 +62,6 @@ function InterestsPanel() {
             </div>
             <div className="flex gap-1.5">
               <EmergencyButton variant="glass" size="sm">Contactar</EmergencyButton>
-              <EmergencyButton variant="glass" size="sm" className="text-operational">Aceptar</EmergencyButton>
             </div>
           </div>
         </GlassCard>

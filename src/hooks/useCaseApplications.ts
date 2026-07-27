@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { caseApplicationService } from '@/services/case-application-service'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
+import { humanizeSupabaseError } from '@/lib/supabase-errors'
+import { useToast } from '@/store/toast-context'
 
 function isNonRetryableQueryError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -10,6 +12,17 @@ function isNonRetryableQueryError(error: unknown): boolean {
   if (err.code === 'PGRST200' || err.code === 'PGRST201' || err.code === 'PGRST202' || err.code === '42703') return true
   const message = (err.message ?? '').toLowerCase()
   return message.includes('does not exist') || message.includes('could not find')
+}
+
+function invalidateAfterApplicationChange(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseAssignments] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+  queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
 }
 
 export function useCaseApplications(caseId: string | undefined) {
@@ -27,7 +40,6 @@ export function useCaseApplications(caseId: string | undefined) {
     queryFn: () => caseApplicationService.listByCase(caseId!),
     enabled: !!caseId,
     staleTime: 10_000,
-    // Antes: refetchInterval 5s + realtime + invalidación del workspace = tormenta de 400.
     refetchInterval: false,
     retry: (failureCount, error) => {
       if (isNonRetryableQueryError(error)) return false
@@ -38,8 +50,9 @@ export function useCaseApplications(caseId: string | undefined) {
 
 export function useApplyToCase() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       caseId,
       applicantId,
       ...params
@@ -50,39 +63,64 @@ export function useApplyToCase() {
       message?: string
       skills?: string[]
       availability?: string
-    }) => caseApplicationService.apply(caseId, applicantId, params),
+    }) => {
+      try {
+        return await caseApplicationService.apply(caseId, applicantId, params)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
       queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      showToast('Postulación enviada.', 'success')
+    },
+    onError: (err: Error) => {
+      showToast(err.message || 'No se pudo postular.', 'warning')
     },
   })
 }
 
 export function useApproveCaseApplication() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   return useMutation({
-    mutationFn: ({ applicationId, operatorId }: { applicationId: string; operatorId: string }) =>
-      caseApplicationService.approve(applicationId, operatorId),
+    mutationFn: async ({ applicationId, operatorId }: { applicationId: string; operatorId: string }) => {
+      try {
+        return await caseApplicationService.approve(applicationId, operatorId)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseAssignments] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
-      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      invalidateAfterApplicationChange(queryClient)
+      showToast('Voluntario aceptado — misión asignada.', 'success')
+    },
+    onError: (err: Error) => {
+      showToast(err.message || 'No se pudo aceptar la postulación.', 'warning')
     },
   })
 }
 
 export function useRejectCaseApplication() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   return useMutation({
-    mutationFn: ({ applicationId, operatorId }: { applicationId: string; operatorId: string }) =>
-      caseApplicationService.reject(applicationId, operatorId),
+    mutationFn: async ({ applicationId, operatorId }: { applicationId: string; operatorId: string }) => {
+      try {
+        return await caseApplicationService.reject(applicationId, operatorId)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
       queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+      showToast('Postulación rechazada.', 'success')
+    },
+    onError: (err: Error) => {
+      showToast(err.message || 'No se pudo rechazar.', 'warning')
     },
   })
 }

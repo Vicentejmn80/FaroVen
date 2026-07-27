@@ -320,6 +320,7 @@ export class PublicNeedRepository {
       call_status: input.callStatus,
       visibility_status: input.callStatus === 'open' ? 'public' : 'hidden',
     }
+    if (input.callStatus === 'open') patch.status = 'active'
     if (input.callStatus === 'complete') patch.status = 'completed'
 
     const { data, error } = await supabase

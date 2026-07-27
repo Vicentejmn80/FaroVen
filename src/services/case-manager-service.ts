@@ -7,6 +7,7 @@ import type { Report } from '@/domain/models'
 import type { CaseDomain, CasePriority } from '@/domain/case-lifecycle.types'
 import type { PublicNeed } from '@/domain/public-need.types'
 import { supabase } from '@/lib/supabase'
+import { missionLog } from '@/lib/operational-log'
 
 const EARTH_RADIUS_KM = 6371
 
@@ -289,6 +290,14 @@ export const caseManagerService = {
       // Ya estaba abierta: reavisar a la red de voluntarios
       await caseApplicationService.notifyVolunteersAboutCase(opened)
     }
+
+    missionLog('waiting_for_applications', {
+      entityId: caseId,
+      entityType: 'case',
+      actorId,
+      to: 'open_for_applications',
+      payload: { publicNeedId: need.id, callStatus: need.callStatus },
+    })
 
     return { case: opened, need }
   },

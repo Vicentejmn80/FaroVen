@@ -36,6 +36,8 @@ import { INCIDENT_TYPE_LABELS, label, PRIORITY_SHORT_LABELS } from '@/lib/labels
 import { useMapData, type Mission } from '@/hooks/useMapData'
 import { usePublicNeeds } from '@/hooks/usePublicNeeds'
 import type { PublicNeed } from '@/domain/public-need.types'
+import { useRealtimeSync } from '@/supabase/use-realtime-sync'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 
 interface SituationScreenProps {
   onOpenDetail?: (site: Site) => void
@@ -52,6 +54,20 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   const { user } = useAuth()
   const mapData = useMapData({ userRole: role, userId: user?.id ?? null, location: null })
   const { data: publicNeeds, isLoading: publicNeedsLoading } = usePublicNeeds()
+
+  // Radar en vivo en el mapa: sin esto el voluntario solo ve cambios al refrescar.
+  useRealtimeSync({
+    channelName: 'volunteer-map-radar',
+    tables: ['public_needs', 'missions', 'mission_assignments', 'case_applications'],
+    invalidateKeys: [
+      FARO_QUERY_KEYS.publicNeeds,
+      FARO_QUERY_KEYS.missions,
+      FARO_QUERY_KEYS.missionAssignments,
+      FARO_QUERY_KEYS.volunteerMissions,
+      FARO_QUERY_KEYS.caseApplications,
+    ],
+  })
+
   const { sites, latestActivity, isLoading, loadError, state } = useFaro()
   const needs = state.needs
   const [selected, setSelected] = useState<Site | null>(null)

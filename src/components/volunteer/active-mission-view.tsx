@@ -548,6 +548,20 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
                 <Clock className="h-4 w-4" />
                 +10 min
               </button>
+              <button
+                type="button"
+                onClick={() =>
+                  reportEta.mutate(
+                    { assignmentId: assignment.id, minutes: 15, actorId: volunteerId },
+                    { onSuccess: () => setEtaBumpMin((n) => n + 15) },
+                  )
+                }
+                disabled={reportEta.isPending}
+                className="flex flex-1 items-center justify-center gap-1 rounded-2xl border border-white/[0.12] py-3 text-sm font-semibold text-ink hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                <Clock className="h-4 w-4" />
+                +15 min
+              </button>
             </div>
             {etaBumpMin > 0 && (
               <p className="text-center text-[11px] text-ink-muted">

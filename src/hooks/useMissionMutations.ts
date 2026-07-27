@@ -98,6 +98,7 @@ export function useRespondMission() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
     },
   })
 }
@@ -121,6 +122,7 @@ export function useUpdateMissionAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
     },
   })
 }
@@ -155,7 +157,7 @@ export function useReportEtaDelay() {
       actorId,
     }: {
       assignmentId: string
-      minutes: 5 | 10
+      minutes: 5 | 10 | 15
       actorId?: string
     }) => missionService.reportEtaDelay(assignmentId, minutes, actorId),
     onSuccess: () => {

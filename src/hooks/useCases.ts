@@ -71,6 +71,7 @@ export function useOpenCaseForApplications() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
     },
   })
 }

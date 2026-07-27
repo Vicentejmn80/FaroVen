@@ -20,10 +20,10 @@ export function useVolunteerMissions(volunteerId: string) {
     queryKey: [FARO_QUERY_KEYS.volunteerMissions, volunteerId],
     queryFn: () => missionService.listByVolunteer(volunteerId),
     enabled: !!volunteerId,
-    // Refresco breve mientras espera validación del gestor
+    // Mientras no hay filas, seguir preguntando breve (primera asignación no llega por poll vacío).
     refetchInterval: (query) => {
       const rows = query.state.data
-      if (!rows?.length) return false
+      if (!rows?.length) return 8_000
       const waiting = rows.some((a) =>
         ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress', 'completed'].includes(a.status),
       )

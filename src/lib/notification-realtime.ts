@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { isSupabaseEnabled, supabase } from '@/lib/supabase'
 import { NOTIFICATION_QUERY_KEYS } from '@/domain/notification-models'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 
 let activeChannel: RealtimeChannel | null = null
 let activeUserId: string | null = null
@@ -39,6 +40,11 @@ export function subscribeNotificationChanges(userId: string, queryClient: QueryC
       },
       () => {
         void queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.list })
+        // Aceptación / convocatoria / postulación: refrescar misiones sin F5
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
       },
     )
 

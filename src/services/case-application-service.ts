@@ -3,11 +3,12 @@ import { asOptionalUuid } from '@/lib/utils'
 import { caseApplicationRepository } from '@/repositories/case-application-repository'
 import { caseRepository } from '@/repositories/case-repository'
 import { missionRepository } from '@/repositories/mission-repository'
+import { publicNeedRepository } from '@/repositories/public-need-repository'
 import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { caseService } from '@/services/case-service'
 import { missionService } from '@/services/mission-service'
 import { notifyUser } from '@/lib/notify'
-import { operationalLog } from '@/lib/operational-log'
+import { missionLog } from '@/lib/operational-log'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import type { Mission } from '@/domain/mission.types'
@@ -31,6 +32,11 @@ export const caseApplicationService = {
     if (existing) return existing
 
     const app = await caseApplicationRepository.apply(caseId, applicantId, params)
+    missionLog('application_received', {
+      entityId: app.id,
+      volunteerId: applicantId,
+      payload: { caseId },
+    })
     try {
       const caseData = await caseService.getById(caseId)
       if (caseData) {
@@ -46,14 +52,13 @@ export const caseApplicationService = {
         }
       }
     } catch {
-      console.warn('[CASE_APPLICATION] Failed to notify managers after apply')
+      console.warn('[FARO_MISSION] Failed to notify managers after apply')
     }
     return app
   },
 
   async notifyVolunteersAboutCase(caseData: CaseDomain) {
     try {
-      // Unir cercanos + todos los perfiles volunteer (lat=0 no debe excluir a Valeria)
       const nearby = await getActiveVolunteersNear(caseData.location.lat, caseData.location.lng, 50)
       const roster = await getAllActiveVolunteerProfiles()
       const seen = new Set<string>()
@@ -70,14 +75,14 @@ export const caseApplicationService = {
         )
       }
     } catch {
-      console.warn('[CASE_APPLICATION] Failed to notify volunteers about case')
+      console.warn('[FARO_MISSION] Failed to notify volunteers about case')
     }
   },
 
   /**
-   * Aprobar postulación → caso assigned → misión + assignment → notificación.
-   * Idempotente: si un intento previo dejó el caso assigned sin misión
-   * (p.ej. 400 en case_events por actor_id vacío), reintentar completa el flujo.
+   * Aprobar postulación → misión+assignment → caso assigned → cerrar radar → notificación.
+   * Orden crítico: crear misión ANTES de cambiar el caso, para no dejar estados parciales.
+   * Idempotente: si un intento previo dejó approved/assigned sin misión, reintentar completa el flujo.
    */
   async approve(applicationId: string, operatorId: string) {
     const actorId = asOptionalUuid(operatorId)
@@ -91,33 +96,23 @@ export const caseApplicationService = {
       throw new Error('Esta postulación no se puede aprobar')
     }
 
-    if (app.status !== 'approved') {
-      await caseApplicationRepository.updateStatus(applicationId, 'approved')
-    }
-
     const caseData = await caseService.getById(app.caseId)
     if (!caseData) throw new Error('Caso no encontrado')
 
-    if (caseData.pipelineStage === 'open_for_applications') {
-      await caseService.transition(
-        app.caseId,
-        'assigned',
-        actorId,
-        'Postulación aprobada — voluntario asignado al caso',
-      )
-    } else if (
-      caseData.pipelineStage === 'assigned' ||
-      caseData.pipelineStage === 'accepted' ||
-      caseData.pipelineStage === 'in_attention'
-    ) {
-      // Recuperación: el caso ya avanzó pero pudo faltar el event / misión.
-      await ensureAssignedEvent(app.caseId, actorId)
-    } else {
+    const stage = caseData.pipelineStage
+    const canAssign =
+      stage === 'open_for_applications' ||
+      stage === 'assigned' ||
+      stage === 'accepted' ||
+      stage === 'in_attention'
+
+    if (!canAssign) {
       throw new Error(
-        `El caso está en "${caseData.pipelineStage}" y no puede asignarse desde una postulación`,
+        `El caso está en "${stage}" y no puede asignarse desde una postulación`,
       )
     }
 
+    // 1) Crear misión + assignment PRIMERO (falla aquí = caso sigue esperando postulantes)
     const mission = await ensureMissionForApprovedApplication({
       caseData,
       skills: app.skills ?? [],
@@ -125,6 +120,37 @@ export const caseApplicationService = {
       applicantProfileId: app.applicantId,
     })
 
+    missionLog('application_accepted', {
+      entityId: applicationId,
+      actorId,
+      volunteerId: app.applicantId,
+      from: stage,
+      to: 'assigned',
+      payload: { caseId: app.caseId, missionId: mission.id },
+    })
+
+    // 2) Transicionar caso a assigned
+    if (stage === 'open_for_applications') {
+      await caseService.transition(
+        app.caseId,
+        'assigned',
+        actorId,
+        'Postulación aprobada — voluntario asignado al caso',
+      )
+    } else {
+      await ensureAssignedEvent(app.caseId, actorId)
+    }
+
+    // 3) Marcar postulación aprobada + rechazar el resto
+    if (app.status !== 'approved') {
+      await caseApplicationRepository.updateStatus(applicationId, 'approved')
+    }
+    await rejectSiblingApplications(app.caseId, applicationId)
+
+    // 4) Cerrar radar (convocatoria) — no completa la necesidad hasta validación
+    await closeRadarForCase(app.caseId)
+
+    // 5) Notificar voluntario
     await notifyUser(
       app.applicantId,
       'Has sido seleccionado para esta misión',
@@ -132,18 +158,6 @@ export const caseApplicationService = {
       'case_approved',
       { caseId: app.caseId, missionId: mission.id },
     )
-
-    operationalLog({
-      entityType: 'application',
-      entityId: applicationId,
-      action: 'approve',
-      from: 'open_for_applications',
-      to: 'assigned',
-      actorId,
-      volunteerId: app.applicantId,
-      source: 'service',
-      payload: { caseId: app.caseId, missionId: mission.id },
-    })
 
     return { caseId: app.caseId, missionId: mission.id }
   },
@@ -159,8 +173,6 @@ export const caseApplicationService = {
 
     await caseApplicationRepository.updateStatus(applicationId, 'rejected')
 
-    // Sin transition: el grafo no permite open_for_applications → open_for_applications
-    // ni assigned → open_for_applications. El rechazo solo afecta la postulación.
     await notifyUser(
       app.applicantId,
       'Postulación rechazada',
@@ -169,6 +181,41 @@ export const caseApplicationService = {
       { caseId: app.caseId, rejectedBy: actorId },
     )
   },
+}
+
+async function closeRadarForCase(caseId: string) {
+  try {
+    const needs = await publicNeedRepository.listByCaseId(caseId)
+    for (const need of needs) {
+      if (need.callStatus === 'open') {
+        await publicNeedRepository.updateCallStatus({
+          publicNeedId: need.id,
+          callStatus: 'closed',
+        })
+        missionLog('waiting_for_applications', {
+          entityId: need.id,
+          entityType: 'public_need',
+          to: 'closed',
+          payload: { caseId, action: 'radar_closed_on_accept' },
+        })
+      }
+    }
+  } catch (err) {
+    console.warn('[FARO_MISSION] No se pudo cerrar el radar tras aceptar', err)
+  }
+}
+
+async function rejectSiblingApplications(caseId: string, approvedId: string) {
+  try {
+    const apps = await caseApplicationRepository.listByCase(caseId)
+    await Promise.all(
+      apps
+        .filter((a) => a.id !== approvedId && (a.status === 'pending' || a.status === 'under_review'))
+        .map((a) => caseApplicationRepository.updateStatus(a.id, 'rejected')),
+    )
+  } catch (err) {
+    console.warn('[FARO_MISSION] No se pudieron rechazar postulaciones hermanas', err)
+  }
 }
 
 async function ensureAssignedEvent(caseId: string, actorId: string) {
@@ -187,7 +234,7 @@ async function ensureAssignedEvent(caseId: string, actorId: string) {
       comment: 'Postulación aprobada — voluntario asignado al caso',
     })
   } catch (err) {
-    console.warn('[CASE_APPLICATION] No se pudo registrar case_assigned en recuperación', err)
+    console.warn('[FARO_MISSION] No se pudo registrar case_assigned en recuperación', err)
   }
 }
 
@@ -225,6 +272,13 @@ async function ensureMissionForApprovedApplication(input: {
     createdBy: input.actorId,
   })
 
+  missionLog('mission_created', {
+    entityId: created.mission.id,
+    actorId: input.actorId,
+    volunteerId: input.applicantProfileId,
+    payload: { caseId: input.caseData.id },
+  })
+
   await missionService.assignVolunteer(created.mission.id, volunteerId, input.actorId)
   return created.mission
 }
@@ -236,7 +290,6 @@ interface NearbyVolunteer {
   distanceKm: number
 }
 
-/** El RPC devuelve columnas en snake_case; sin mapearlas el `userId` era undefined. */
 async function getActiveVolunteersNear(lat: number, lng: number, radiusKm: number): Promise<NearbyVolunteer[]> {
   try {
     const { data } = await supabase.rpc('get_volunteers_near_location', {

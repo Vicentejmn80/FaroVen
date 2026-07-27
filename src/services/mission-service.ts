@@ -14,6 +14,7 @@ import {
   notifyMissionOperators,
   type MissionNoticeEvent,
 } from '@/services/mission-notification-service'
+import { missionLog } from '@/lib/operational-log'
 
 async function emitAssignmentStatus(
   assignment: MissionAssignment,
@@ -269,6 +270,11 @@ export const missionService = {
     await emitAssignmentStatus(updated, 'accepted', 'El voluntario aceptó la asignación')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.ACCEPTED, _volunteerId)
     await announce(updated, 'volunteer_accepted')
+    missionLog('mission_started', {
+      entityId: updated.missionId,
+      volunteerId: _volunteerId,
+      payload: { assignmentId, status: updated.status },
+    })
     return updated
   },
 
@@ -317,13 +323,18 @@ export const missionService = {
     await emitAssignmentStatus(updated, 'completed', 'El voluntario finalizó la operación')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.COMPLETED)
     await announce(updated, 'mission_completed', { volunteer: true, operators: true })
+    missionLog('mission_completed', {
+      entityId: updated.missionId,
+      volunteerId: updated.volunteerId,
+      payload: { assignmentId },
+    })
     return updated
   },
 
-  /** Voluntario reporta retraso estimado (+5 / +10 min) — no cambia estado. */
+  /** Voluntario reporta retraso estimado (+5 / +10 / +15 min) — no cambia estado. */
   async reportEtaDelay(
     assignmentId: string,
-    minutes: 5 | 10,
+    minutes: 5 | 10 | 15,
     actorId?: string,
   ): Promise<void> {
     const assignment = await missionRepository.findAssignmentById(assignmentId)
@@ -345,6 +356,12 @@ export const missionService = {
       `Retraso estimado: +${minutes} minutos`,
     )
     await announce(assignment, 'volunteer_en_route', { operators: true })
+    missionLog('mission_eta_updated', {
+      entityId: assignment.missionId,
+      actorId,
+      volunteerId: assignment.volunteerId,
+      payload: { assignmentId, delayMinutes: minutes },
+    })
   },
 
   async markPreparing(assignmentId: string): Promise<MissionAssignment> {
@@ -425,6 +442,19 @@ export const missionService = {
       })
       if (recorded) await announce(updated, 'success_case_created', { volunteer: true, operators: true })
     }
+
+    missionLog('mission_verified', {
+      entityId: updated.missionId,
+      actorId: verifiedBy,
+      volunteerId: updated.volunteerId,
+      payload: { assignmentId, caseId: mission?.caseId },
+    })
+    missionLog('mission_closed', {
+      entityId: updated.missionId,
+      actorId: verifiedBy,
+      volunteerId: updated.volunteerId,
+      payload: { assignmentId },
+    })
 
     return updated
   },

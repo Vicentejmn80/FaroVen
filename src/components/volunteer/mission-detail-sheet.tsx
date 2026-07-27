@@ -21,7 +21,8 @@ import { NeedItemLabel } from '@/components/faro/need-item-label'
 import { useAuth } from '@/store/auth-context'
 import { useExpressInterest } from '@/hooks/useVolunteerInterests'
 import { caseApplicationService } from '@/services/case-application-service'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { openExternalNavigation, buildGoogleMapsViewLink, cn, timeAgo, isValidCoord } from '@/lib/utils'
 import {
   label,
@@ -115,16 +116,18 @@ export function MissionDetailSheet({
   variant = 'sheet',
 }: MissionDetailSheetProps) {
   const { profile, user } = useAuth()
+  const queryClient = useQueryClient()
   const expressInterest = useExpressInterest()
   const [phase, setPhase] = useState<HelpPhase>('idle')
   const [helpError, setHelpError] = useState<string | null>(null)
 
+  const resolvedCaseId = mission?.caseId ?? mission?.id
   const volunteerId = user?.id ?? profile?.id
 
   const { data: existingApplication } = useQuery({
-    queryKey: ['my-case-application', mission?.id, volunteerId],
-    queryFn: () => caseApplicationService.findByCaseAndApplicant(mission!.id, volunteerId!),
-    enabled: !!mission && !!volunteerId,
+    queryKey: ['my-case-application', resolvedCaseId, volunteerId],
+    queryFn: () => caseApplicationService.findByCaseAndApplicant(resolvedCaseId!, volunteerId!),
+    enabled: !!mission && !!volunteerId && !!resolvedCaseId,
   })
 
   useEffect(() => {
@@ -211,13 +214,17 @@ export function MissionDetailSheet({
         skills: profile?.specialty ? [profile.specialty] : [],
       })
 
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      void queryClient.invalidateQueries({ queryKey: ['my-case-application', resolvedCaseId, volunteerId] })
+
       if (app.status === 'approved') setPhase('approved')
       else setPhase('submitted')
     } catch (err) {
       setPhase('error')
       setHelpError(err instanceof Error ? err.message : 'No se pudo registrar tu interés.')
     }
-  }, [mission, expressInterest, user?.id, profile?.id, profile?.full_name, title, volunteerId])
+  }, [mission, expressInterest, user?.id, profile?.id, profile?.full_name, profile?.specialty, title, volunteerId, queryClient])
 
   const handleNavigate = useCallback(() => {
     if (!mission) return

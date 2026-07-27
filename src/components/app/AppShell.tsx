@@ -120,6 +120,11 @@ const VolunteerWorkspace = lazyWithRetry(() =>
     default: m.VolunteerWorkspace,
   })),
 )
+const ImmersiveMissionGate = lazyWithRetry(() =>
+  import('@/components/volunteer/volunteer-workspace').then((m) => ({
+    default: m.ImmersiveMissionGate,
+  })),
+)
 
 type ProfileSubview = 'main' | 'notification-preferences'
 
@@ -559,6 +564,12 @@ export function AppShell() {
               </motion.div>
             </AnimatePresence>
           </main>
+
+          {isVolunteer && (
+            <Suspense fallback={null}>
+              <ImmersiveMissionGate />
+            </Suspense>
+          )}
 
           <BottomNavigation
             active={activeView}

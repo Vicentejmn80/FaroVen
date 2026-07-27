@@ -65,3 +65,39 @@ export async function withOperationalLog<T>(
     throw err
   }
 }
+
+/** Prefijo estable `[FARO_MISSION]` para el ciclo misión/postulación. */
+export function missionLog(
+  action:
+    | 'mission_created'
+    | 'waiting_for_applications'
+    | 'application_received'
+    | 'application_accepted'
+    | 'mission_started'
+    | 'mission_eta_updated'
+    | 'mission_completed'
+    | 'mission_verified'
+    | 'mission_closed',
+  extra: Partial<OperationalLogPayload> & { entityId: string },
+): Record<string, unknown> {
+  const record = operationalLog({
+    entityType: extra.entityType ?? 'mission',
+    entityId: extra.entityId,
+    action,
+    from: extra.from,
+    to: extra.to,
+    actorId: extra.actorId,
+    volunteerId: extra.volunteerId,
+    centerId: extra.centerId,
+    source: extra.source ?? 'service',
+    payload: extra.payload,
+    error: extra.error,
+  })
+  // Duplica con prefijo de dominio pedido para filtrar en consola.
+  if (extra.error) {
+    console.warn('[FARO_MISSION]', action, record)
+  } else {
+    console.info('[FARO_MISSION]', action, record)
+  }
+  return record
+}
