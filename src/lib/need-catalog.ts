@@ -23,16 +23,34 @@ export const NEED_CATEGORY_ICONS: Partial<Record<NeedCategoryKey, string>> = {
 }
 
 export const NEED_ITEM_PRESETS: Partial<Record<NeedCategoryKey, readonly string[]>> = {
+  agua: ['Agua'],
+  alimentos: ['Alimentos (general)', 'Harina', 'Arroz', 'Aceite', 'Pasta', 'Leche', 'Leche infantil'],
+  medicamentos: [
+    'Medicamentos (general)',
+    'Paracetamol',
+    'Ibuprofeno',
+    'Insulina',
+    'Loratadina',
+    'Guantes',
+    'Jeringas',
+    'Gasas',
+    'Suero',
+  ],
+  'atencion-medica': ['Médicos', 'Enfermeros'],
+  refugio: ['Colchones', 'Cobijas', 'Camas'],
+  ropa: ['Cobijas'],
+  higiene: ['Pañales'],
+  panales: ['Pañales'],
   'apoyo-psicologico': [
+    'Psicólogos',
+    'Trabajadores Sociales',
     'Psicólogo clínico',
     'Psicólogo infantil',
-    'Psiquiatra',
-    'Consejero emocional',
     'Primeros auxilios psicológicos',
-    'Terapia grupal',
-    'Atención a crisis',
-    'Espacio seguro para apoyo emocional',
   ],
+  energia: ['Linternas', 'Baterías'],
+  herramientas: ['Palas', 'Picos', 'Martillos', 'Herramientas (general)'],
+  voluntarios: ['Personal disponible', 'Médicos', 'Enfermeros', 'Trabajadores Sociales'],
 }
 
 const PSYCHOLOGICAL_KEYWORDS = [
@@ -75,17 +93,16 @@ export function resolveNeedItemName(
   presetItem: string,
   customLabel: string,
 ): string {
+  // Solo "otros" permite etiqueta libre; el resto debe venir del catálogo.
   if (categoryKey === 'otros') {
     return customLabel.trim()
   }
   const presets = NEED_ITEM_PRESETS[categoryKey]
   if (presets?.length) {
-    if (presetItem === '__custom__') {
-      return customLabel.trim()
-    }
-    return presetItem
+    if (presetItem && presets.includes(presetItem)) return presetItem
+    return presets[0]
   }
-  return customLabel.trim() || getNeedCategoryLabel(categoryKey)
+  return getNeedCategoryLabel(categoryKey)
 }
 
 export function qtyPlaceholderForCategory(categoryKey: NeedCategoryKey, itemName: string): string {

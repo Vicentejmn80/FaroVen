@@ -1,17 +1,51 @@
 import { supabase } from '@/lib/supabase'
-import type { CenterResource, CenterEvent, SupportRequest, CenterEventType, SupportRequestStatus, SupportRequestType, OperationalMode } from '@/domain/center-operations.types'
-import type { CenterResourceRow, SupportRequestRow, CenterEventRow } from '@/types/supabase'
+import type {
+  CenterResource,
+  CenterEvent,
+  SupportRequest,
+  CenterEventType,
+  SupportRequestStatus,
+  SupportRequestType,
+  OperationalMode,
+  InventoryMovement,
+  InventoryMovementReason,
+} from '@/domain/center-operations.types'
+import type { CenterResourceRow, SupportRequestRow, CenterEventRow, InventoryMovementRow } from '@/types/supabase'
 import type { RegisterSiteType } from './types'
+import {
+  getResourceCatalogItem,
+  getResourceMinRecommended,
+  getResourceUnit,
+} from '@/lib/resource-catalog'
 
 function mapResourceRow(row: CenterResourceRow): CenterResource {
+  const catalog = getResourceCatalogItem(row.resource_type)
   return {
     id: row.id,
     centerId: row.center_id,
     resourceType: row.resource_type,
     currentLevel: row.current_level,
     maxLevel: row.max_level,
-    unit: row.unit,
+    minLevel: row.min_level ?? catalog?.minRecommended ?? getResourceMinRecommended(row.resource_type),
+    unit: row.unit || catalog?.unit || getResourceUnit(row.resource_type),
+    category: row.category ?? catalog?.category,
     updatedAt: new Date(row.updated_at),
+  }
+}
+
+function mapMovementRow(row: InventoryMovementRow): InventoryMovement {
+  return {
+    id: row.id,
+    centerId: row.center_id,
+    resourceType: row.resource_type,
+    delta: row.delta,
+    balanceAfter: row.balance_after,
+    reason: row.reason as InventoryMovementReason,
+    sourceLabel: row.source_label ?? undefined,
+    missionId: row.mission_id ?? undefined,
+    actorId: row.actor_id ?? undefined,
+    actorName: row.actor_name ?? undefined,
+    createdAt: new Date(row.created_at),
   }
 }
 
@@ -69,7 +103,10 @@ export class CenterOperationsRepository {
     currentLevel: number
     maxLevel: number
     unit: string
+    minLevel?: number
+    category?: string
   }): Promise<CenterResource> {
+    const catalog = getResourceCatalogItem(input.resourceType)
     const { data, error } = await supabase
       .from('center_resources')
       .upsert(
@@ -78,7 +115,10 @@ export class CenterOperationsRepository {
           resource_type: input.resourceType,
           current_level: input.currentLevel,
           max_level: input.maxLevel,
-          unit: input.unit,
+          min_level: input.minLevel ?? catalog?.minRecommended ?? 0,
+          unit: input.unit || catalog?.unit || 'unidades',
+          category: input.category ?? catalog?.category ?? 'alimentos',
+          updated_at: new Date().toISOString(),
         },
         { onConflict: 'center_id,resource_type' },
       )
@@ -86,6 +126,87 @@ export class CenterOperationsRepository {
       .single()
     if (error) throw error
     return mapResourceRow(data as CenterResourceRow)
+  }
+
+  async deleteResource(centerId: string, resourceType: string): Promise<void> {
+    const { error } = await supabase
+      .from('center_resources')
+      .delete()
+      .eq('center_id', centerId)
+      .eq('resource_type', resourceType)
+    if (error) throw error
+  }
+
+  async listMovements(centerId: string, limit = 40): Promise<InventoryMovement[]> {
+    const { data, error } = await supabase
+      .from('center_inventory_movements')
+      .select('*')
+      .eq('center_id', centerId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) {
+      // Tabla aún no migrada
+      if ((error as { code?: string }).code === '42P01' || /does not exist/i.test(error.message)) return []
+      throw error
+    }
+    return ((data ?? []) as InventoryMovementRow[]).map(mapMovementRow)
+  }
+
+  async createMovement(input: {
+    centerId: string
+    resourceType: string
+    delta: number
+    balanceAfter: number
+    reason: InventoryMovementReason
+    sourceLabel?: string
+    missionId?: string
+    actorId?: string
+    actorName?: string
+  }): Promise<InventoryMovement | null> {
+    const { data, error } = await supabase
+      .from('center_inventory_movements')
+      .insert({
+        center_id: input.centerId,
+        resource_type: input.resourceType,
+        delta: input.delta,
+        balance_after: input.balanceAfter,
+        reason: input.reason,
+        source_label: input.sourceLabel ?? null,
+        mission_id: input.missionId ?? null,
+        actor_id: input.actorId ?? null,
+        actor_name: input.actorName ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) {
+      if ((error as { code?: string }).code === '42P01' || /does not exist/i.test(error.message)) return null
+      throw error
+    }
+    return mapMovementRow(data as InventoryMovementRow)
+  }
+
+  /** Lookup para Gestor de Casos / Logistics: centros con stock de un recurso. */
+  async findCentersWithResource(resourceType: string, minQty = 1): Promise<Array<{
+    centerId: string
+    resourceType: string
+    quantity: number
+    unit: string
+    updatedAt: Date
+  }>> {
+    const { data, error } = await supabase
+      .from('center_resources')
+      .select('center_id, resource_type, current_level, unit, updated_at')
+      .eq('resource_type', resourceType)
+      .gte('current_level', minQty)
+      .order('current_level', { ascending: false })
+    if (error) throw error
+    return ((data ?? []) as CenterResourceRow[]).map((row) => ({
+      centerId: row.center_id,
+      resourceType: row.resource_type,
+      quantity: row.current_level,
+      unit: row.unit,
+      updatedAt: new Date(row.updated_at),
+    }))
   }
 
   async getEvents(centerId: string): Promise<CenterEvent[]> {

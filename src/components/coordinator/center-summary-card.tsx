@@ -1,4 +1,4 @@
-import { Users, Package, AlertTriangle, Clock } from 'lucide-react'
+import { Users, Package, Clock, Shield } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { StatusBadge } from './status-badge'
 import type { CoordinatorDashboardMetrics } from '@/services/coordinator-service'
@@ -8,48 +8,54 @@ import { timeAgo } from '@/lib/utils'
 interface CenterSummaryCardProps {
   site: Site
   metrics: CoordinatorDashboardMetrics
+  activeMissionsCount?: number
+  peopleServed?: number
 }
 
-export function CenterSummaryCard({ site, metrics }: CenterSummaryCardProps) {
-  const occupancyPct = metrics.peopleSaturationPct
-  const occupancyColor =
-    occupancyPct >= 85 ? 'text-critical' : occupancyPct >= 65 ? 'text-warning' : 'text-operational'
+/** Estado del Nodo Logístico — solo señales críticas. */
+export function CenterSummaryCard({
+  site,
+  metrics,
+  activeMissionsCount = 0,
+  peopleServed,
+}: CenterSummaryCardProps) {
+  const people = peopleServed ?? 0
 
   return (
     <GlassCard strong className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-ink-subtle">Centro asignado</p>
+          <p className="text-[11px] uppercase tracking-[0.14em] text-ink-subtle">Estado del centro</p>
           <p className="mt-1 truncate text-lg font-semibold text-ink">{metrics.siteName}</p>
-          <p className="mt-0.5 text-xs text-ink-subtle">{metrics.siteTypeLabel}</p>
+          <p className="mt-0.5 text-xs text-ink-subtle">{metrics.siteTypeLabel} · Nodo logístico</p>
         </div>
         <StatusBadge status={site.status} label={metrics.operationalStatus} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <SummaryMetric
-          icon={Users}
-          label="Ocupación"
-          value={`${occupancyPct}%`}
-          tone={occupancyColor}
-        />
-        <SummaryMetric
-          icon={Package}
-          label="Necesidades"
-          value={String(metrics.activeNeedsCount)}
-          tone={metrics.activeNeedsCount > 0 ? 'text-warning' : 'text-operational'}
-        />
-        <SummaryMetric
-          icon={AlertTriangle}
-          label="Reportes"
-          value={String(metrics.pendingReportsCount)}
-          tone={metrics.pendingReportsCount > 0 ? 'text-critical' : 'text-operational'}
-        />
-        <SummaryMetric
           icon={Clock}
           label="Última actualización"
           value={timeAgo(metrics.lastUpdated)}
           tone="text-ink-subtle"
+        />
+        <SummaryMetric
+          icon={Users}
+          label="Personas atendidas"
+          value={String(people)}
+          tone="text-ink"
+        />
+        <SummaryMetric
+          icon={Package}
+          label="Necesidades activas"
+          value={String(metrics.activeNeedsCount)}
+          tone={metrics.activeNeedsCount > 0 ? 'text-warning' : 'text-operational'}
+        />
+        <SummaryMetric
+          icon={Shield}
+          label="Misiones activas"
+          value={String(activeMissionsCount)}
+          tone={activeMissionsCount > 0 ? 'text-info' : 'text-operational'}
         />
       </div>
     </GlassCard>

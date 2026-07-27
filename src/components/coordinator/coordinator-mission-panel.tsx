@@ -126,6 +126,28 @@ function MissionCard({ mission }: { mission: Mission }) {
   const [showDetail, setShowDetail] = useState(false)
   const startMatching = useStartMatching()
   const transition = useTransitionMission()
+  const { user } = useAuth()
+
+  const primary = assignments?.find((a) =>
+    !['rejected', 'cancelled'].includes(a.status),
+  ) ?? assignments?.[0]
+
+  const statusLabel = (() => {
+    if (!primary) return MISSION_STAGE_LABELS[mission.status as MissionStage] ?? mission.status
+    if (primary.status === 'assigned') return 'Pendiente de aceptación'
+    if (primary.status === 'accepted' || primary.status === 'preparing') return 'Preparándose'
+    if (primary.status === 'en_route') return 'En camino'
+    if (primary.status === 'on_site' || primary.status === 'in_progress') return 'En sitio'
+    if (primary.status === 'completed') return 'Esperando evidencia'
+    if (primary.status === 'verified') return 'Verificada'
+    return MISSION_STAGE_LABELS[mission.status as MissionStage] ?? primary.status
+  })()
+
+  const etaLabel = mission.eta
+    ? `ETA ${Math.max(1, Math.round((new Date(mission.eta).getTime() - Date.now()) / 60000))} min`
+    : primary?.status === 'en_route'
+      ? 'En tránsito'
+      : null
 
   const canStartMatching = mission.status === MISSION_STAGES.CREATED
   const canCancel = !['completed', 'verified', 'archived', 'cancelled'].includes(mission.status)
@@ -133,33 +155,21 @@ function MissionCard({ mission }: { mission: Mission }) {
 
   return (
     <GlassCard className="p-4">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold text-ink truncate">{mission.title}</h4>
-            <StageBadge stage={mission.status} />
-          </div>
-          <p className="text-xs text-ink-subtle mt-0.5">
-            {mission.requiredPeople} voluntarios necesarios &middot; {mission.assignedPeople} asignados &middot; {timeAgo(mission.createdAt)}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink truncate">
+            {primary ? `Voluntario · ${primary.volunteerId.slice(0, 8)}` : mission.title}
           </p>
+          <p className="mt-0.5 text-xs text-ink-muted">{statusLabel}</p>
+          {etaLabel && <p className="mt-0.5 text-xs text-info">{etaLabel}</p>}
         </div>
+        <StageBadge stage={primary?.status ?? mission.status} />
       </div>
 
-      {mission.description && (
-        <p className="text-xs text-ink-muted line-clamp-2 mb-3">{mission.description}</p>
-      )}
-
-      {mission.requiredSkills.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {mission.requiredSkills.map((skill) => (
-            <span key={skill} className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-ink-subtle">
-              {skill}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <EmergencyButton variant="glass" size="sm" onClick={() => setShowDetail((v) => !v)}>
+          {showDetail ? 'Ocultar' : 'Ver detalles'}
+        </EmergencyButton>
         {canStartMatching && (
           <EmergencyButton
             variant="primary"
@@ -167,14 +177,20 @@ function MissionCard({ mission }: { mission: Mission }) {
             onClick={() => startMatching.mutate({ missionId: mission.id })}
             disabled={startMatching.isPending}
           >
-            Iniciar búsqueda de voluntarios
+            Buscar voluntarios
           </EmergencyButton>
         )}
         {canVerify && (
           <EmergencyButton
             variant="primary"
             size="sm"
-            onClick={() => transition.mutate({ missionId: mission.id, toStage: MISSION_STAGES.VERIFIED })}
+            onClick={() =>
+              transition.mutate({
+                missionId: mission.id,
+                toStage: MISSION_STAGES.VERIFIED,
+                actorId: user?.id,
+              })
+            }
             disabled={transition.isPending}
           >
             Verificar
@@ -184,46 +200,39 @@ function MissionCard({ mission }: { mission: Mission }) {
           <EmergencyButton
             variant="glass"
             size="sm"
-            onClick={() => transition.mutate({ missionId: mission.id, toStage: MISSION_STAGES.CANCELLED, comment: 'Cancelada por coordinador' })}
+            onClick={() =>
+              transition.mutate({
+                missionId: mission.id,
+                toStage: MISSION_STAGES.CANCELLED,
+                comment: 'Cancelada por coordinador',
+                actorId: user?.id,
+              })
+            }
             disabled={transition.isPending}
           >
             Cancelar
           </EmergencyButton>
         )}
-        <button
-          className="text-xs text-ink-subtle hover:text-ink transition-colors"
-          onClick={() => setShowDetail(!showDetail)}
-        >
-          {showDetail ? 'Ocultar detalle' : 'Ver detalle'}
-        </button>
       </div>
 
       {showDetail && (
-        <div className="space-y-3 mt-3 pt-3 border-t border-white/10">
+        <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+          <p className="text-xs text-ink-subtle">{mission.title}</p>
+          {mission.description && (
+            <p className="text-xs text-ink-muted">{mission.description}</p>
+          )}
           {events && events.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-ink-subtle mb-2">Timeline</p>
+              <p className="mb-2 text-xs font-medium text-ink-subtle">Línea de tiempo</p>
               <div className="space-y-1.5">
                 {events.map((ev) => (
                   <div key={ev.id} className="flex items-center gap-2 text-xs text-ink-muted">
-                    <span className="h-1.5 w-1.5 rounded-full bg-info shrink-0" />
-                    <span className="text-ink-subtle">{ev.eventType}</span>
-                    {ev.description && <span>&middot; {ev.description}</span>}
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-info" />
+                    <span>{ev.description ?? ev.eventType}</span>
                     <span className="ml-auto">{timeAgo(ev.createdAt)}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-          {assignments && assignments.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-ink-subtle mb-2">Voluntarios asignados</p>
-              {assignments.map((a) => (
-                <div key={a.id} className="flex items-center justify-between text-xs text-ink-muted py-1">
-                  <span>{a.volunteerId}</span>
-                  <StageBadge stage={a.status} />
-                </div>
-              ))}
             </div>
           )}
         </div>

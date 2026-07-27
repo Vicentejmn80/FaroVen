@@ -44,26 +44,34 @@ export const SUPPORT_REQUEST_STATUSES = {
 export type SupportRequestStatus = typeof SUPPORT_REQUEST_STATUSES[keyof typeof SUPPORT_REQUEST_STATUSES]
 
 export const CENTER_RESOURCE_TYPES = {
-  WATER: 'water',
-  MEDICINE: 'medicine',
-  FOOD: 'food',
+  WATER: 'agua',
+  MEDICINE: 'medicamentos',
+  FOOD: 'alimentos',
   BEDS: 'beds',
   PERSONNEL: 'personnel',
 } as const
 
-export type CenterResourceType = typeof CENTER_RESOURCE_TYPES[keyof typeof CENTER_RESOURCE_TYPES]
+/** Clave de catálogo (ver resource-catalog.ts). Ya no se limita a 5 tipos. */
+export type CenterResourceType = string
 
-export const CENTER_RESOURCE_LABELS: Record<CenterResourceType, string> = {
-  [CENTER_RESOURCE_TYPES.WATER]: 'Agua',
-  [CENTER_RESOURCE_TYPES.MEDICINE]: 'Medicinas',
-  [CENTER_RESOURCE_TYPES.FOOD]: 'Alimentos',
-  [CENTER_RESOURCE_TYPES.BEDS]: 'Camas',
-  [CENTER_RESOURCE_TYPES.PERSONNEL]: 'Personal disponible',
+export const CENTER_RESOURCE_LABELS: Record<string, string> = {
+  agua: 'Agua',
+  water: 'Agua',
+  medicamentos: 'Medicamentos',
+  medicine: 'Medicinas',
+  alimentos: 'Alimentos',
+  food: 'Alimentos',
+  beds: 'Camas',
+  personnel: 'Personal disponible',
 }
 
 export const CENTER_EVENT_TYPES = {
   CAPACITY_UPDATED: 'capacity_updated',
   RESOURCE_UPDATED: 'resource_updated',
+  RESOURCE_ADDED: 'resource_added',
+  RESOURCE_REMOVED: 'resource_removed',
+  INVENTORY_IN: 'inventory_in',
+  INVENTORY_OUT: 'inventory_out',
   CASE_ACCEPTED: 'case_accepted',
   CASE_REJECTED: 'case_rejected',
   CASE_RESOLVED: 'case_resolved',
@@ -97,8 +105,32 @@ export interface CenterResource {
   resourceType: CenterResourceType
   currentLevel: number
   maxLevel: number
+  minLevel: number
   unit: string
+  category?: string
   updatedAt: Date
+}
+
+export type InventoryMovementReason =
+  | 'donation'
+  | 'dispatch'
+  | 'mission'
+  | 'adjustment'
+  | 'intake'
+  | 'outflow'
+
+export interface InventoryMovement {
+  id: string
+  centerId: string
+  resourceType: string
+  delta: number
+  balanceAfter: number
+  reason: InventoryMovementReason
+  sourceLabel?: string
+  missionId?: string
+  actorId?: string
+  actorName?: string
+  createdAt: Date
 }
 
 export interface CenterEvent {

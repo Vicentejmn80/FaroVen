@@ -160,11 +160,27 @@ export interface CaseAssignmentRow {
 export interface CenterResourceRow {
   id: string
   center_id: string
-  resource_type: 'water' | 'medicine' | 'food' | 'beds' | 'personnel'
+  resource_type: string
   current_level: number
   max_level: number
+  min_level?: number
   unit: string
+  category?: string
   updated_at: string
+}
+
+export interface InventoryMovementRow {
+  id: string
+  center_id: string
+  resource_type: string
+  delta: number
+  balance_after: number
+  reason: string
+  source_label: string | null
+  mission_id: string | null
+  actor_id: string | null
+  actor_name: string | null
+  created_at: string
 }
 
 export interface SupportRequestRow {

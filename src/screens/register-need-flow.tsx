@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -36,13 +36,45 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
   const [done, setDone] = useState(false)
   const [savedItemName, setSavedItemName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const skipCategoryReset = useRef(false)
+
+  // Prefill desde sugerencia de inventario del Nodo Logístico
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('faro:need-preset')
+      if (!raw) return
+      sessionStorage.removeItem('faro:need-preset')
+      const preset = JSON.parse(raw) as {
+        categoryKey?: string
+        itemName?: string
+        quantity?: number
+      }
+      skipCategoryReset.current = true
+      if (preset.categoryKey && NEED_CATEGORIES.some((c) => c.key === preset.categoryKey)) {
+        setCategoryKey(preset.categoryKey as NeedCategoryKey)
+      }
+      if (preset.itemName) {
+        setPresetItem(preset.itemName)
+        setCustomLabel(preset.itemName)
+      }
+      if (preset.quantity && preset.quantity > 0) {
+        setQtyRequired(String(preset.quantity))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const selectedSite = useMemo(() => sites.find((s) => s.id === siteId), [sites, siteId])
   const categoryPresets = NEED_ITEM_PRESETS[categoryKey]
   const usesPresetList = Boolean(categoryPresets?.length)
-  const usesCustomOnly = categoryKey === 'otros' || !usesPresetList
+  const usesCustomOnly = categoryKey === 'otros'
 
   useEffect(() => {
+    if (skipCategoryReset.current) {
+      skipCategoryReset.current = false
+      return
+    }
     const presets = NEED_ITEM_PRESETS[categoryKey]
     if (presets?.length) {
       setPresetItem(presets[0])

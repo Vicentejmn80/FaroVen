@@ -6,6 +6,7 @@ import { useCenters } from '@/hooks/useCenters'
 import { assignmentService } from '@/services/assignment-service'
 import { useQueryClient } from '@tanstack/react-query'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
+import { CenterStockLookup } from '@/components/shared/center-stock-lookup'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 
 interface AsignarCentroModalProps {
@@ -81,6 +82,13 @@ export function AsignarCentroModal({ caseData, open, onClose, actorId }: Asignar
           <GlassCard className="p-3">
             <p className="text-sm font-medium text-ink">{caseData.title}</p>
             <p className="mt-1 text-xs text-ink-muted">{caseData.zone}</p>
+          </GlassCard>
+
+          <GlassCard className="p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+              Inventario en red
+            </p>
+            <CenterStockLookup />
           </GlassCard>
 
           {isLoading ? (

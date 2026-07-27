@@ -5,9 +5,13 @@ import {
   getCenterResources,
   getCenterSupportRequests,
   getCenterEvents,
+  getInventoryMovements,
   updateCenterCapacity,
   updateCenterResource,
+  setCatalogInventoryItem,
+  removeCatalogInventoryItem,
   createSupportRequest,
+  findCentersWithStock,
 } from '@/services/center-operations-service'
 import {
   type CenterCapacityUpdate,
@@ -28,6 +32,16 @@ export function useCenterResources(centerId: string) {
     queryKey: [FARO_QUERY_KEYS.centerResources, centerId],
     queryFn: () => getCenterResources(centerId),
     enabled: !!centerId,
+    staleTime: 8_000,
+  })
+}
+
+export function useInventoryMovements(centerId: string) {
+  return useQuery({
+    queryKey: [FARO_QUERY_KEYS.centerEvents, 'inventory-movements', centerId],
+    queryFn: () => getInventoryMovements(centerId),
+    enabled: !!centerId,
+    staleTime: 8_000,
   })
 }
 
@@ -45,6 +59,24 @@ export function useSupportRequests(centerId: string) {
     queryFn: () => getCenterSupportRequests(centerId),
     enabled: !!centerId,
   })
+}
+
+/** Lookup GC: centros con stock de un recurso del catálogo. */
+export function useCentersWithStock(resourceType: string | undefined, minQty = 1) {
+  return useQuery({
+    queryKey: [FARO_QUERY_KEYS.centerResources, 'stock-lookup', resourceType, minQty],
+    queryFn: () => findCentersWithStock(resourceType!, minQty),
+    enabled: !!resourceType,
+    staleTime: 15_000,
+  })
+}
+
+function invalidateInventory(qc: ReturnType<typeof useQueryClient>, centerId: string) {
+  qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerResources, centerId] })
+  qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerProfile, centerId] })
+  qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerEvents, centerId] })
+  qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerEvents, 'inventory-movements', centerId] })
+  qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerResources, 'stock-lookup'] })
 }
 
 export function useUpdateCenterCapacity() {
@@ -92,11 +124,23 @@ export function useUpdateCenterResource() {
       actorId?: string
       actorName?: string
     }) => updateCenterResource(centerId, siteType, resourceType, currentLevel, maxLevel, unit, actorId, actorName),
-    onSuccess: (_, { centerId }) => {
-      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerResources, centerId] })
-      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerProfile, centerId] })
-      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerEvents, centerId] })
-    },
+    onSuccess: (_, { centerId }) => invalidateInventory(qc, centerId),
+  })
+}
+
+export function useSetCatalogInventory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: setCatalogInventoryItem,
+    onSuccess: (_, vars) => invalidateInventory(qc, vars.centerId),
+  })
+}
+
+export function useRemoveCatalogInventory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: removeCatalogInventoryItem,
+    onSuccess: (_, vars) => invalidateInventory(qc, vars.centerId),
   })
 }
 

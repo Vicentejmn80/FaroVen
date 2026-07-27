@@ -5,6 +5,7 @@ import { siteToNeedableType } from '@/lib/site-utils'
 
 export type CoordinatorModuleId =
   | 'dashboard'
+  | 'inventory'
   | 'needs'
   | 'donations'
   | 'saturation'
