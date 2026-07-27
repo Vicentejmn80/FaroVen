@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Clock, MapPin, Search, User } from 'lucide-react'
+import { AlertTriangle, Clock, Search, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
@@ -24,13 +24,23 @@ export const KANBAN_COLUMNS = [
     header: 'text-warning',
   },
   {
+    id: 'esperando_postulantes',
+    label: 'Esperando postulantes',
+    stages: [PIPELINE_STAGES.OPEN_FOR_APPLICATIONS] as PipelineStage[],
+    accent: 'border-t-info',
+    header: 'text-info',
+  },
+  {
+    id: 'esperando_centro',
+    label: 'Esperando centro',
+    stages: [PIPELINE_STAGES.AWAITING_CENTER_CONFIRMATION] as PipelineStage[],
+    accent: 'border-t-warning',
+    header: 'text-warning',
+  },
+  {
     id: 'asignado',
     label: 'Asignado',
-    stages: [
-      PIPELINE_STAGES.ASSIGNED,
-      PIPELINE_STAGES.ACCEPTED,
-      PIPELINE_STAGES.OPEN_FOR_APPLICATIONS,
-    ] as PipelineStage[],
+    stages: [PIPELINE_STAGES.ASSIGNED, PIPELINE_STAGES.ACCEPTED] as PipelineStage[],
     accent: 'border-t-info',
     header: 'text-info',
   },
@@ -43,7 +53,7 @@ export const KANBAN_COLUMNS = [
   },
   {
     id: 'esperando',
-    label: 'Esperando',
+    label: 'Esperando info',
     stages: [PIPELINE_STAGES.AWAITING_INFO] as PipelineStage[],
     accent: 'border-t-warning',
     header: 'text-warning',
@@ -206,7 +216,7 @@ export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, class
 
 function KanbanCard({
   caseItem,
-  metrics,
+  metrics: _metrics,
   selected,
   onSelect,
   index,
@@ -217,8 +227,23 @@ function KanbanCard({
   onSelect: () => void
   index: number
 }) {
+  void _metrics
   const priority = PRIORITY_STYLE[caseItem.priority] ?? PRIORITY_STYLE.low
   const unassigned = !caseItem.assignedCenterId && !caseItem.assignedTo
+  const stageLabel =
+    ({
+      nuevo: 'Nuevo',
+      pending_review: 'En revisión',
+      validating: 'Validando',
+      awaiting_info: 'Esperando info',
+      open_for_applications: 'Esperando postulantes',
+      awaiting_center_confirmation: 'Esperando centro',
+      assigned: 'Asignado',
+      accepted: 'Aceptado',
+      in_attention: 'En atención',
+      resolved: 'Resuelto',
+      archived: 'Archivado',
+    } as Record<string, string>)[caseItem.pipelineStage] ?? caseItem.pipelineStage
 
   return (
     <motion.button
@@ -251,48 +276,33 @@ function KanbanCard({
         </span>
       </div>
 
-      <div className="mt-2 space-y-1 pl-1 text-[11px] text-ink-muted">
-        <div className="grid grid-cols-3 gap-1">
-          <MiniMetric label="Necesidades" value={String(metrics?.needs ?? 0)} />
-          <MiniMetric label="Cubiertas" value={String(metrics?.covered ?? 0)} />
-          <MiniMetric label="Pendientes" value={String(metrics?.pending ?? 0)} />
-        </div>
-        <div className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2 py-1">
-          <span className="text-[10px] text-ink-faint">Convocatoria</span>
-          <span className={cn('text-[10px] font-semibold', callStatusClass(metrics?.callStatus))}>
-            {callStatusLabel(metrics?.callStatus)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2 py-1">
-          <span className="text-[10px] text-ink-faint">Voluntarios</span>
-          <span className="text-[10px] font-semibold text-ink">
-            {metrics?.volunteersAccepted ?? 0} / {metrics?.volunteersRequired ?? 0}
-          </span>
-        </div>
-        <p className="flex items-center gap-1.5 min-w-0">
-          <MapPin className="h-3 w-3 shrink-0 opacity-70" />
-          <span className="truncate">
-            {(caseItem.location.address ?? caseItem.location.zone ?? caseItem.zone) || 'Sin zona'}
-          </span>
-        </p>
+      <div className="mt-2 space-y-1.5 pl-1 text-[11px] text-ink-muted">
         <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1 min-w-0">
-            <User className="h-3 w-3 shrink-0 opacity-70" />
-            <span className="truncate">{caseItem.reporterInfo.name ?? 'Ciudadano'}</span>
-          </span>
+          <span className="truncate font-medium text-ink-subtle">{stageLabel}</span>
           <span className="flex shrink-0 items-center gap-1">
             <Clock className="h-3 w-3" />
             {formatTimeAgo(caseItem.createdAt)}
           </span>
         </div>
+        <p className="flex items-center gap-1.5 min-w-0">
+          <User className="h-3 w-3 shrink-0 opacity-70" />
+          <span className="truncate">
+            {caseItem.assignedTo ??
+              (caseItem.assignedCenterId
+                ? `Centro ${caseItem.assignedCenterId.slice(0, 8)}`
+                : 'Sin responsable')}
+          </span>
+        </p>
       </div>
 
-      {unassigned && (
-        <p className="mt-2 flex items-center gap-1 pl-1 text-[10px] font-medium text-warning">
-          <AlertTriangle className="h-3 w-3" />
-          Sin asignar
-        </p>
-      )}
+      {unassigned &&
+        caseItem.pipelineStage !== 'open_for_applications' &&
+        caseItem.pipelineStage !== 'pending_review' && (
+          <p className="mt-2 flex items-center gap-1 pl-1 text-[10px] font-medium text-warning">
+            <AlertTriangle className="h-3 w-3" />
+            Sin asignar
+          </p>
+        )}
     </motion.button>
   )
 }
@@ -304,27 +314,6 @@ interface CaseCardMetrics {
   volunteersAccepted: number
   volunteersRequired: number
   callStatus: PublicNeed['callStatus']
-}
-
-function MiniMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="rounded-lg bg-white/[0.03] px-1.5 py-1">
-      <span className="block text-[9px] text-ink-faint">{label}</span>
-      <span className="block text-[11px] font-semibold text-ink">{value}</span>
-    </span>
-  )
-}
-
-function callStatusLabel(status?: PublicNeed['callStatus']) {
-  if (status === 'open') return 'Abierta'
-  if (status === 'complete') return 'Completa'
-  return 'Cerrada'
-}
-
-function callStatusClass(status?: PublicNeed['callStatus']) {
-  if (status === 'open') return 'text-info'
-  if (status === 'complete') return 'text-operational'
-  return 'text-ink-faint'
 }
 
 function formatTimeAgo(date: Date): string {

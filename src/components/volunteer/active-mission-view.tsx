@@ -6,7 +6,6 @@ import {
   MapPin,
   Clock,
   AlertTriangle,
-  Shield,
   CheckCircle2,
   X,
   Send,
@@ -20,7 +19,7 @@ import { MapZoomControls, MapLocateControl, MapGoogleLinkButton } from '@/compon
 import { useGeolocation, haversineDistance, formatDistance, estimateTravelTime } from '@/hooks/useGeolocation'
 import { cn } from '@/lib/utils'
 import { label, PRIORITY_LABELS } from '@/lib/labels'
-import { useRespondMission, useUpdateMissionAssignment, useSubmitEvidence } from '@/hooks/useMissionMutations'
+import { useUpdateMissionAssignment, useSubmitEvidence, useReportEtaDelay } from '@/hooks/useMissionMutations'
 import type { Mission, MissionAssignment } from '@/domain/mission.types'
 
 interface ActiveMissionViewProps {
@@ -113,9 +112,10 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
   const [showEvidenceForm, setShowEvidenceForm] = useState(false)
   const [newEvidenceUrl, setNewEvidenceUrl] = useState('')
   const [elapsedSec, setElapsedSec] = useState(0)
-  const respondMission = useRespondMission()
   const updateStatus = useUpdateMissionAssignment()
   const submitEvidence = useSubmitEvidence()
+  const reportEta = useReportEtaDelay()
+  const [etaBumpMin, setEtaBumpMin] = useState(0)
 
   const locked = LOCKED_STATUSES.has(assignment.status)
   const missionCenter: [number, number] = [mission.location.lat, mission.location.lng]
@@ -488,108 +488,87 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
         )}
       </div>
 
-      {/* Bottom actions — avisos al gestor */}
+      {/* Bottom actions — tarjeta operacional simplificada */}
       <div className="relative z-20 shrink-0 border-t border-white/[0.06] bg-[#070B14]/95 px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur">
         {locked && (
           <p className="mb-2 text-center text-[10px] text-ink-faint">
-            Cada botón notifica al gestor de casos en tiempo real
+            Cada botón registra un evento de misión para el gestor
           </p>
         )}
 
-        {assignment.status === 'assigned' && (
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                respondMission.mutate({ assignmentId: assignment.id, action: 'reject', volunteerId })
-              }
-              disabled={respondMission.isPending}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-critical/30 py-3.5 text-sm font-semibold text-critical transition-all hover:bg-critical/10 disabled:opacity-50"
-            >
-              <X className="h-5 w-5" />
-              No puedo
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                respondMission.mutate({ assignmentId: assignment.id, action: 'accept', volunteerId })
-              }
-              disabled={respondMission.isPending}
-              className="flex flex-[1.4] items-center justify-center gap-2 rounded-2xl bg-operational py-3.5 text-sm font-semibold text-white shadow-lg shadow-operational/25 transition-all hover:bg-operational/90 disabled:opacity-50"
-            >
-              <CheckCircle2 className="h-5 w-5" />
-              {respondMission.isPending ? 'Aceptando...' : 'Comenzar misión'}
-            </button>
-          </div>
-        )}
-
-        {assignment.status === 'accepted' && (
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'preparing' })}
-              disabled={updateStatus.isPending}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/[0.15] py-3.5 text-sm font-semibold text-ink transition-all hover:bg-white/[0.06] disabled:opacity-50"
-            >
-              Estoy listo
-            </button>
-            <button
-              type="button"
-              onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'en_route' })}
-              disabled={updateStatus.isPending}
-              className="flex flex-[2] items-center justify-center gap-2 rounded-2xl bg-info py-3.5 text-sm font-semibold text-white shadow-lg shadow-info/25 transition-all hover:bg-info/90 disabled:opacity-50"
-            >
-              <Navigation className="h-5 w-5" />
-              {updateStatus.isPending ? 'Avisando...' : 'Voy en camino'}
-            </button>
-          </div>
-        )}
-
-        {assignment.status === 'preparing' && (
+        {(assignment.status === 'accepted' || assignment.status === 'preparing') && (
           <button
             type="button"
             onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'en_route' })}
             disabled={updateStatus.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-info py-3.5 text-sm font-semibold text-white shadow-lg shadow-info/25 transition-all hover:bg-info/90 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-info py-4 text-base font-semibold text-white shadow-lg shadow-info/25 transition-all hover:bg-info/90 disabled:opacity-50"
           >
             <Navigation className="h-5 w-5" />
-            {updateStatus.isPending ? 'Avisando...' : 'Salgo ahora / Voy en camino'}
+            {updateStatus.isPending ? 'Avisando...' : 'En camino'}
           </button>
         )}
 
         {assignment.status === 'en_route' && (
-          <button
-            type="button"
-            onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'on_site' })}
-            disabled={updateStatus.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-warning py-3.5 text-sm font-semibold text-white shadow-lg shadow-warning/25 transition-all hover:bg-warning/90 disabled:opacity-50"
-          >
-            <MapPin className="h-5 w-5" />
-            {updateStatus.isPending ? 'Avisando...' : 'Ya llegué al sitio'}
-          </button>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'on_site' })}
+              disabled={updateStatus.isPending}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-warning py-4 text-base font-semibold text-white shadow-lg shadow-warning/25 transition-all hover:bg-warning/90 disabled:opacity-50"
+            >
+              <MapPin className="h-5 w-5" />
+              {updateStatus.isPending ? 'Avisando...' : 'Llegué'}
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  reportEta.mutate(
+                    { assignmentId: assignment.id, minutes: 5, actorId: volunteerId },
+                    { onSuccess: () => setEtaBumpMin((n) => n + 5) },
+                  )
+                }
+                disabled={reportEta.isPending}
+                className="flex flex-1 items-center justify-center gap-1 rounded-2xl border border-white/[0.12] py-3 text-sm font-semibold text-ink hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                <Clock className="h-4 w-4" />
+                +5 min
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  reportEta.mutate(
+                    { assignmentId: assignment.id, minutes: 10, actorId: volunteerId },
+                    { onSuccess: () => setEtaBumpMin((n) => n + 10) },
+                  )
+                }
+                disabled={reportEta.isPending}
+                className="flex flex-1 items-center justify-center gap-1 rounded-2xl border border-white/[0.12] py-3 text-sm font-semibold text-ink hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                <Clock className="h-4 w-4" />
+                +10 min
+              </button>
+            </div>
+            {etaBumpMin > 0 && (
+              <p className="text-center text-[11px] text-ink-muted">
+                Retraso reportado: +{etaBumpMin} min
+              </p>
+            )}
+          </div>
         )}
 
-        {assignment.status === 'on_site' && (
+        {(assignment.status === 'on_site' || assignment.status === 'in_progress') && (
           <button
             type="button"
-            onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'in_progress' })}
+            onClick={() => {
+              // Entregado → completed (esperando validación). Si está on_site, avanza a completed.
+              updateStatus.mutate({ assignmentId: assignment.id, status: 'completed' })
+            }}
             disabled={updateStatus.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Shield className="h-5 w-5" />
-            {updateStatus.isPending ? 'Iniciando...' : 'Iniciar ayuda'}
-          </button>
-        )}
-
-        {assignment.status === 'in_progress' && (
-          <button
-            type="button"
-            onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'completed' })}
-            disabled={updateStatus.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-operational py-3.5 text-sm font-semibold text-white shadow-lg shadow-operational/25 transition-all hover:bg-operational/90 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-operational py-4 text-base font-semibold text-white shadow-lg shadow-operational/25 transition-all hover:bg-operational/90 disabled:opacity-50"
           >
             <CheckCircle2 className="h-5 w-5" />
-            {updateStatus.isPending ? 'Finalizando...' : 'Ya finalicé la misión'}
+            {updateStatus.isPending ? 'Registrando...' : 'Entregado'}
           </button>
         )}
 
@@ -604,7 +583,7 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
               onClick={onClose}
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.12] py-3 text-sm font-medium text-ink-muted hover:bg-white/[0.04]"
             >
-              Salir de la experiencia
+              Salir
             </button>
           </div>
         )}

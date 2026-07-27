@@ -110,7 +110,7 @@ export interface CaseRow {
   title: string
   description: string
   priority: 'critical' | 'high' | 'medium' | 'low'
-  pipeline_stage: 'nuevo' | 'pending_review' | 'validating' | 'awaiting_info' | 'open_for_applications' | 'assigned' | 'accepted' | 'in_attention' | 'resolved' | 'archived'
+  pipeline_stage: 'nuevo' | 'pending_review' | 'validating' | 'awaiting_info' | 'open_for_applications' | 'awaiting_center_confirmation' | 'assigned' | 'accepted' | 'in_attention' | 'resolved' | 'archived'
   latitude: number | null
   longitude: number | null
   address: string | null

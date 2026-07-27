@@ -8,11 +8,12 @@ interface CaseStatusBadgeProps {
 
 const STAGE_META: Record<PipelineStage, { label: string; color: string; bg: string }> = {
   nuevo: { label: 'Nuevo', color: 'text-info', bg: 'bg-info/10' },
-  pending_review: { label: 'Analizando', color: 'text-warning', bg: 'bg-warning/10' },
+  pending_review: { label: 'En revisión', color: 'text-warning', bg: 'bg-warning/10' },
   validating: { label: 'Planificando', color: 'text-warning', bg: 'bg-warning/10' },
   awaiting_info: { label: 'Monitoreando', color: 'text-ink-muted', bg: 'bg-white/[0.06]' },
-  open_for_applications: { label: 'Convocatoria', color: 'text-info', bg: 'bg-info/10' },
-  assigned: { label: 'Asignando', color: 'text-info', bg: 'bg-info/10' },
+  open_for_applications: { label: 'Esperando postulantes', color: 'text-info', bg: 'bg-info/10' },
+  awaiting_center_confirmation: { label: 'Esperando centro', color: 'text-warning', bg: 'bg-warning/10' },
+  assigned: { label: 'Asignado', color: 'text-info', bg: 'bg-info/10' },
   accepted: { label: 'Ejecucion', color: 'text-operational', bg: 'bg-operational/10' },
   in_attention: { label: 'Ejecucion', color: 'text-operational', bg: 'bg-operational/10' },
   resolved: { label: 'Completado', color: 'text-operational', bg: 'bg-operational/10' },

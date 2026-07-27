@@ -7,6 +7,7 @@ import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { caseService } from '@/services/case-service'
 import { missionService } from '@/services/mission-service'
 import { notifyUser } from '@/lib/notify'
+import { operationalLog } from '@/lib/operational-log'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import type { Mission } from '@/domain/mission.types'
@@ -126,11 +127,23 @@ export const caseApplicationService = {
 
     await notifyUser(
       app.applicantId,
-      'Tu postulación fue aceptada',
-      `Fuiste asignado a "${caseData.title}". Abre la misión para comenzar.`,
+      'Has sido seleccionado para esta misión',
+      `Fuiste seleccionado para "${caseData.title}". Abre FARO e inicia la misión.`,
       'case_approved',
       { caseId: app.caseId, missionId: mission.id },
     )
+
+    operationalLog({
+      entityType: 'application',
+      entityId: applicationId,
+      action: 'approve',
+      from: 'open_for_applications',
+      to: 'assigned',
+      actorId,
+      volunteerId: app.applicantId,
+      source: 'service',
+      payload: { caseId: app.caseId, missionId: mission.id },
+    })
 
     return { caseId: app.caseId, missionId: mission.id }
   },

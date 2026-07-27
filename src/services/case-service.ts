@@ -1,6 +1,7 @@
 import { transitionCase, canTransition } from '@/domain/case-lifecycle.service'
 import type { CaseDomain, CaseDomainEvent, CasePriority, PipelineStage, TransitionResult } from '@/domain/case-lifecycle.types'
 import { caseRepository, type CaseFilters } from '@/repositories/case-repository'
+import { operationalLog } from '@/lib/operational-log'
 
 export interface CreateCaseParams {
   title: string
@@ -65,8 +66,21 @@ export const caseService = {
     const domain: CaseDomain = { ...existing, pipelineStage: existing.pipelineStage as PipelineStage }
 
     const check = canTransition(domain, toStage)
-    if (!check.allowed) throw new Error(check.reason)
+    if (!check.allowed) {
+      operationalLog({
+        entityType: 'case',
+        entityId: caseId,
+        action: 'transition_rejected',
+        from: domain.pipelineStage,
+        to: toStage,
+        actorId: actorId ?? null,
+        source: 'service',
+        error: check.reason,
+      })
+      throw new Error(check.reason)
+    }
 
+    const started = Date.now()
     const result = transitionCase(domain, toStage, actorId, comment)
 
     await caseRepository.update(caseId, result.case)
@@ -80,6 +94,19 @@ export const caseService = {
       comment,
     })
 
+    operationalLog({
+      entityType: 'case',
+      entityId: caseId,
+      action: 'transition',
+      from: result.event.fromStage,
+      to: result.event.toStage,
+      actorId: actorId ?? null,
+      centerId: result.case.assignedCenterId ?? null,
+      source: 'service',
+      durationMs: Date.now() - started,
+      payload: { eventType: result.event.eventType, comment },
+    })
+
     // Al resolver o archivar, cerrar misiones y necesidades públicas asociadas
     if (toStage === 'resolved' || toStage === 'archived') {
       try {
@@ -87,6 +114,16 @@ export const caseService = {
         await missionService.closeForResolvedCase(caseId, actorId)
       } catch (err) {
         console.warn('[CASE] No se pudo sincronizar misiones al resolver/archivar', err)
+        operationalLog({
+          entityType: 'case',
+          entityId: caseId,
+          action: 'close_missions_failed',
+          from: result.event.fromStage,
+          to: toStage,
+          actorId: actorId ?? null,
+          source: 'service',
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 

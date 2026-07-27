@@ -6,6 +6,7 @@ export type PipelineStage =
   | 'validating'
   | 'awaiting_info'
   | 'open_for_applications'
+  | 'awaiting_center_confirmation'
   | 'assigned'
   | 'accepted'
   | 'in_attention'

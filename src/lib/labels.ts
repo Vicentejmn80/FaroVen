@@ -7,10 +7,11 @@ import type { RoleRequestStatus } from '@/domain/role-request.types'
 /* ------------------------------------------------------------------ */
 export const PIPELINE_LABELS: Record<PipelineStage, string> = {
   nuevo: 'Nuevo',
-  pending_review: 'Esperando revisión',
+  pending_review: 'En revisión',
   validating: 'En validación',
   awaiting_info: 'Esperando información',
-  open_for_applications: 'Aceptando postulaciones',
+  open_for_applications: 'Esperando postulantes',
+  awaiting_center_confirmation: 'Esperando confirmación del centro',
   assigned: 'Asignado',
   accepted: 'Aceptado',
   in_attention: 'En atención',

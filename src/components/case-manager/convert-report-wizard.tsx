@@ -102,7 +102,7 @@ export function ConvertReportWizard({ reportId, onDone, onCancel }: ConvertRepor
       <GlassCard className="p-6 text-center">
         <p className="text-lg font-semibold text-ink mb-2">Caso creado</p>
         <p className="text-sm text-ink-subtle mb-4">
-          Necesidad pública publicada. Ya puede aparecer en el radar de voluntarios.
+          Caso operativo en revisión. Solicita postulantes o asigna a un centro para continuar.
         </p>
         <EmergencyButton variant="primary" size="sm" onClick={onDone}>Aceptar</EmergencyButton>
       </GlassCard>

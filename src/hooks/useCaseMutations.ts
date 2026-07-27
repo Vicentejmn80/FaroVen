@@ -72,10 +72,8 @@ export function useAssignCase() {
       reason?: string
     }) => {
       try {
-        const assignment = await assignmentService.assign(caseId, centerId, assignedBy, assignedTo, reason)
-        await caseService.transition(caseId, 'assigned', assignedBy, `Asignado a centro ${centerId}`)
-        void slaService.setDeadline(caseId, 'high')
-        return assignment
+        // assign() deja el caso en awaiting_center_confirmation — NO en assigned
+        return await assignmentService.assign(caseId, centerId, assignedBy, assignedTo, reason)
       } catch (err) {
         throw new Error(humanizeSupabaseError(err))
       }
@@ -85,7 +83,51 @@ export function useAssignCase() {
       if (variables.assignedTo) {
         notifyUser(variables.assignedTo, 'Nuevo caso asignado', `Se te ha asignado un caso. Consulta el panel de coordinación.`)
       }
-      showToast('Caso asignado correctamente.', 'success')
+      showToast('Centro propuesto — esperando confirmación.', 'success')
+    },
+  })
+}
+
+export function useConfirmCenterAssignment() {
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async ({ caseId, actorId }: { caseId: string; actorId?: string }) => {
+      try {
+        return await assignmentService.confirmCenter(caseId, actorId)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      invalidateCaseData(queryClient)
+      showToast('Centro confirmado — caso asignado.', 'success')
+    },
+  })
+}
+
+export function useRejectCenterAssignment() {
+  const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async ({
+      caseId,
+      actorId,
+      reason,
+    }: {
+      caseId: string
+      actorId?: string
+      reason?: string
+    }) => {
+      try {
+        return await assignmentService.rejectCenter(caseId, actorId, reason)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      invalidateCaseData(queryClient)
+      showToast('Sin confirmación del centro — caso vuelve a revisión.', 'info')
     },
   })
 }

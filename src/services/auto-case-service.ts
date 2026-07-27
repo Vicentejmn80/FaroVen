@@ -1,4 +1,5 @@
 import type { Report } from '@/domain/models'
+import { reportRepository } from '@/repositories/report-repository'
 import { caseService } from './case-service'
 
 export const autoCaseService = {
@@ -7,7 +8,7 @@ export const autoCaseService = {
       ? report.description.slice(0, 77) + '...'
       : report.description
 
-    return caseService.create({
+    const result = await caseService.create({
       title,
       description: report.description,
       priority: report.confidence === 'high' ? 'high' : 'medium',
@@ -23,6 +24,26 @@ export const autoCaseService = {
       },
       category: report.type,
       actorId,
+      reportId: report.id,
     })
+
+    if (report.status !== 'converted' && report.status !== 'discarded') {
+      await reportRepository.markConverted({
+        id: report.id,
+        caseId: result.case.id,
+      })
+    }
+
+    const transitioned =
+      result.case.pipelineStage === 'pending_review'
+        ? result
+        : await caseService.transition(
+            result.case.id,
+            'pending_review',
+            actorId,
+            'Caso operativo creado automáticamente desde reporte',
+          )
+
+    return transitioned
   },
 }

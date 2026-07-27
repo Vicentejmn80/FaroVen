@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases, useArchiveCase } from '@/hooks/useCases'
+import { useConfirmCenterAssignment, useRejectCenterAssignment } from '@/hooks/useCaseMutations'
 import { useRoleRequests } from '@/hooks/useRoleRequests'
 import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -218,22 +219,29 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
       )}
 
       {pendingValidation.length > 0 && (
-        <div className="bg-white/[0.03] rounded-2xl p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-3">Ayuda por validar</p>
-          <div className="space-y-2">
+        <div className="bg-warning/[0.06] rounded-2xl border border-warning/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-warning mb-3">
+            Esperando validación de entrega
+          </p>
+          <div className="space-y-3">
             {pendingValidation.map((a) => (
-              <div key={a.id} className="space-y-1.5">
+              <div key={a.id} className="space-y-2">
                 <p className="text-[11px] text-ink-muted">
                   {a.evidenceUrls && a.evidenceUrls.length > 0
-                    ? 'El voluntario finalizó y adjuntó evidencia'
-                    : 'El voluntario finalizó — pendiente de validación del gestor'}
+                    ? 'El voluntario marcó Entregado y adjuntó evidencia'
+                    : 'El voluntario marcó Entregado — revisa y confirma para cerrar'}
                 </p>
                 {a.evidenceUrls && a.evidenceUrls.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {a.evidenceUrls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                         className="text-xs text-info underline truncate max-w-[200px]">
-                        {url.split('/').pop() ?? `Evidencia ${i + 1}`}
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-info underline truncate max-w-[200px]"
+                      >
+                        Ver evidencia {i + 1}
                       </a>
                     ))}
                   </div>
@@ -247,7 +255,7 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
                     verifyAssignment.mutate({ assignmentId: a.id, verifiedBy: user.id })
                   }}
                 >
-                  Validar y cerrar misión
+                  Confirmar entrega
                 </EmergencyButton>
               </div>
             ))}
@@ -278,6 +286,8 @@ export function CaseManagerWorkspace() {
   const closeNeedCall = useCloseNeedCall()
   const deleteReport = useDeleteReport()
   const archiveCase = useArchiveCase()
+  const confirmCenter = useConfirmCenterAssignment()
+  const rejectCenter = useRejectCenterAssignment()
   const [esperandoCasoId, setEsperandoCasoId] = useState<string | null>(null)
   const [asignandoCasoId, setAsignandoCasoId] = useState<string | null>(null)
   const [applicationCaseId, setApplicationCaseId] = useState<string | undefined>(undefined)
@@ -507,7 +517,7 @@ export function CaseManagerWorkspace() {
                   <button onClick={() => setExpandedCaseId(isExpanded ? null : c.id)} className="w-full text-left">
                     <GlassCard className={cn('p-3 transition-all', isExpanded ? 'ring-1 ring-info/30' : '')}>
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <p className="text-sm font-medium text-ink">{c.title}</p>
+                        <p className="text-sm font-medium text-ink line-clamp-2">{c.title}</p>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
                             {label(PRIORITY_LABELS, c.priority, c.priority)}
@@ -522,10 +532,15 @@ export function CaseManagerWorkspace() {
                           </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-ink-subtle">
-                        <span>{c.zone}</span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
+                        <span>{label(PIPELINE_LABELS, c.pipelineStage)}</span>
                         <span>&middot;</span>
-                        <span>Etapa: {label(PIPELINE_LABELS, c.pipelineStage)}</span>
+                        <span>{Math.max(0, Math.round((Date.now() - c.createdAt.getTime()) / 3600000))}h</span>
+                        <span>&middot;</span>
+                        <span>
+                          {c.assignedTo ??
+                            (c.assignedCenterId ? `Centro ${c.assignedCenterId.slice(0, 6)}` : 'Sin responsable')}
+                        </span>
                       </div>
                     </GlassCard>
                   </button>
@@ -533,38 +548,95 @@ export function CaseManagerWorkspace() {
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
 
-                      {/* Actions for cases that can open for applications or are already open */}
-                      {(c.pipelineStage === 'pending_review' || c.pipelineStage === 'validating' || c.pipelineStage === 'awaiting_info' || c.pipelineStage === 'open_for_applications') && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setEsperandoCasoId(c.id)}
-                          className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
-                        >
-                          <p className="font-medium text-ink">{c.pipelineStage === 'open_for_applications' ? 'Reabrir convocatoria' : 'Solicitar voluntarios'}</p>
-                          <p className="text-ink-faint mt-0.5">Abre la convocatoria y recibe postulaciones en el mapa</p>
-                        </button>
-                        <button
-                          onClick={() => setAsignandoCasoId(c.id)}
-                          className={cn('flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]', 'border-white/[0.08]')}
-                        >
-                          <p className="font-medium text-ink">Asignar a centro</p>
-                          <p className="text-ink-faint mt-0.5">Enviar a Protección Civil, centros de acopio u otras instituciones</p>
-                        </button>
-                      </div>
+                      {/* Caso en revisión: SOLO dos acciones */}
+                      {(c.pipelineStage === 'pending_review' ||
+                        c.pipelineStage === 'validating' ||
+                        c.pipelineStage === 'awaiting_info') && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEsperandoCasoId(c.id)}
+                            className={cn(
+                              'flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]',
+                              'border-white/[0.08]',
+                            )}
+                          >
+                            <p className="font-medium text-ink">Solicitar postulantes</p>
+                            <p className="text-ink-faint mt-0.5">
+                              Abre el radar y notifica a voluntarios — no asigna a nadie
+                            </p>
+                          </button>
+                          <button
+                            onClick={() => setAsignandoCasoId(c.id)}
+                            className={cn(
+                              'flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]',
+                              'border-white/[0.08]',
+                            )}
+                          >
+                            <p className="font-medium text-ink">Asignar a Centro</p>
+                            <p className="text-ink-faint mt-0.5">
+                              Centro, refugio, ONG o institución — espera confirmación
+                            </p>
+                          </button>
+                        </div>
                       )}
 
-                      {/* Applications panel when case is open_for_applications */}
+                      {c.pipelineStage === 'awaiting_center_confirmation' && (
+                        <div className="space-y-2 rounded-xl border border-warning/20 bg-warning/[0.06] p-3">
+                          <p className="text-xs font-medium text-warning">
+                            Esperando confirmación del centro
+                          </p>
+                          <p className="text-[11px] text-ink-muted">
+                            El caso aún no está ASIGNADO. Confirma cuando el centro acepte, o
+                            devuélvelo a revisión.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                confirmCenter.mutate({ caseId: c.id, actorId: user?.id })
+                              }
+                              disabled={confirmCenter.isPending || !user?.id}
+                              className="flex-1 rounded-lg bg-operational/15 py-1.5 text-xs font-medium text-operational hover:bg-operational/25"
+                            >
+                              Centro confirmó
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                rejectCenter.mutate({
+                                  caseId: c.id,
+                                  actorId: user?.id,
+                                  reason: 'Sin respuesta del centro',
+                                })
+                              }
+                              disabled={rejectCenter.isPending || !user?.id}
+                              className="flex-1 rounded-lg bg-white/[0.06] py-1.5 text-xs font-medium text-ink-subtle hover:bg-white/[0.1]"
+                            >
+                              Sin respuesta
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Postulaciones: solo contador + ver */}
                       {c.pipelineStage === 'open_for_applications' && (
                         <div className="space-y-2">
-                          {applicationCaseId !== c.id && (
-                            <button
-                              onClick={() => setApplicationCaseId(c.id)}
-                              className="w-full rounded-xl border border-white/[0.08] px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]"
-                            >
-                              <p className="font-medium text-ink">Ver postulaciones ({applications.length})</p>
-                              <p className="text-ink-faint mt-0.5">Revisa y aprueba postulantes para este caso</p>
-                            </button>
-                          )}
+                          <button
+                            onClick={() =>
+                              setApplicationCaseId(applicationCaseId === c.id ? undefined : c.id)
+                            }
+                            className="w-full rounded-xl border border-white/[0.08] px-3 py-2 text-left text-xs transition-all hover:bg-white/[0.04]"
+                          >
+                            <p className="font-medium text-ink">
+                              Ver postulantes
+                              {applicationCaseId === c.id || applications.length > 0
+                                ? ` (${applicationCaseId === c.id ? applications.length : '…'})`
+                                : ''}
+                            </p>
+                            <p className="text-ink-faint mt-0.5">
+                              Al aceptar, el caso pasa a ASIGNADO
+                            </p>
+                          </button>
 
                           {applicationCaseId === c.id && (
                             <div className="space-y-2">
@@ -605,9 +677,11 @@ export function CaseManagerWorkspace() {
                                       </div>
                                       {app.totalMissions !== undefined && (
                                         <div className="flex gap-3 text-[10px] text-ink-faint">
-                                          <span>{app.totalMissions} misiones</span>
-                                          {app.completedMissions !== undefined &&                                           <span>{app.completedMissions} completadas</span>}
-                                          {app.serviceHours !== undefined && <span>{app.serviceHours} horas</span>}
+                                          <span>Reputación: {app.trustScore ?? '—'}%</span>
+                                          <span>{app.completedMissions ?? 0} misiones ok</span>
+                                          {app.avgResponseMin != null && (
+                                            <span>~{app.avgResponseMin} min resp.</span>
+                                          )}
                                         </div>
                                       )}
                                       {canModerate && (
@@ -617,7 +691,7 @@ export function CaseManagerWorkspace() {
                                             disabled={approveApp.isPending || !user?.id}
                                             className="flex-1 rounded-lg bg-operational/15 py-1.5 text-xs font-medium text-operational hover:bg-operational/25 transition-colors"
                                           >
-                                            Aprobar
+                                            Aceptar
                                           </button>
                                           <button
                                             onClick={() => rejectApp.mutate({ applicationId: app.id, operatorId: user?.id ?? '' })}

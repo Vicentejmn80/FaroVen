@@ -320,6 +320,33 @@ export const missionService = {
     return updated
   },
 
+  /** Voluntario reporta retraso estimado (+5 / +10 min) — no cambia estado. */
+  async reportEtaDelay(
+    assignmentId: string,
+    minutes: 5 | 10,
+    actorId?: string,
+  ): Promise<void> {
+    const assignment = await missionRepository.findAssignmentById(assignmentId)
+    if (!assignment) throw new Error('Asignación no encontrada')
+    await missionRepository.addEvent({
+      missionId: assignment.missionId,
+      eventType: 'eta_delay',
+      actorId,
+      description: `Voluntario reportó +${minutes} minutos de demora`,
+      metadata: {
+        assignmentId,
+        delayMinutes: minutes,
+        fromStatus: assignment.status,
+      },
+    })
+    await emitAssignmentStatus(
+      assignment,
+      'en_route',
+      `Retraso estimado: +${minutes} minutos`,
+    )
+    await announce(assignment, 'volunteer_en_route', { operators: true })
+  },
+
   async markPreparing(assignmentId: string): Promise<MissionAssignment> {
     const updated = await missionRepository.updateAssignment(assignmentId, {
       status: 'preparing',
@@ -459,6 +486,7 @@ async function resolveCaseBestEffort(caseId: string, actorId: string | undefined
     accepted: ['in_attention', 'resolved'],
     in_attention: ['resolved'],
     open_for_applications: ['assigned', 'accepted', 'in_attention', 'resolved'],
+    awaiting_center_confirmation: ['assigned', 'accepted', 'in_attention', 'resolved'],
   }
   const path = paths[stage]
   if (!path) return

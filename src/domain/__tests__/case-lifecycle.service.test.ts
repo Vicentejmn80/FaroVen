@@ -49,8 +49,16 @@ describe('isValidTransition', () => {
     expect(isValidTransition(N.NUEVO, N.ARCHIVED)).toBe(true)
   })
 
-  it('permite pending_review → validating', () => {
-    expect(isValidTransition(N.PENDING_REVIEW, N.VALIDATING)).toBe(true)
+  it('permite pending_review → open_for_applications', () => {
+    expect(isValidTransition(N.PENDING_REVIEW, N.OPEN_FOR_APPLICATIONS)).toBe(true)
+  })
+
+  it('permite pending_review → awaiting_center_confirmation', () => {
+    expect(isValidTransition(N.PENDING_REVIEW, N.AWAITING_CENTER_CONFIRMATION)).toBe(true)
+  })
+
+  it('NO permite pending_review → validating (saltos genéricos eliminados)', () => {
+    expect(isValidTransition(N.PENDING_REVIEW, N.VALIDATING)).toBe(false)
   })
 
   it('permite pending_review → awaiting_info', () => {
@@ -61,8 +69,12 @@ describe('isValidTransition', () => {
     expect(isValidTransition(N.PENDING_REVIEW, N.ARCHIVED)).toBe(true)
   })
 
-  it('permite validating → assigned', () => {
-    expect(isValidTransition(N.VALIDATING, N.ASSIGNED)).toBe(true)
+  it('NO permite validating → assigned (ASIGNADO solo tras aceptar/confirmar)', () => {
+    expect(isValidTransition(N.VALIDATING, N.ASSIGNED)).toBe(false)
+  })
+
+  it('permite validating → open_for_applications', () => {
+    expect(isValidTransition(N.VALIDATING, N.OPEN_FOR_APPLICATIONS)).toBe(true)
   })
 
   it('permite validating → awaiting_info', () => {
@@ -75,6 +87,14 @@ describe('isValidTransition', () => {
 
   it('permite awaiting_info → archived', () => {
     expect(isValidTransition(N.AWAITING_INFO, N.ARCHIVED)).toBe(true)
+  })
+
+  it('permite awaiting_center_confirmation → assigned', () => {
+    expect(isValidTransition(N.AWAITING_CENTER_CONFIRMATION, N.ASSIGNED)).toBe(true)
+  })
+
+  it('permite open_for_applications → assigned', () => {
+    expect(isValidTransition(N.OPEN_FOR_APPLICATIONS, N.ASSIGNED)).toBe(true)
   })
 
   it('permite assigned → accepted', () => {
@@ -152,8 +172,16 @@ describe('getTransitionEvent', () => {
     expect(getTransitionEvent(N.NUEVO, N.ARCHIVED)).toBe(CASE_EVENT_TYPES.CASE_DISMISSED)
   })
 
-  it('pending_review → validating emite CASE_REVIEW_STARTED', () => {
-    expect(getTransitionEvent(N.PENDING_REVIEW, N.VALIDATING)).toBe(CASE_EVENT_TYPES.CASE_REVIEW_STARTED)
+  it('pending_review → open_for_applications emite CASE_OPENED_FOR_APPLICATIONS', () => {
+    expect(getTransitionEvent(N.PENDING_REVIEW, N.OPEN_FOR_APPLICATIONS)).toBe(
+      CASE_EVENT_TYPES.CASE_OPENED_FOR_APPLICATIONS,
+    )
+  })
+
+  it('pending_review → awaiting_center_confirmation emite CASE_AWAITING_CENTER', () => {
+    expect(getTransitionEvent(N.PENDING_REVIEW, N.AWAITING_CENTER_CONFIRMATION)).toBe(
+      CASE_EVENT_TYPES.CASE_AWAITING_CENTER,
+    )
   })
 
   it('assigned → accepted emite CASE_ACCEPTED', () => {
@@ -260,14 +288,14 @@ describe('transitionCase', () => {
   })
 
   it('asigna assignedAt al llegar a assigned', () => {
-    const c = makeCase({ pipelineStage: N.VALIDATING })
+    const c = makeCase({ pipelineStage: N.OPEN_FOR_APPLICATIONS })
     const { case: result } = transitionCase(c, N.ASSIGNED)
     expect(result.assignedAt).toBeDefined()
   })
 
   it('no sobreescribe assignedAt si ya existe', () => {
     const existing = new Date('2026-07-16T09:00:00Z')
-    const c = makeCase({ pipelineStage: N.VALIDATING, assignedAt: existing })
+    const c = makeCase({ pipelineStage: N.OPEN_FOR_APPLICATIONS, assignedAt: existing })
     const { case: result } = transitionCase(c, N.ASSIGNED)
     expect(result.assignedAt).toBe(existing)
   })
@@ -276,8 +304,8 @@ describe('transitionCase', () => {
     let c = makeCase()
     const stages: Array<{ from: string; to: string }> = [
       { from: N.NUEVO, to: N.PENDING_REVIEW },
-      { from: N.PENDING_REVIEW, to: N.VALIDATING },
-      { from: N.VALIDATING, to: N.ASSIGNED },
+      { from: N.PENDING_REVIEW, to: N.OPEN_FOR_APPLICATIONS },
+      { from: N.OPEN_FOR_APPLICATIONS, to: N.ASSIGNED },
       { from: N.ASSIGNED, to: N.ACCEPTED },
       { from: N.ACCEPTED, to: N.IN_ATTENTION },
       { from: N.IN_ATTENTION, to: N.RESOLVED },

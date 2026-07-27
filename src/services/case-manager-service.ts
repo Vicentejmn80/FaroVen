@@ -198,19 +198,22 @@ export const caseManagerService = {
       reportId: data.reportId,
     })
 
-    const transitioned = await caseService.transition(
-      result.case.id,
-      'pending_review',
-      actorId,
-      'Caso operativo creado desde reporte ciudadano',
-    )
-
-    // Marcar convertido ANTES de crear la necesidad: si falla, no debe quedar
-    // el reporte en bandeja con casos huérfanos (era el bug del 406).
+    // Marcar convertido apenas existe el caso — sobrevive fallos posteriores
+    // (p.ej. transición redundante en casos critical que ya están en pending_review).
     await reportRepository.markConverted({
       id: data.reportId,
-      caseId: transitioned.case.id,
+      caseId: result.case.id,
     })
+
+    const transitioned =
+      result.case.pipelineStage === 'pending_review'
+        ? result
+        : await caseService.transition(
+            result.case.id,
+            'pending_review',
+            actorId,
+            'Caso operativo creado desde reporte ciudadano',
+          )
 
     // Necesidad borrador (convocatoria cerrada). El gestor abre voluntarios después.
     await publicNeedRepository.createFromCase({

@@ -274,6 +274,16 @@ export class MissionRepository {
     return mapMissionAssignmentRow(data as MissionAssignmentRow)
   }
 
+  async findAssignmentById(id: string): Promise<MissionAssignment | null> {
+    const { data, error } = await supabase
+      .from('mission_assignments')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapMissionAssignmentRow(data as MissionAssignmentRow) : null
+  }
+
   async listAssignmentsByVolunteer(volunteerId: string): Promise<MissionAssignment[]> {
     const { data, error } = await supabase
       .from('mission_assignments')

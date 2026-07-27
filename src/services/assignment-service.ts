@@ -1,5 +1,7 @@
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { caseRepository } from '@/repositories/case-repository'
+import { caseService } from '@/services/case-service'
+import { operationalLog } from '@/lib/operational-log'
 
 export interface CenterInfo {
   id: string
@@ -107,7 +109,88 @@ export const assignmentService = {
       assignedAt: new Date(),
     })
 
+    // No marcar ASIGNADO todavía: esperar confirmación del centro (GC puede confirmar).
+    const stage = caseData.pipelineStage
+    if (
+      stage === 'pending_review' ||
+      stage === 'validating' ||
+      stage === 'awaiting_info' ||
+      stage === 'open_for_applications'
+    ) {
+      await caseService.transition(
+        caseId,
+        'awaiting_center_confirmation',
+        assignedBy || undefined,
+        reason ?? `Propuesto a centro ${centerId} — esperando confirmación`,
+      )
+    }
+
+    operationalLog({
+      entityType: 'case',
+      entityId: caseId,
+      action: 'assign_center_proposed',
+      from: stage,
+      to: 'awaiting_center_confirmation',
+      actorId: assignedBy || null,
+      centerId,
+      source: 'service',
+      payload: { assignmentId: assignment.id, reason },
+    })
+
     return assignment
+  },
+
+  /** GC confirma por el centro → ahora sí ASIGNADO. */
+  async confirmCenter(caseId: string, actorId?: string) {
+    const caseData = await caseRepository.findById(caseId)
+    if (!caseData) throw new Error(`Caso no encontrado: ${caseId}`)
+    if (caseData.pipelineStage !== 'awaiting_center_confirmation') {
+      throw new Error('El caso no está esperando confirmación del centro')
+    }
+    const result = await caseService.transition(
+      caseId,
+      'assigned',
+      actorId,
+      'Centro confirmó — caso asignado',
+    )
+    operationalLog({
+      entityType: 'case',
+      entityId: caseId,
+      action: 'center_confirmed',
+      from: 'awaiting_center_confirmation',
+      to: 'assigned',
+      actorId: actorId ?? null,
+      centerId: caseData.assignedCenterId ?? null,
+      source: 'service',
+    })
+    return result
+  },
+
+  /** Sin respuesta del centro → volver a revisión. */
+  async rejectCenter(caseId: string, actorId?: string, reason?: string) {
+    const caseData = await caseRepository.findById(caseId)
+    if (!caseData) throw new Error(`Caso no encontrado: ${caseId}`)
+    if (caseData.pipelineStage !== 'awaiting_center_confirmation') {
+      throw new Error('El caso no está esperando confirmación del centro')
+    }
+    const result = await caseService.transition(
+      caseId,
+      'pending_review',
+      actorId,
+      reason ?? 'Centro sin respuesta — caso vuelve a revisión',
+    )
+    operationalLog({
+      entityType: 'case',
+      entityId: caseId,
+      action: 'center_rejected',
+      from: 'awaiting_center_confirmation',
+      to: 'pending_review',
+      actorId: actorId ?? null,
+      centerId: caseData.assignedCenterId ?? null,
+      source: 'service',
+      payload: { reason },
+    })
+    return result
   },
 
   async acceptAssignment(assignmentId: string) {

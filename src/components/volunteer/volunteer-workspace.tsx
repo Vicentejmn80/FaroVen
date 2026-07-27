@@ -183,15 +183,56 @@ function VolunteerHistory() {
   )
 }
 
-/** Estados donde la experiencia de misión debe invadir toda la pantalla. */
+/** Estados inmersivos tras iniciar misión (assigned muestra modal de selección). */
 const IMMERSIVE_MISSION_STATUSES = [
-  'assigned',
   'accepted',
   'preparing',
   'en_route',
   'on_site',
   'in_progress',
 ] as const
+
+function SelectedMissionModal({
+  missionTitle,
+  onStart,
+  onReject,
+  isPending,
+}: {
+  missionTitle: string
+  onStart: () => void
+  onReject: () => void
+  isPending: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+      <GlassCard className="w-full max-w-sm space-y-4 border-info/20 p-5">
+        <div className="space-y-1 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-operational">
+            Selección confirmada
+          </p>
+          <h2 className="text-lg font-semibold text-ink">Has sido seleccionado para esta misión</h2>
+          <p className="text-sm text-ink-muted">{missionTitle}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={isPending}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-operational py-3.5 text-sm font-semibold text-white hover:bg-operational/90 disabled:opacity-50"
+        >
+          {isPending ? 'Iniciando...' : 'Iniciar misión'}
+        </button>
+        <button
+          type="button"
+          onClick={onReject}
+          disabled={isPending}
+          className="w-full rounded-2xl border border-white/[0.1] py-2.5 text-xs font-medium text-ink-muted hover:bg-white/[0.04] disabled:opacity-50"
+        >
+          No puedo ahora
+        </button>
+      </GlassCard>
+    </div>
+  )
+}
 
 function MyMissions() {
   const { user } = useAuth()
@@ -286,12 +327,13 @@ function MyMissions() {
               { id: 'verified', label: 'Completada', completed: a.status === 'verified', active: a.status === 'verified' },
             ]
             const isImmersive = (IMMERSIVE_MISSION_STATUSES as readonly string[]).includes(a.status)
+            const needsSelection = a.status === 'assigned'
             return (
               <div key={a.id}>
                 <button
                   type="button"
                   onClick={() => {
-                    if (isImmersive || a.status === 'completed') {
+                    if (isImmersive || needsSelection || a.status === 'completed') {
                       openImmersive(a.id)
                       return
                     }
@@ -493,6 +535,7 @@ function ImmersiveMissionGate() {
   const { data: profile } = useVolunteerProfile()
   const { data: assignments } = useVolunteerMissions(profile?.id ?? '')
   const { data: allMissions } = useMissions()
+  const respondMission = useRespondMission()
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() =>
     loadDismissedMissionIds(user?.id),
   )
@@ -508,6 +551,11 @@ function ImmersiveMissionGate() {
     return map
   }, [allMissions])
 
+  const pendingSelection = useMemo(() => {
+    const list = assignments ?? []
+    return list.find((a) => a.status === 'assigned' && !dismissedIds.has(a.id)) ?? null
+  }, [assignments, dismissedIds])
+
   const target = useMemo(() => {
     const list = assignments ?? []
     const immersive = list.find((a) =>
@@ -516,9 +564,15 @@ function ImmersiveMissionGate() {
     if (immersive) return immersive
     if (forcedOpenId) {
       const forced = list.find((a) => a.id === forcedOpenId)
-      if (forced && forced.status !== 'rejected' && forced.status !== 'cancelled') return forced
+      if (
+        forced &&
+        forced.status !== 'rejected' &&
+        forced.status !== 'cancelled' &&
+        forced.status !== 'assigned'
+      ) {
+        return forced
+      }
     }
-    // completed/verified: solo si el voluntario no cerró antes (persistido en localStorage)
     return (
       list.find(
         (a) =>
@@ -538,7 +592,33 @@ function ImmersiveMissionGate() {
     return () => window.removeEventListener('faro:open-immersive-mission', open)
   }, [])
 
-  if (!target || !user?.id) return null
+  if (!user?.id) return null
+
+  if (pendingSelection && !target) {
+    const mission = missionMap.get(pendingSelection.missionId)
+    return (
+      <SelectedMissionModal
+        missionTitle={mission?.title ?? 'Misión asignada'}
+        isPending={respondMission.isPending}
+        onStart={() =>
+          respondMission.mutate({
+            assignmentId: pendingSelection.id,
+            action: 'accept',
+            volunteerId: user.id,
+          })
+        }
+        onReject={() =>
+          respondMission.mutate({
+            assignmentId: pendingSelection.id,
+            action: 'reject',
+            volunteerId: user.id,
+          })
+        }
+      />
+    )
+  }
+
+  if (!target) return null
 
   const mission = missionMap.get(target.missionId) ?? {
     id: target.missionId,

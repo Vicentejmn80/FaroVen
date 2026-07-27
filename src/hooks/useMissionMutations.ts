@@ -146,6 +146,25 @@ export function useSubmitEvidence() {
   })
 }
 
+export function useReportEtaDelay() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      minutes,
+      actorId,
+    }: {
+      assignmentId: string
+      minutes: 5 | 10
+      actorId?: string
+    }) => missionService.reportEtaDelay(assignmentId, minutes, actorId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionEvents] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+    },
+  })
+}
+
 export function useVerifyAssignment() {
   const qc = useQueryClient()
   return useMutation({

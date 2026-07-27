@@ -5,7 +5,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CaseDomain, CaseDomainEvent, PipelineStage } from '@/domain/case-lifecycle.types'
 import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
-import { getValidTargets } from '@/domain/case-lifecycle.service'
 import { slaService } from '@/services/sla-service'
 import type { AssignmentSuggestion } from '@/types/operations-hub.types'
 import { CaseStatusBadge } from './case-status-badge'
@@ -44,7 +43,6 @@ export function CaseDetailPanel({
   }
 
   const slaInfo = slaService.getSlaInfo(caseItem)
-  const availableActions = getAvailableActions(caseItem.pipelineStage)
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
@@ -142,23 +140,46 @@ export function CaseDetailPanel({
             <InfoChip label="ID" value={caseItem.id.slice(0, 8)} />
           </div>
 
-          {/* Acciones operativas */}
-          {availableActions.length > 0 && onTransition && (
+          {/* Acciones operativas — solo cierre/archivo; no saltos genéricos de etapa */}
+          {onTransition && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-ink-muted">Acciones directas</p>
+              <p className="text-xs font-medium text-ink-muted">Acciones de cierre</p>
               <div className="flex flex-wrap gap-1.5">
-                {availableActions.map((action) => (
+                {caseItem.pipelineStage === PIPELINE_STAGES.IN_ATTENTION && (
                   <EmergencyButton
-                    key={action.value}
                     variant="glass"
                     size="sm"
-                    onClick={() => onTransition(caseItem.id, action.value, action.label)}
+                    onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.RESOLVED, 'Resolver caso')}
                     disabled={isTransitioning}
                   >
-                    {action.label}
+                    Resolver caso
                   </EmergencyButton>
-                ))}
+                )}
+                {caseItem.pipelineStage !== PIPELINE_STAGES.ARCHIVED &&
+                  caseItem.pipelineStage !== PIPELINE_STAGES.RESOLVED && (
+                    <EmergencyButton
+                      variant="glass"
+                      size="sm"
+                      onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar')}
+                      disabled={isTransitioning}
+                    >
+                      Archivar
+                    </EmergencyButton>
+                  )}
+                {caseItem.pipelineStage === PIPELINE_STAGES.RESOLVED && (
+                  <EmergencyButton
+                    variant="glass"
+                    size="sm"
+                    onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar')}
+                    disabled={isTransitioning}
+                  >
+                    Archivar
+                  </EmergencyButton>
+                )}
               </div>
+              <p className="text-[10px] text-ink-faint">
+                Solicitar postulantes y asignar centro se gestionan desde el Gestor de Casos.
+              </p>
             </div>
           )}
 
@@ -237,27 +258,6 @@ function InfoChip({ label, value }: { label: string; value: string }) {
       <p className="text-sm font-medium text-ink">{value}</p>
     </div>
   )
-}
-
-function getAvailableActions(stage: PipelineStage): Array<{ label: string; value: PipelineStage }> {
-  const targets = getValidTargets(stage)
-  return targets
-    .filter((t) => t !== PIPELINE_STAGES.ARCHIVED)
-    .map((t) => ({
-      label: ACTION_LABELS[t] ?? t,
-      value: t,
-    }))
-}
-
-const ACTION_LABELS: Partial<Record<PipelineStage, string>> = {
-  [PIPELINE_STAGES.PENDING_REVIEW]: 'Enviar a revisión',
-  [PIPELINE_STAGES.VALIDATING]: 'Validar caso',
-  [PIPELINE_STAGES.AWAITING_INFO]: 'Solicitar información',
-  [PIPELINE_STAGES.ASSIGNED]: 'Asignar a centro',
-  [PIPELINE_STAGES.ACCEPTED]: 'Aceptar asignación',
-  [PIPELINE_STAGES.IN_ATTENTION]: 'Iniciar atención',
-  [PIPELINE_STAGES.RESOLVED]: 'Resolver caso',
-  [PIPELINE_STAGES.ARCHIVED]: 'Archivar',
 }
 
 function SuggestedCenterCard({
