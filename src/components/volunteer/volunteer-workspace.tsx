@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useVolunteerProfile, useVolunteerMissions, useUpdateVolunteerAvailability } from '@/hooks/useVolunteerProfile'
 import { useMissions } from '@/hooks/useMissions'
 import { useUpdateMissionAssignment, useRespondMission, useSubmitEvidence } from '@/hooks/useMissionMutations'
@@ -535,18 +536,43 @@ const TABS: Array<{ id: VolunteerTab; label: string }> = [
  */
 export function ImmersiveMissionGate() {
   const { user } = useAuth()
-  const { data: profile } = useVolunteerProfile()
-  const { data: assignments } = useVolunteerMissions(profile?.id ?? '')
+  const queryClient = useQueryClient()
+  const { data: profile, refetch: refetchProfile } = useVolunteerProfile()
+  const volunteerRowId = profile?.id ?? ''
+  const { data: assignments, refetch: refetchMissions } = useVolunteerMissions(volunteerRowId)
   const { data: allMissions } = useMissions()
   const respondMission = useRespondMission()
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() =>
     loadDismissedMissionIds(user?.id),
   )
   const [forcedOpenId, setForcedOpenId] = useState<string | null>(null)
+  const [forceSelection, setForceSelection] = useState(false)
 
   useEffect(() => {
     if (user?.id) setDismissedIds(loadDismissedMissionIds(user.id))
   }, [user?.id])
+
+  // Asegura fila en volunteers para poder leer mission_assignments
+  useEffect(() => {
+    if (!user?.id || profile?.id) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const { volunteerRepository } = await import('@/repositories/volunteer-repository')
+        await volunteerRepository.ensureIdForUser(user.id)
+        if (!cancelled) {
+          await refetchProfile()
+          void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerProfile] })
+          void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+        }
+      } catch {
+        console.warn('[FARO_MISSION] No se pudo asegurar perfil de voluntario')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, profile?.id, refetchProfile, queryClient])
 
   const missionMap = useMemo(() => {
     const map = new Map<string, Mission>()
@@ -595,6 +621,37 @@ export function ImmersiveMissionGate() {
     return () => window.removeEventListener('faro:open-immersive-mission', open)
   }, [])
 
+  // Tras aceptación del GC: refrescar perfil/misiones y mostrar SelectedMissionModal
+  useEffect(() => {
+    const onAssigned = () => {
+      setForceSelection(true)
+      void (async () => {
+        try {
+          if (user?.id) {
+            const { volunteerRepository } = await import('@/repositories/volunteer-repository')
+            await volunteerRepository.ensureIdForUser(user.id)
+          }
+        } catch {
+          /* ignore */
+        }
+        await refetchProfile()
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerProfile] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+        await refetchMissions()
+      })()
+    }
+    window.addEventListener('faro:mission-assigned', onAssigned)
+    return () => window.removeEventListener('faro:mission-assigned', onAssigned)
+  }, [user?.id, refetchProfile, refetchMissions, queryClient])
+
+  useEffect(() => {
+    if (forceSelection && pendingSelection) {
+      setForceSelection(false)
+    }
+  }, [forceSelection, pendingSelection])
+
   if (!user?.id) return null
 
   if (pendingSelection && !target) {
@@ -618,6 +675,18 @@ export function ImmersiveMissionGate() {
           })
         }
       />
+    )
+  }
+
+  // Esperando a que llegue la assignment tras aprobación (breve)
+  if (forceSelection && !pendingSelection && !target) {
+    return (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+        <GlassCard className="w-full max-w-sm space-y-3 border-info/20 p-5 text-center">
+          <p className="text-sm font-semibold text-ink">Preparando tu misión…</p>
+          <p className="text-xs text-ink-muted">El gestor te seleccionó. Cargando protocolo.</p>
+        </GlassCard>
+      </div>
     )
   }
 

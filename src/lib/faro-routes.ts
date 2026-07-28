@@ -13,6 +13,16 @@ export function isHomePath(pathname = window.location.pathname): boolean {
 }
 
 /**
+ * URL absoluta para confirmación de correo / magic link.
+ * Apunta a /role-selection (sin query) para que coincida con la allowlist
+ * de Redirect URLs en Supabase y caiga en la elección de roles (PWA o web).
+ */
+export function buildAuthEmailRedirectUrl(): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  return new URL(FARO_ROUTES.roleSelection, origin || 'https://localhost').toString()
+}
+
+/**
  * Fuerza /role-selection cuando falta rol de red.
  * Ignora la URL de retorno de Supabase (/, ?code=, hash tokens).
  */
@@ -22,6 +32,7 @@ export function syncRoleSelectionUrl(mustBeOnRoleSelection: boolean): void {
   const { pathname, search, hash } = window.location
 
   if (mustBeOnRoleSelection) {
+    // Conservar solo la ruta canónica (sin query/hash de Supabase)
     if (pathname !== FARO_ROUTES.roleSelection || search || hash) {
       window.history.replaceState(window.history.state, '', FARO_ROUTES.roleSelection)
     }

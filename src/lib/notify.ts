@@ -6,6 +6,11 @@ export async function notifyUser(
   message: string,
   type: string = 'system',
   data?: Record<string, unknown>,
+  options?: {
+    priority?: 'critical' | 'high' | 'normal' | 'low'
+    actionUrl?: string | null
+    icon?: string | null
+  },
 ) {
   try {
     await supabase.rpc('create_notification', {
@@ -13,7 +18,9 @@ export async function notifyUser(
       p_title: title,
       p_message: message,
       p_type: type,
-      p_priority: 'normal',
+      p_priority: options?.priority ?? 'normal',
+      p_icon: options?.icon ?? null,
+      p_action_url: options?.actionUrl ?? null,
       p_metadata: (data ?? {}) as Record<string, unknown>,
     })
   } catch {

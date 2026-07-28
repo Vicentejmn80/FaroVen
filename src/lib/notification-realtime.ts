@@ -38,13 +38,28 @@ export function subscribeNotificationChanges(userId: string, queryClient: QueryC
         table: 'notifications',
         filter: `user_id=eq.${userId}`,
       },
-      () => {
+      (payload) => {
         void queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.list })
         // Aceptación / convocatoria / postulación: refrescar misiones sin F5
         void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
         void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
         void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
         void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerProfile] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
+        void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+
+        const row = payload.new as {
+          type?: string
+          metadata?: Record<string, unknown>
+        } | null
+        if (row?.type === 'case_approved') {
+          const missionId =
+            typeof row.metadata?.missionId === 'string' ? row.metadata.missionId : undefined
+          window.dispatchEvent(
+            new CustomEvent('faro:mission-assigned', { detail: { missionId } }),
+          )
+        }
       },
     )
 

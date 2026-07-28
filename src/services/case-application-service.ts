@@ -41,13 +41,24 @@ export const caseApplicationService = {
       const caseData = await caseService.getById(caseId)
       if (caseData) {
         const managers = await getActiveManagers()
+        const applicantName =
+          (await getApplicantDisplayName(applicantId)) ?? 'Un voluntario'
         for (const m of managers) {
           await notifyUser(
             m.id,
             'Nuevo postulante',
-            `Un voluntario se postuló al caso "${caseData.title}"`,
+            `${applicantName} quiere ayudar en "${caseData.title}"`,
             'case_application',
-            { caseId, applicationId: app.id },
+            {
+              caseId,
+              applicationId: app.id,
+              applicant_name: applicantName,
+            },
+            {
+              priority: 'high',
+              actionUrl: `tab:case-manager:application:${caseId}:${app.id}`,
+              icon: 'users',
+            },
           )
         }
       }
@@ -150,13 +161,18 @@ export const caseApplicationService = {
     // 4) Cerrar radar (convocatoria) — no completa la necesidad hasta validación
     await closeRadarForCase(app.caseId)
 
-    // 5) Notificar voluntario
+    // 5) Notificar voluntario — abre modal de misión asignada
     await notifyUser(
       app.applicantId,
       'Has sido seleccionado para esta misión',
       `Fuiste seleccionado para "${caseData.title}". Abre FARO e inicia la misión.`,
       'case_approved',
       { caseId: app.caseId, missionId: mission.id },
+      {
+        priority: 'high',
+        actionUrl: `tab:map:mission-assigned:${mission.id}`,
+        icon: 'flag',
+      },
     )
 
     return { caseId: app.caseId, missionId: mission.id }
@@ -342,9 +358,23 @@ async function getActiveManagers() {
     const { data } = await supabase
       .from('profiles')
       .select('id')
-      .in('role', ['case_manager', 'coordinator', 'regional_admin', 'super_admin'])
+      .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+      .eq('status', 'active')
     return (data ?? []) as { id: string }[]
   } catch {
     return []
+  }
+}
+
+async function getApplicantDisplayName(profileId: string): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', profileId)
+      .maybeSingle()
+    return (data as { full_name: string | null } | null)?.full_name ?? null
+  } catch {
+    return null
   }
 }

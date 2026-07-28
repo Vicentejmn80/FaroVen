@@ -10,6 +10,10 @@
   "theme_color": "#003399",
   "lang": "es",
   "categories": ["utilities", "health", "productivity"],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "icons": [
     {
       "src": "/icons/icon-192.png",

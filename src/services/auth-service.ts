@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import type { SignUpResult } from '@/lib/auth-callback'
+import { buildAuthEmailRedirectUrl, FARO_ROUTES } from '@/lib/faro-routes'
 import { FARO_ROLES, type FaroRole } from '@/lib/roles'
 import { formatAuthError } from '@/lib/auth-errors'
 import { countSignupDebug } from '@/lib/signup-debug'
@@ -64,7 +65,7 @@ export const authService = {
       throw new Error('El teléfono es obligatorio.')
     }
 
-    const redirectTo = `${window.location.origin}${window.location.pathname}`
+    const redirectTo = buildAuthEmailRedirectUrl()
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -116,7 +117,10 @@ export const authService = {
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: captchaToken ? { captchaToken } : undefined,
+      options: {
+        emailRedirectTo: buildAuthEmailRedirectUrl(),
+        ...(captchaToken ? { captchaToken } : {}),
+      },
     })
     if (error) throw new Error(formatAuthError(error.message))
   },
@@ -124,13 +128,16 @@ export const authService = {
   async sendLoginOtp(email: string) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: buildAuthEmailRedirectUrl(),
+      },
     })
     if (error) throw new Error(formatAuthError(error.message))
   },
 
   async resetPassword(email: string, captchaToken?: string) {
-    const redirectTo = `${window.location.origin}${window.location.pathname}?auth=recovery`
+    const redirectTo = `${window.location.origin}${FARO_ROUTES.home}?auth=recovery`
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
       captchaToken,

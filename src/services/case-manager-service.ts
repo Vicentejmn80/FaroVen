@@ -246,8 +246,14 @@ export const caseManagerService = {
     const caseData = await caseService.getById(caseId)
     if (!caseData) throw new Error('Caso no encontrado')
 
-    const { assertCaseDomainReadyToPublish } = await import('@/domain/case-publish-validation')
-    assertCaseDomainReadyToPublish(caseData, actorId)
+    const { assertCaseReadyForRadar } = await import('@/domain/case-publish-validation')
+    assertCaseReadyForRadar(caseData, actorId)
+
+    if (!caseData.category) {
+      await caseService.updateClassification(caseId, {
+        category: caseData.title.slice(0, 80) || 'apoyo',
+      })
+    }
 
     if (!options?.skipDecisionLog) {
       const { pipelineLog } = await import('@/lib/operational-log')

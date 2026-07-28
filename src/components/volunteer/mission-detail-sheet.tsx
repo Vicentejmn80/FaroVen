@@ -192,31 +192,42 @@ export function MissionDetailSheet({
     try {
       if (!volunteerId) throw new Error('Debes iniciar sesión para ofrecer ayuda.')
 
-      const resolvedCaseId = mission.caseId ?? mission.id
+      const caseId = mission.caseId?.trim()
+      if (!caseId) {
+        throw new Error(
+          'Esta alerta aún no está vinculada a un caso del Gestor. Espera a que el GC abra el radar o elige otra misión en el mapa.',
+        )
+      }
 
-      // Check if already applied before doing anything
-      const existing = await caseApplicationService.findByCaseAndApplicant(resolvedCaseId, volunteerId)
+      const existing = await caseApplicationService.findByCaseAndApplicant(caseId, volunteerId)
       if (existing) {
         setPhase(existing.status === 'approved' ? 'approved' : 'submitted')
         return
       }
 
-      await expressInterest.mutateAsync({
-        volunteerId,
-        volunteerName: profile?.full_name ?? 'Voluntario',
-        message: `Quiero ayudar con: ${title}`,
-        needId: mission.id,
-      })
-
-      // Create case_application — will succeed or return existing (handles 409)
-      const app = await caseApplicationService.apply(resolvedCaseId, volunteerId, {
+      // Postulación canónica → notificación a campanita del GC
+      const app = await caseApplicationService.apply(caseId, volunteerId, {
         message: `Quiero ayudar: ${title}`,
         skills: profile?.specialty ? [profile.specialty] : [],
       })
 
+      // Interés legacy (best-effort, no bloquea)
+      try {
+        await expressInterest.mutateAsync({
+          volunteerId,
+          volunteerName: profile?.full_name ?? 'Voluntario',
+          message: `Quiero ayudar con: ${title}`,
+          needId: mission.id,
+        })
+      } catch {
+        /* ignore */
+      }
+
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
-      void queryClient.invalidateQueries({ queryKey: ['my-case-application', resolvedCaseId, volunteerId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['my-case-application', caseId, volunteerId],
+      })
 
       if (app.status === 'approved') setPhase('approved')
       else setPhase('submitted')
@@ -224,7 +235,15 @@ export function MissionDetailSheet({
       setPhase('error')
       setHelpError(err instanceof Error ? err.message : 'No se pudo registrar tu interés.')
     }
-  }, [mission, expressInterest, user?.id, profile?.id, profile?.full_name, profile?.specialty, title, volunteerId, queryClient])
+  }, [
+    mission,
+    expressInterest,
+    profile?.full_name,
+    profile?.specialty,
+    title,
+    volunteerId,
+    queryClient,
+  ])
 
   const handleNavigate = useCallback(() => {
     if (!mission) return

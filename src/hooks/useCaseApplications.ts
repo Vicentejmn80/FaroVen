@@ -92,9 +92,14 @@ export function useApproveCaseApplication() {
         throw new Error(humanizeSupabaseError(err))
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidateAfterApplicationChange(queryClient)
       showToast('Voluntario aceptado — misión asignada.', 'success')
+      window.dispatchEvent(
+        new CustomEvent('faro:mission-assigned', {
+          detail: { missionId: data.missionId, caseId: data.caseId },
+        }),
+      )
     },
     onError: (err: Error) => {
       showToast(err.message || 'No se pudo aceptar la postulación.', 'warning')

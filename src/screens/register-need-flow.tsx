@@ -113,8 +113,14 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
     }
     const centerId = selectedSite?.id ?? assignment?.siteId ?? ''
     const zone = selectedSite?.name ?? assignment?.siteName ?? 'Centro'
-    const lat = selectedSite?.lat ?? 0
-    const lng = selectedSite?.lng ?? 0
+    const lat = selectedSite?.lat
+    const lng = selectedSite?.lng
+    const hasCoords =
+      typeof lat === 'number' &&
+      typeof lng === 'number' &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      !(lat === 0 && lng === 0)
     try {
       await createCase.mutateAsync({
         title: `Solicitud: ${itemName}`,
@@ -123,10 +129,9 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
         zone,
         category: itemName,
         affectedCount: Math.max(1, Number(qtyRequired) || 1),
-        location:
-          Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
-            ? { lat, lng, address: selectedSite?.zone }
-            : undefined,
+        location: hasCoords
+          ? { lat: lat!, lng: lng!, address: selectedSite?.zone }
+          : undefined,
         actorId: user?.id,
         requestingCenterId: centerId,
         requestSource: 'coordinator',

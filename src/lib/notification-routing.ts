@@ -6,10 +6,13 @@ export interface NotificationNavigationTarget {
   flow?: 'coordinator-request'
   focusRequestId?: string
   focusReportId?: string
+  focusCaseId?: string
+  focusApplicationId?: string
+  missionAssignedId?: string
   coordinatorModule?: CoordinatorModuleId
 }
 
-/** Parsea action_url generado por triggers SQL (ej. tab:admin:request:UUID). */
+/** Parsea action_url generado por triggers SQL / notifyUser (ej. tab:admin:request:UUID). */
 export function parseNotificationActionUrl(actionUrl: string | null | undefined): NotificationNavigationTarget | null {
   if (!actionUrl) return null
   const parts = actionUrl.split(':')
@@ -34,12 +37,24 @@ export function parseNotificationActionUrl(actionUrl: string | null | undefined)
   if (tab === 'profile' && parts[2] === 'coordinator-request') {
     target.flow = 'coordinator-request'
   }
+  // GC: postulación de voluntario → modal aceptar/rechazar
+  if ((tab === 'case-manager' || parts[1] === 'case-manager') && parts[2] === 'application' && parts[3]) {
+    target.tab = 'case-manager'
+    target.focusCaseId = parts[3]
+    if (parts[4]) target.focusApplicationId = parts[4]
+  }
+  // Voluntario: misión asignada → abrir modal inmersivo
+  if (parts[2] === 'mission-assigned' && parts[3]) {
+    target.missionAssignedId = parts[3]
+  }
 
   return target
 }
 
 export function getNotificationActionLabel(actionUrl: string | null | undefined, type?: string): string {
   const target = parseNotificationActionUrl(actionUrl)
+  if (target?.focusApplicationId || target?.focusCaseId) return 'Revisar postulación'
+  if (target?.missionAssignedId) return 'Abrir misión'
   if (target?.focusRequestId) return 'Abrir solicitud'
   if (target?.focusReportId) return 'Ver reporte'
   if (target?.coordinatorModule === 'needs') return 'Ver necesidades'
@@ -48,6 +63,8 @@ export function getNotificationActionLabel(actionUrl: string | null | undefined,
   if (target?.tab === 'admin') return 'Ir a administración'
   if (target?.tab === 'case-manager') return 'Ir a bandeja'
   if (target?.flow === 'coordinator-request') return 'Responder'
+  if (type === 'case_application' || type === 'volunteer_interest') return 'Revisar postulación'
+  if (type === 'case_approved') return 'Abrir misión'
   if (type?.includes('approved')) return 'Ir a Mi Centro'
   if (type?.includes('rejected') || type?.includes('info_request')) return 'Ver solicitud'
   return 'Abrir'

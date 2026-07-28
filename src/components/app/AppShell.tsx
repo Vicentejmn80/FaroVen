@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { EmergencyHeader } from '@/components/faro/emergency-header'
 import { ConnectionBanner } from '@/components/faro/connection-banner'
 import { NotificationHub } from '@/components/notifications/NotificationHub'
+import { ApplicationReviewModal } from '@/components/case-manager/application-review-modal'
 import { PushPermissionModal } from '@/components/notifications/PushPermissionModal'
 import { ScreenErrorBoundary } from '@/components/app/ScreenErrorBoundary'
 import { useNotifications, useNotificationMutations } from '@/hooks/useNotifications'
@@ -153,6 +154,10 @@ export function AppShell() {
   const [focusRequestId, setFocusRequestId] = useState<string | null>(null)
   const [coordinatorModule, setCoordinatorModule] = useState<CoordinatorModuleId>('dashboard')
   const [focusReportId, setFocusReportId] = useState<string | null>(null)
+  const [reviewApplication, setReviewApplication] = useState<{
+    caseId: string
+    applicationId?: string
+  } | null>(null)
   const notifications = useNotifications()
   const { markRead, markAllRead, remove } = useNotificationMutations()
   const pushNotif = usePushNotifications()
@@ -281,8 +286,23 @@ export function AppShell() {
     }
     if (target.coordinatorModule) setCoordinatorModule(target.coordinatorModule)
     if (target.flow === 'coordinator-request') startTransition(() => setFlow('coordinator-request'))
+    if (target.focusCaseId) {
+      setActiveView('case-manager')
+      setReviewApplication({
+        caseId: target.focusCaseId,
+        applicationId: target.focusApplicationId,
+      })
+    }
+    if (target.missionAssignedId) {
+      setActiveView(isVolunteer ? 'map' : activeView)
+      window.dispatchEvent(
+        new CustomEvent('faro:mission-assigned', {
+          detail: { missionId: target.missionAssignedId },
+        }),
+      )
+    }
     setHubOpen(false)
-  }, [setActiveView])
+  }, [setActiveView, isVolunteer, activeView])
 
   useEffect(() => {
     const target = parseNavQueryParam(window.location.search)
@@ -433,6 +453,31 @@ export function AppShell() {
     const target = parseNotificationActionUrl(notification.action_url)
     if (target) {
       applyNotificationNavigation(target)
+      return
+    }
+    // Fallback por tipo cuando no hay action_url (notificaciones antiguas)
+    if (notification.type === 'case_application' || notification.type === 'volunteer_interest') {
+      const meta = notification.metadata ?? {}
+      const caseId = typeof meta.caseId === 'string' ? meta.caseId : null
+      const applicationId = typeof meta.applicationId === 'string' ? meta.applicationId : undefined
+      if (caseId) {
+        setActiveView('case-manager')
+        setReviewApplication({ caseId, applicationId })
+        setHubOpen(false)
+        return
+      }
+      setActiveView('case-manager')
+      setHubOpen(false)
+      return
+    }
+    if (notification.type === 'case_approved') {
+      const meta = notification.metadata ?? {}
+      const missionId = typeof meta.missionId === 'string' ? meta.missionId : undefined
+      setActiveView('map')
+      setHubOpen(false)
+      window.dispatchEvent(
+        new CustomEvent('faro:mission-assigned', { detail: { missionId } }),
+      )
       return
     }
     if (notification.type === 'user_signup') {
@@ -708,6 +753,15 @@ export function AppShell() {
           onAction={handleNotificationAction}
           onEnablePush={pushNotif.openPermissionModal}
         />
+
+        {reviewApplication && (
+          <ApplicationReviewModal
+            open={Boolean(reviewApplication)}
+            caseId={reviewApplication.caseId}
+            applicationId={reviewApplication.applicationId}
+            onClose={() => setReviewApplication(null)}
+          />
+        )}
 
         <PushPermissionModal
           open={pushNotif.modalOpen}

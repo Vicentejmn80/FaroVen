@@ -49,6 +49,24 @@ export function assertCaseReadyToPublish(fields: PublishCaseFields): void {
   }
 }
 
+/**
+ * Radar: exige destino/prioridad/responsable; coords recomendadas pero
+ * permite abrir si hay zona (mapa usará coordenadas del caso o fallback).
+ */
+export function assertCaseReadyForRadar(
+  caseData: CaseDomain,
+  actorId?: string,
+): void {
+  const errors: string[] = []
+  if (!caseData.priority) errors.push('prioridad')
+  if (!caseData.zone?.trim() && !caseData.assignedCenterId) errors.push('destino')
+  if (!(actorId ?? caseData.assignedTo)?.trim()) errors.push('responsable')
+  if ((caseData.affectedCount ?? 0) < 1) errors.push('cantidad')
+  if (errors.length > 0) {
+    throw new Error(`No se puede abrir el radar. Falta: ${errors.join(', ')}.`)
+  }
+}
+
 export function assertCaseDomainReadyToPublish(
   caseData: CaseDomain,
   actorId?: string,

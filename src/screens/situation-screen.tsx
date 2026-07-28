@@ -140,9 +140,13 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   )
 
   const volunteerMissions = useMemo(() => {
+    // Solo convocatorias del GC (public_needs abiertas con caseId).
+    // No mezclar necesidades legacy del coordinador: Ofrecer ayuda requiere caso.
     return filterMappableMissions(
-      normalizeVolunteerMissions(publicNeedMissions, mapData.sites, mapData.needs),
-    )
+      normalizeVolunteerMissions(publicNeedMissions, mapData.sites, mapData.needs, {
+        mergeSiteNeeds: false,
+      }),
+    ).filter((m) => Boolean(m.caseId))
   }, [mapData.sites, mapData.needs, publicNeedMissions])
 
   if (isVolunteer) {

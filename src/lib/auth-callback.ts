@@ -1,4 +1,5 @@
 import { isClockSkewError } from '@/lib/auth-session'
+import { FARO_ROUTES } from '@/lib/faro-routes'
 import { supabase } from '@/lib/supabase'
 import type { Session, User } from '@supabase/supabase-js'
 
@@ -46,12 +47,15 @@ export async function completeAuthFromUrl(): Promise<{
   }
 
   let errorMessage: string | null = null
+  const isRecoveryIntent =
+    hashType === 'recovery' || params.get('auth') === 'recovery' || params.get('type') === 'recovery'
   const isEmailConfirmationIntent =
-    hashType === 'signup' ||
-    hashType === 'email' ||
-    hashType === 'magiclink' ||
-    hasAuthFragment ||
-    hasAuthCode
+    !isRecoveryIntent &&
+    (hashType === 'signup' ||
+      hashType === 'email' ||
+      hashType === 'magiclink' ||
+      hasAuthFragment ||
+      hasAuthCode)
 
   if (hasAuthCode) {
     const code = params.get('code')
@@ -78,10 +82,16 @@ export async function completeAuthFromUrl(): Promise<{
     }
   }
 
-  // Limpiar tokens de Supabase de la URL; RoleGuard fijará /role-selection si aplica
-  window.history.replaceState({}, document.title, window.location.pathname)
+  // Limpiar tokens de Supabase; email confirm → /role-selection
+  const cleanPath = isRecoveryIntent
+    ? `${FARO_ROUTES.home}?auth=recovery`
+    : isEmailConfirmationIntent
+      ? FARO_ROUTES.roleSelection
+      : window.location.pathname
 
-  if (hashType === 'recovery') {
+  window.history.replaceState({}, document.title, cleanPath)
+
+  if (isRecoveryIntent) {
     return { error: errorMessage, intent: 'password_recovery' }
   }
 
