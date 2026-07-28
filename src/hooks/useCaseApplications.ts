@@ -85,9 +85,17 @@ export function useApproveCaseApplication() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   return useMutation({
-    mutationFn: async ({ applicationId, operatorId }: { applicationId: string; operatorId: string }) => {
+    mutationFn: async ({
+      applicationId,
+      operatorId,
+      pickupCenterId,
+    }: {
+      applicationId: string
+      operatorId: string
+      pickupCenterId?: string
+    }) => {
       try {
-        return await caseApplicationService.approve(applicationId, operatorId)
+        return await caseApplicationService.approve(applicationId, operatorId, pickupCenterId)
       } catch (err) {
         throw new Error(humanizeSupabaseError(err))
       }

@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { REQUEST_SOURCE_LABELS, OPERATION_TYPE_LABELS } from '@/domain/case-lifecycle.types'
-import { useCentersWithStock } from '@/hooks/useCenterOperations'
-import { useCenters } from '@/hooks/useCenters'
+import { useRecommendedCenters } from '@/hooks/useLogistics'
 import { getResourceLabel, resolveCatalogKey } from '@/lib/resource-catalog'
 import { cn } from '@/lib/utils'
 
@@ -35,24 +34,16 @@ export function GcDecisionPanel({
 }: GcDecisionPanelProps) {
   const catalogKey = resolveCatalogKey(caseData.category) ?? 'agua'
   const minQty = Math.max(1, caseData.affectedCount || 1)
-  const { data: stockRows = [], isLoading } = useCentersWithStock(catalogKey, minQty)
-  const { data: centers = [] } = useCenters()
+  const { data: recommended = [], isLoading } = useRecommendedCenters({
+    resourceType: catalogKey,
+    minQty,
+    missionLat: caseData.location.lat,
+    missionLng: caseData.location.lng,
+  })
   const [selectedOrigin, setSelectedOrigin] = useState<string | null>(null)
   const [executor, setExecutor] = useState<TransferExecutor>('volunteer')
 
-  const nameById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const c of centers) map.set(c.id, c.name)
-    return map
-  }, [centers])
-
-  const requestingCenterId =
-    typeof (caseData as CaseDomain & { metadata?: Record<string, unknown> }).metadata === 'object'
-      ? undefined
-      : undefined
-
-  // Filtrar el propio centro solicitante si está en metadata vía description heurística — usamos stockRows tal cual
-  const candidates = stockRows.filter((row) => row.centerId !== requestingCenterId)
+  const candidates = recommended
   const hasStock = candidates.length > 0
   const originId = selectedOrigin ?? candidates[0]?.centerId ?? null
 
@@ -93,9 +84,14 @@ export function GcDecisionPanel({
                       : 'border-white/10 bg-white/[0.03] text-ink-muted',
                   )}
                 >
-                  <span className="truncate">{nameById.get(row.centerId) ?? row.centerId}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate">{row.centerName}</span>
+                    <span className="text-[10px] text-ink-faint">
+                      {row.distanceKm} km · {row.operationalMode === 'active' ? 'Activo' : 'Limitado'}
+                    </span>
+                  </span>
                   <span className="font-semibold tabular-nums text-operational">
-                    {row.quantity} {row.unit}
+                    {row.available} {row.unit}
                   </span>
                 </button>
               ))}

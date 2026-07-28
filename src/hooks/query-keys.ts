@@ -36,4 +36,5 @@ export const FARO_QUERY_KEYS = {
   successCases: 'success-cases',
   availability: 'availability',
   coverage: 'coverage',
+  inventoryReservations: 'inventory-reservations',
 } as const

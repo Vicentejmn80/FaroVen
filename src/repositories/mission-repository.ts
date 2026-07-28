@@ -27,6 +27,11 @@ function mapMissionRow(row: MissionRow): Mission {
     verifiedAt: row.verified_at ? new Date(row.verified_at) : undefined,
     cancelledAt: row.cancelled_at ? new Date(row.cancelled_at) : undefined,
     cancellationReason: row.cancellation_reason ?? undefined,
+    pickupCenterId: row.pickup_center_id ?? undefined,
+    pickupAddress: row.pickup_address ?? undefined,
+    resourceType: row.resource_type ?? undefined,
+    resourceQty: row.resource_qty ?? undefined,
+    deliveryAddress: row.delivery_address ?? undefined,
   }
 }
 
@@ -160,6 +165,11 @@ export class MissionRepository {
     caseId?: string
     deadline?: Date
     createdBy: string
+    pickupCenterId?: string
+    pickupAddress?: string
+    resourceType?: string
+    resourceQty?: number
+    deliveryAddress?: string
   }): Promise<Mission> {
     const { data, error } = await supabase
       .from('missions')
@@ -178,6 +188,11 @@ export class MissionRepository {
         case_id: input.caseId ?? null,
         deadline: input.deadline?.toISOString() ?? null,
         created_by: input.createdBy,
+        pickup_center_id: input.pickupCenterId ?? null,
+        pickup_address: input.pickupAddress ?? null,
+        resource_type: input.resourceType ?? null,
+        resource_qty: input.resourceQty ?? null,
+        delivery_address: input.deliveryAddress ?? null,
       })
       .select('*')
       .single()

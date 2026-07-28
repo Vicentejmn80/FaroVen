@@ -165,10 +165,24 @@ export interface CenterResourceRow {
   center_id: string
   resource_type: string
   current_level: number
+  reserved_level?: number
   max_level: number
   min_level?: number
   unit: string
   category?: string
+  updated_at: string
+}
+
+export interface InventoryReservationRow {
+  id: string
+  mission_id: string
+  case_id: string
+  center_id: string
+  resource_type: string
+  quantity: number
+  status: 'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'
+  volunteer_id: string | null
+  created_at: string
   updated_at: string
 }
 
@@ -280,6 +294,11 @@ export interface MissionRow {
   verified_at: string | null
   cancelled_at: string | null
   cancellation_reason: string | null
+  pickup_center_id: string | null
+  pickup_address: string | null
+  resource_type: string | null
+  resource_qty: number | null
+  delivery_address: string | null
 }
 
 export interface MissionAssignmentRow {

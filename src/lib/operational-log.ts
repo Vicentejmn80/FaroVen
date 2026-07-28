@@ -10,6 +10,8 @@ export interface OperationalLogPayload {
   actorRole?: string | null
   volunteerId?: string | null
   centerId?: string | null
+  missionId?: string | null
+  caseId?: string | null
   source?: LogSource
   payload?: Record<string, unknown>
   durationMs?: number
@@ -33,6 +35,8 @@ export function operationalLog(entry: OperationalLogPayload): Record<string, unk
     actor_role: entry.actorRole ?? null,
     volunteer_id: entry.volunteerId ?? null,
     center_id: entry.centerId ?? null,
+    mission_id: entry.missionId ?? null,
+    case_id: entry.caseId ?? null,
     duration_ms: entry.durationMs ?? null,
     error: entry.error ?? null,
     payload: entry.payload ?? {},
@@ -97,6 +101,42 @@ export function missionLog(
     console.warn('[FARO_MISSION]', action, record)
   } else {
     console.info('[FARO_MISSION]', action, record)
+  }
+  return record
+}
+
+/** Prefijo estable `[FARO_LOGISTICS]` para red logistica (reservas, recomendacion, entregas). */
+export function logisticsLog(
+  action:
+    | 'inventory_updated'
+    | 'centers_recommended'
+    | 'reservation_created'
+    | 'reservation_ready'
+    | 'reservation_released'
+    | 'volunteer_assigned'
+    | 'resources_delivered'
+    | 'mission_completed',
+  extra: Partial<OperationalLogPayload> & { entityId: string },
+): Record<string, unknown> {
+  const record = operationalLog({
+    entityType: extra.entityType ?? 'mission',
+    entityId: extra.entityId,
+    action,
+    from: extra.from,
+    to: extra.to,
+    actorId: extra.actorId,
+    volunteerId: extra.volunteerId,
+    centerId: extra.centerId,
+    missionId: extra.missionId,
+    caseId: extra.caseId,
+    source: extra.source ?? 'service',
+    payload: extra.payload,
+    error: extra.error,
+  })
+  if (extra.error) {
+    console.warn('[FARO_LOGISTICS]', action, record)
+  } else {
+    console.info('[FARO_LOGISTICS]', action, record)
   }
   return record
 }

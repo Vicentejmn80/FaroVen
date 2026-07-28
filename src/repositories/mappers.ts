@@ -327,6 +327,7 @@ export function caseRowToDomain(row: CaseRow): CaseDomain {
     resolvedAt: row.resolved_at ? new Date(row.resolved_at) : undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
+    metadata: (row.metadata as Record<string, unknown> | null) ?? undefined,
   }
 }
 
@@ -361,6 +362,7 @@ export function caseDomainToRow(domain: Partial<CaseDomain>): Record<string, unk
   if (domain.slaDeadline !== undefined) row.sla_deadline = domain.slaDeadline?.toISOString() ?? null
   if (domain.firstResponseAt !== undefined) row.first_response_at = domain.firstResponseAt?.toISOString() ?? null
   if (domain.resolvedAt !== undefined) row.resolved_at = domain.resolvedAt?.toISOString() ?? null
+  if (domain.metadata !== undefined) row.metadata = domain.metadata ?? {}
   return row
 }
 

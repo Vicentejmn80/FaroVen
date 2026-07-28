@@ -1,5 +1,6 @@
 import { reportRepository } from '@/repositories/report-repository'
 import { publicNeedRepository } from '@/repositories/public-need-repository'
+import { caseRepository } from '@/repositories/case-repository'
 import { caseService } from './case-service'
 import { caseApplicationService } from './case-application-service'
 import { openNeedCall } from './public-need-service'
@@ -342,8 +343,18 @@ export const caseManagerService = {
 
     await caseService.updateClassification(params.caseId, { operationType: 'transfer' })
 
-    // Persist origin in metadata via repository update of description/metadata isn't on CaseDomain —
-    // store via caseRepository raw if needed; for MVP keep origin in decision log payload.
+    // Persistir origen de la transferencia para usarlo al aprobar la postulación.
+    await caseRepository.update(params.caseId, {
+      metadata: {
+        ...(caseData.metadata ?? {}),
+        logistics: {
+          originCenterId: params.originCenterId,
+          resourceType: params.resourceType,
+          quantity: Math.max(1, caseData.affectedCount || 1),
+          executor: params.executor,
+        },
+      },
+    })
     pipelineLog('gc_decision', {
       entityId: params.caseId,
       actorId: params.actorId,

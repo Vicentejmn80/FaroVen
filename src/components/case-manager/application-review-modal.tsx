@@ -1,11 +1,14 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Users, X } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplication } from '@/hooks/useCaseApplications'
 import { useCases } from '@/hooks/useCases'
+import { useRecommendedCenters } from '@/hooks/useLogistics'
 import { useAuth } from '@/store/auth-context'
 import { label, SKILL_LABELS } from '@/lib/labels'
+import { resolveCatalogKey } from '@/lib/resource-catalog'
+import { cn } from '@/lib/utils'
 
 interface ApplicationReviewModalProps {
   caseId: string
@@ -30,6 +33,22 @@ export function ApplicationReviewModal({
   const rejectApp = useRejectCaseApplication()
 
   const caseData = useMemo(() => cases?.find((c) => c.id === caseId), [cases, caseId])
+  const isTransferCase = caseData?.operationType === 'transfer'
+  const catalogKey = resolveCatalogKey(caseData?.category) ?? 'agua'
+  const minQty = Math.max(1, caseData?.affectedCount || 1)
+
+  const { data: recommended = [] } = useRecommendedCenters({
+    resourceType: catalogKey,
+    minQty,
+    missionLat: caseData?.location.lat,
+    missionLng: caseData?.location.lng,
+    enabled: open && isTransferCase,
+  })
+  const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null)
+
+  const logisticsMeta = caseData?.metadata?.logistics as { originCenterId?: string } | undefined
+  const defaultCenterId = logisticsMeta?.originCenterId ?? recommended[0]?.centerId
+  const pickupCenterId = selectedCenterId ?? defaultCenterId
 
   const pending = useMemo(
     () => applications.filter((a) => a.status === 'pending' || a.status === 'under_review'),
@@ -99,6 +118,39 @@ export function ApplicationReviewModal({
               <p className="text-[11px] text-ink-faint">Tel: {focused.applicantPhone}</p>
             )}
 
+            {isTransferCase && recommended.length > 0 && (
+              <div className="space-y-1.5 rounded-lg border border-info/20 bg-info/[0.05] p-2.5">
+                <p className="text-[11px] font-medium text-ink">Centro de recogida recomendado</p>
+                <div className="space-y-1">
+                  {recommended.slice(0, 3).map((center) => (
+                    <button
+                      key={center.centerId}
+                      type="button"
+                      onClick={() => setSelectedCenterId(center.centerId)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-md border px-2 py-1.5 text-left text-[11px]',
+                        pickupCenterId === center.centerId
+                          ? 'border-info/50 bg-info/15 text-ink'
+                          : 'border-white/10 bg-white/[0.03] text-ink-muted',
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate">{center.centerName}</span>
+                        <span className="text-[10px] text-ink-faint">
+                          {center.distanceKm} km · {center.available} disponibles
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {pickupCenterId && (
+                  <p className="text-[10px] text-ink-faint">
+                    Se reservará {minQty} en el centro seleccionado al aceptar.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2 pt-1">
               <EmergencyButton
                 variant="glass"
@@ -117,11 +169,15 @@ export function ApplicationReviewModal({
               <EmergencyButton
                 variant="primary"
                 size="md"
-                disabled={busy || !user?.id}
+                disabled={busy || !user?.id || (isTransferCase && !pickupCenterId)}
                 onClick={() => {
                   if (!user?.id) return
                   approveApp.mutate(
-                    { applicationId: focused.id, operatorId: user.id },
+                    {
+                      applicationId: focused.id,
+                      operatorId: user.id,
+                      pickupCenterId: isTransferCase ? pickupCenterId : undefined,
+                    },
                     { onSuccess: () => onClose() },
                   )
                 }}

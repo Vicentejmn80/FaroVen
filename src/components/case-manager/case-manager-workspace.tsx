@@ -27,6 +27,8 @@ import { useCaseApplications, useApproveCaseApplication, useRejectCaseApplicatio
 import { useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import type { Mission } from '@/domain/mission.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
+import { useCaseReservations } from '@/hooks/useLogistics'
+import { getResourceLabel } from '@/lib/resource-catalog'
 import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
 import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { VOLUNTEER_AVAILABILITY_LABELS } from '@/domain/volunteer.types'
@@ -549,6 +551,8 @@ export function CaseManagerWorkspace() {
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
 
+                      {c.operationType === 'transfer' && <CaseLogisticsTracker caseId={c.id} />}
+
                       {/* Caso en revisión: asistente FARO (stock → transferencia o radar) */}
                       {(c.pipelineStage === 'pending_review' ||
                         c.pipelineStage === 'validating' ||
@@ -938,6 +942,71 @@ export function CaseManagerWorkspace() {
           />
         )
       })()}
+    </div>
+  )
+}
+
+/** Seguimiento logístico de un caso transfer (reserva, preparación, traslado, entrega). */
+function CaseLogisticsTracker({ caseId }: { caseId: string }) {
+  const { data: reservations = [], isLoading } = useCaseReservations(caseId)
+  const { data: missions = [] } = useMissions()
+
+  const missionById = useMemo(() => {
+    const map = new Map<string, Mission>()
+    for (const m of missions) map.set(m.id, m)
+    return map
+  }, [missions])
+
+  if (isLoading) {
+    return <GlassCard className="h-16 animate-pulse" />
+  }
+
+  const active = reservations.filter((r) => r.status !== 'released' && r.status !== 'cancelled')
+  if (active.length === 0) return null
+
+  const statusLabel: Record<string, string> = {
+    reserved: 'Reservado',
+    ready: 'Preparado',
+    delivered: 'Entregado al voluntario',
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-info/20 bg-info/[0.05] p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+        Logística de recursos
+      </p>
+      {active.map((reservation) => {
+        const mission = missionById.get(reservation.missionId)
+        return (
+          <div key={reservation.id} className="space-y-1 text-xs">
+            <div className="flex items-center justify-between">
+              <p className="font-medium text-ink">
+                {reservation.quantity} × {getResourceLabel(reservation.resourceType)}
+              </p>
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                  reservation.status === 'delivered'
+                    ? 'bg-operational/15 text-operational'
+                    : reservation.status === 'ready'
+                      ? 'bg-operational/15 text-operational'
+                      : 'bg-warning/15 text-warning',
+                )}
+              >
+                {statusLabel[reservation.status] ?? reservation.status}
+              </span>
+            </div>
+            <p className="text-ink-muted">
+              Centro: {mission?.pickupAddress ?? reservation.centerId.slice(0, 8)}
+            </p>
+            {mission && (
+              <p className="text-ink-muted">
+                Estado misión: {label(MISSION_STAGE_LABELS, mission.status)}
+              </p>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

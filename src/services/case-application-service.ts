@@ -7,6 +7,7 @@ import { publicNeedRepository } from '@/repositories/public-need-repository'
 import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { caseService } from '@/services/case-service'
 import { missionService } from '@/services/mission-service'
+import { prepareMissionWithReservation } from '@/services/logistics-service'
 import { notifyUser } from '@/lib/notify'
 import { missionLog } from '@/lib/operational-log'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
@@ -95,7 +96,7 @@ export const caseApplicationService = {
    * Orden crítico: crear misión ANTES de cambiar el caso, para no dejar estados parciales.
    * Idempotente: si un intento previo dejó approved/assigned sin misión, reintentar completa el flujo.
    */
-  async approve(applicationId: string, operatorId: string) {
+  async approve(applicationId: string, operatorId: string, pickupCenterId?: string) {
     const actorId = asOptionalUuid(operatorId)
     if (!actorId) {
       throw new Error('Se requiere un operador autenticado para aprobar la postulación')
@@ -123,13 +124,37 @@ export const caseApplicationService = {
       )
     }
 
+    const volunteerId = await volunteerRepository.ensureIdForUser(app.applicantId)
+
     // 1) Crear misión + assignment PRIMERO (falla aquí = caso sigue esperando postulantes)
     const mission = await ensureMissionForApprovedApplication({
       caseData,
       skills: app.skills ?? [],
       actorId,
       applicantProfileId: app.applicantId,
+      pickupCenterId,
     })
+
+    // 1b) Mision de recursos: reservar inventario y completar mision con centro de recogida
+    if (caseData.operationType === 'transfer') {
+      const logistics = caseData.metadata?.logistics as
+        | { originCenterId?: string; resourceType?: string; quantity?: number }
+        | undefined
+      const resourceType = logistics?.resourceType ?? caseData.category ?? 'agua'
+      const quantity = Math.max(1, logistics?.quantity ?? caseData.affectedCount ?? 1)
+      const centerId = pickupCenterId ?? logistics?.originCenterId
+      if (centerId) {
+        await prepareMissionWithReservation({
+          mission,
+          caseId: app.caseId,
+          centerId,
+          resourceType,
+          quantity,
+          volunteerId,
+          actorId,
+        })
+      }
+    }
 
     missionLog('application_accepted', {
       entityId: applicationId,
@@ -259,6 +284,7 @@ async function ensureMissionForApprovedApplication(input: {
   skills: string[]
   actorId: string
   applicantProfileId: string
+  pickupCenterId?: string
 }): Promise<Mission> {
   const existing = await missionRepository.findByCaseId(input.caseData.id)
   const volunteerId = await volunteerRepository.ensureIdForUser(input.applicantProfileId)
@@ -282,10 +308,12 @@ async function ensureMissionForApprovedApplication(input: {
     location: {
       lat: input.caseData.location.lat,
       lng: input.caseData.location.lng,
+      address: input.caseData.location.address,
       zone: input.caseData.zone,
     },
     caseId: input.caseData.id,
     createdBy: input.actorId,
+    pickupCenterId: input.pickupCenterId,
   })
 
   missionLog('mission_created', {

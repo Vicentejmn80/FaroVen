@@ -35,6 +35,7 @@ import { CoordinatorInventoryPanel } from './coordinator-resources-panel'
 import { CoordinatorCapacityEditor } from './coordinator-capacity-editor'
 import { CoordinatorMissionPanel } from './coordinator-mission-panel'
 import { CoordinatorNeedsSmartPanel } from './coordinator-needs-smart-panel'
+import { CoordinatorPreparationsPanel } from './coordinator-preparations-panel'
 import type { CoordinatorModuleId } from '@/services/coordinator-service'
 import type { Site } from '@/lib/types'
 import { MISSION_STAGES, type MissionStage } from '@/domain/mission.types'
@@ -42,6 +43,7 @@ import { MISSION_STAGES, type MissionStage } from '@/domain/mission.types'
 const PRIMARY_MODULES: Array<{ id: CoordinatorModuleId; label: string; icon: typeof PackagePlus }> = [
   { id: 'dashboard', label: 'Estado', icon: Zap },
   { id: 'inventory', label: 'Inventario', icon: Package },
+  { id: 'preparations', label: 'Preparaciones', icon: Package },
   { id: 'needs', label: 'Solicitudes', icon: PackagePlus },
   { id: 'missions', label: 'Misiones', icon: Shield },
   { id: 'history', label: 'Historial', icon: History },
@@ -292,6 +294,8 @@ export function CoordinatorWorkspace({
           )}
 
           {module === 'inventory' && <CoordinatorInventoryPanel />}
+
+          {module === 'preparations' && <CoordinatorPreparationsPanel />}
 
           {module === 'needs' && (
             <CoordinatorNeedsSmartPanel onCreateNeed={openSuggestedNeed} />

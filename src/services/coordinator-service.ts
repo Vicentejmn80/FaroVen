@@ -14,6 +14,7 @@ export type CoordinatorModuleId =
   | 'cases'
   | 'center-ops'
   | 'missions'
+  | 'preparations'
 
 export type InboxFilter = 'pending' | 'approved' | 'rejected' | 'all'
 

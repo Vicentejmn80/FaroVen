@@ -179,6 +179,12 @@ export interface Mission {
   verifiedAt?: Date
   cancelledAt?: Date
   cancellationReason?: string
+  /** Logistica inteligente: centro donde se recoge el recurso. */
+  pickupCenterId?: string
+  pickupAddress?: string
+  resourceType?: string
+  resourceQty?: number
+  deliveryAddress?: string
 }
 
 export interface MissionAssignment {

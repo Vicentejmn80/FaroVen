@@ -104,10 +104,29 @@ export interface CenterResource {
   centerId: string
   resourceType: CenterResourceType
   currentLevel: number
+  /** Reservado por misiones logisticas (trigger DB). */
+  reservedLevel?: number
+  /** Disponible real = currentLevel - reservedLevel. */
+  available?: number
   maxLevel: number
   minLevel: number
   unit: string
   category?: string
+  updatedAt: Date
+}
+
+export type InventoryReservationStatus = 'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'
+
+export interface InventoryReservation {
+  id: string
+  missionId: string
+  caseId: string
+  centerId: string
+  resourceType: string
+  quantity: number
+  status: InventoryReservationStatus
+  volunteerId?: string
+  createdAt: Date
   updatedAt: Date
 }
 

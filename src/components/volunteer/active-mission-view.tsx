@@ -17,6 +17,8 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { MapZoomControls, MapLocateControl, MapGoogleLinkButton } from '@/components/faro/map-controls'
 import { useGeolocation, haversineDistance, formatDistance, estimateTravelTime } from '@/hooks/useGeolocation'
+import { getResourceLabel } from '@/lib/resource-catalog'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { label, PRIORITY_LABELS } from '@/lib/labels'
 import { useUpdateMissionAssignment, useSubmitEvidence, useReportEtaDelay } from '@/hooks/useMissionMutations'
@@ -118,7 +120,32 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
   const [etaBumpMin, setEtaBumpMin] = useState(0)
 
   const locked = LOCKED_STATUSES.has(assignment.status)
+  const isResourceMission = Boolean(mission.pickupCenterId)
   const missionCenter: [number, number] = [mission.location.lat, mission.location.lng]
+
+  // Centro de recogida (mision logistica)
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | null>(null)
+  useEffect(() => {
+    if (!mission.pickupCenterId) return
+    let cancelled = false
+    ;(async () => {
+      for (const table of ['hospitals', 'shelters', 'supply_centers'] as const) {
+        const { data } = await supabase
+          .from(table)
+          .select('latitude, longitude')
+          .eq('id', mission.pickupCenterId)
+          .maybeSingle()
+        if (!cancelled && data?.latitude != null && data?.longitude != null) {
+          setPickupCoords({ lat: data.latitude as number, lng: data.longitude as number })
+          return
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [mission.pickupCenterId])
+
   const distance = position
     ? haversineDistance(position.lat, position.lng, mission.location.lat, mission.location.lng)
     : null
@@ -161,60 +188,114 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
     return () => window.clearInterval(id)
   }, [clockStart?.getTime(), frozenEndMs, assignment.status])
 
-  const timelineSteps: TimelineStep[] = [
-    {
-      id: 'assigned',
-      label: 'Asignada',
-      completed: assignment.status !== 'assigned',
-      active: assignment.status === 'assigned',
-      timestamp: assignment.assignedAt?.toISOString(),
-    },
-    {
-      id: 'accepted',
-      label: 'Aceptada',
-      completed: !['assigned'].includes(assignment.status),
-      active: assignment.status === 'accepted',
-      timestamp: assignment.respondedAt?.toISOString(),
-    },
-    {
-      id: 'preparing',
-      label: 'Preparándose',
-      completed: ['en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(assignment.status),
-      active: assignment.status === 'preparing',
-      timestamp: assignment.preparingAt?.toISOString(),
-    },
-    {
-      id: 'en_route',
-      label: 'En camino',
-      completed: ['on_site', 'in_progress', 'completed', 'verified'].includes(assignment.status),
-      active: assignment.status === 'en_route',
-      metadata: distance ? formatDistance(distance) : undefined,
-    },
-    {
-      id: 'on_site',
-      label: 'En sitio',
-      completed: ['in_progress', 'completed', 'verified'].includes(assignment.status),
-      active: assignment.status === 'on_site',
-    },
-    {
-      id: 'in_progress',
-      label: 'Ejecutando',
-      completed: ['completed', 'verified'].includes(assignment.status),
-      active: assignment.status === 'in_progress',
-    },
-    {
-      id: 'completed',
-      label: 'Esperando validación',
-      completed: ['verified'].includes(assignment.status),
-      active: assignment.status === 'completed',
-    },
-    {
-      id: 'verified',
-      label: 'Completada',
-      completed: assignment.status === 'verified',
-      active: assignment.status === 'verified',
-    },
-  ]
+  const timelineSteps: TimelineStep[] = isResourceMission
+    ? [
+        {
+          id: 'assigned',
+          label: 'Asignada',
+          completed: assignment.status !== 'assigned',
+          active: assignment.status === 'assigned',
+          timestamp: assignment.assignedAt?.toISOString(),
+        },
+        {
+          id: 'accepted',
+          label: 'Aceptada',
+          completed: !['assigned'].includes(assignment.status),
+          active: assignment.status === 'accepted',
+          timestamp: assignment.respondedAt?.toISOString(),
+        },
+        {
+          id: 'preparing',
+          label: 'Yendo al centro',
+          completed: ['en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'preparing',
+          timestamp: assignment.preparingAt?.toISOString(),
+        },
+        {
+          id: 'en_route',
+          label: 'En camino al centro',
+          completed: ['on_site', 'in_progress', 'completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'en_route',
+        },
+        {
+          id: 'on_site',
+          label: 'En el centro',
+          completed: ['in_progress', 'completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'on_site',
+        },
+        {
+          id: 'in_progress',
+          label: 'En camino al destino',
+          completed: ['completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'in_progress',
+        },
+        {
+          id: 'completed',
+          label: 'Entregado',
+          completed: ['verified'].includes(assignment.status),
+          active: assignment.status === 'completed',
+        },
+        {
+          id: 'verified',
+          label: 'Completada',
+          completed: assignment.status === 'verified',
+          active: assignment.status === 'verified',
+        },
+      ]
+    : [
+        {
+          id: 'assigned',
+          label: 'Asignada',
+          completed: assignment.status !== 'assigned',
+          active: assignment.status === 'assigned',
+          timestamp: assignment.assignedAt?.toISOString(),
+        },
+        {
+          id: 'accepted',
+          label: 'Aceptada',
+          completed: !['assigned'].includes(assignment.status),
+          active: assignment.status === 'accepted',
+          timestamp: assignment.respondedAt?.toISOString(),
+        },
+        {
+          id: 'preparing',
+          label: 'Preparándose',
+          completed: ['en_route', 'on_site', 'in_progress', 'completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'preparing',
+          timestamp: assignment.preparingAt?.toISOString(),
+        },
+        {
+          id: 'en_route',
+          label: 'En camino',
+          completed: ['on_site', 'in_progress', 'completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'en_route',
+          metadata: distance ? formatDistance(distance) : undefined,
+        },
+        {
+          id: 'on_site',
+          label: 'En sitio',
+          completed: ['in_progress', 'completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'on_site',
+        },
+        {
+          id: 'in_progress',
+          label: 'Ejecutando',
+          completed: ['completed', 'verified'].includes(assignment.status),
+          active: assignment.status === 'in_progress',
+        },
+        {
+          id: 'completed',
+          label: 'Esperando validación',
+          completed: ['verified'].includes(assignment.status),
+          active: assignment.status === 'completed',
+        },
+        {
+          id: 'verified',
+          label: 'Completada',
+          completed: assignment.status === 'verified',
+          active: assignment.status === 'verified',
+        },
+      ]
 
   const handleAddEvidence = () => {
     if (!newEvidenceUrl.trim()) return
@@ -232,6 +313,28 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
   }
 
   const statusLabel = () => {
+    if (isResourceMission) {
+      switch (assignment.status) {
+        case 'assigned':
+          return 'Nueva misión logística — acéptala para ver el centro'
+        case 'accepted':
+          return 'Listo para ir al centro de acopio'
+        case 'preparing':
+          return 'Ve al centro a recoger los recursos'
+        case 'en_route':
+          return 'En camino al centro — avisa al llegar'
+        case 'on_site':
+          return 'En el centro — espera la entrega de recursos'
+        case 'in_progress':
+          return 'Recursos recogidos — ve al destino'
+        case 'completed':
+          return 'Entregado — esperando validación del gestor'
+        case 'verified':
+          return 'Misión completada y validada'
+        default:
+          return ''
+      }
+    }
     switch (assignment.status) {
       case 'assigned':
         return 'Nueva misión — acéptala para comenzar'
@@ -357,6 +460,9 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
           <MapZoomControls />
           <MapLocateControl />
           <Marker position={missionCenter} icon={createMissionMarker(mission.priority)} />
+          {pickupCoords && (
+            <Marker position={[pickupCoords.lat, pickupCoords.lng]} icon={createMissionMarker('high')} />
+          )}
           {position && <Marker position={[position.lat, position.lng]} icon={createVolunteerMarker()} />}
         </MapContainer>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#070B14] to-transparent" />
@@ -391,6 +497,28 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
           </div>
           <OperationalTimeline steps={timelineSteps} />
         </GlassCard>
+
+        {isResourceMission && (
+          <GlassCard className="space-y-2 border-info/20 bg-info/[0.05] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+              Recursos a recoger
+            </p>
+            <p className="text-sm font-medium text-ink">
+              {mission.resourceQty ?? '—'} × {getResourceLabel(mission.resourceType ?? '')}
+            </p>
+            <p className="text-xs text-ink-muted">
+              Centro: {mission.pickupAddress ?? mission.pickupCenterId?.slice(0, 8)}
+            </p>
+            <p className="text-xs text-ink-muted">
+              Destino: {mission.deliveryAddress ?? mission.location.zone}
+            </p>
+            {assignment.status === 'on_site' && (
+              <p className="rounded-lg bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+                Espera a que el coordinador marque los recursos como entregados.
+              </p>
+            )}
+          </GlassCard>
+        )}
 
         <GlassCard className="space-y-2 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Información de la misión</p>
@@ -504,7 +632,11 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-info py-4 text-base font-semibold text-white shadow-lg shadow-info/25 transition-all hover:bg-info/90 disabled:opacity-50"
           >
             <Navigation className="h-5 w-5" />
-            {updateStatus.isPending ? 'Avisando...' : 'En camino'}
+            {updateStatus.isPending
+              ? 'Avisando...'
+              : isResourceMission
+                ? 'En camino al centro'
+                : 'En camino'}
           </button>
         )}
 
@@ -517,7 +649,11 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-warning py-4 text-base font-semibold text-white shadow-lg shadow-warning/25 transition-all hover:bg-warning/90 disabled:opacity-50"
             >
               <MapPin className="h-5 w-5" />
-              {updateStatus.isPending ? 'Avisando...' : 'Llegué'}
+              {updateStatus.isPending
+                ? 'Avisando...'
+                : isResourceMission
+                  ? 'Llegué al centro'
+                  : 'Llegué'}
             </button>
             <div className="flex gap-2">
               <button
@@ -571,11 +707,23 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
           </div>
         )}
 
-        {(assignment.status === 'on_site' || assignment.status === 'in_progress') && (
+        {isResourceMission && assignment.status === 'on_site' && (
+          <button
+            type="button"
+            onClick={() => updateStatus.mutate({ assignmentId: assignment.id, status: 'in_progress' })}
+            disabled={updateStatus.isPending}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-info py-4 text-base font-semibold text-white shadow-lg shadow-info/25 transition-all hover:bg-info/90 disabled:opacity-50"
+          >
+            <Navigation className="h-5 w-5" />
+            {updateStatus.isPending ? 'Avisando...' : 'Salir hacia el destino'}
+          </button>
+        )}
+
+        {((!isResourceMission && (assignment.status === 'on_site' || assignment.status === 'in_progress')) ||
+          (isResourceMission && assignment.status === 'in_progress')) && (
           <button
             type="button"
             onClick={() => {
-              // Entregado → completed (esperando validación). Si está on_site, avanza a completed.
               updateStatus.mutate({ assignmentId: assignment.id, status: 'completed' })
             }}
             disabled={updateStatus.isPending}

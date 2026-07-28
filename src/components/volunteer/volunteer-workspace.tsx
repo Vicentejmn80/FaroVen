@@ -12,6 +12,7 @@ import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
 import { VOLUNTEER_AVAILABILITY, VOLUNTEER_AVAILABILITY_LABELS, VOLUNTEER_AVAILABILITY_TONES, VERIFICATION_LEVEL_LABELS, SKILL_LABELS } from '@/domain/volunteer.types'
 import type { Mission } from '@/domain/mission.types'
+import { getResourceLabel } from '@/lib/resource-catalog'
 import { useAuth, usePermissions } from '@/store/auth-context'
 import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
@@ -195,15 +196,18 @@ const IMMERSIVE_MISSION_STATUSES = [
 
 function SelectedMissionModal({
   missionTitle,
+  mission,
   onStart,
   onReject,
   isPending,
 }: {
   missionTitle: string
+  mission?: Mission | null
   onStart: () => void
   onReject: () => void
   isPending: boolean
 }) {
+  const isResourceMission = Boolean(mission?.pickupCenterId)
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
       <GlassCard className="w-full max-w-sm space-y-4 border-info/20 p-5">
@@ -213,17 +217,37 @@ function SelectedMissionModal({
           </p>
           <h2 className="text-lg font-semibold text-ink">Misión asignada</h2>
           <p className="text-sm text-ink-muted">
-            Tu ayuda fue aceptada. Prepárate para iniciar la misión.
+            {isResourceMission
+              ? 'Debes recoger recursos en un centro antes de ir al destino.'
+              : 'Tu ayuda fue aceptada. Prepárate para iniciar la misión.'}
           </p>
           <p className="pt-1 text-xs text-ink-faint">{missionTitle}</p>
         </div>
+
+        {isResourceMission && mission && (
+          <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+              Recursos a recoger
+            </p>
+            <p className="text-sm font-medium text-ink">
+              {mission.resourceQty ?? '—'} × {getResourceLabel(mission.resourceType ?? '')}
+            </p>
+            <p className="text-xs text-ink-muted">
+              Centro: {mission.pickupAddress ?? mission.pickupCenterId?.slice(0, 8)}
+            </p>
+            <p className="text-xs text-ink-muted">
+              Destino: {mission.deliveryAddress ?? mission.location.zone}
+            </p>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={onStart}
           disabled={isPending}
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-operational py-3.5 text-sm font-semibold text-white hover:bg-operational/90 disabled:opacity-50"
         >
-          {isPending ? 'Iniciando...' : 'Iniciar misión'}
+          {isPending ? 'Iniciando...' : isResourceMission ? 'Ir al centro' : 'Iniciar misión'}
         </button>
         <button
           type="button"
@@ -659,6 +683,7 @@ export function ImmersiveMissionGate() {
     return (
       <SelectedMissionModal
         missionTitle={mission?.title ?? 'Misión asignada'}
+        mission={mission}
         isPending={respondMission.isPending}
         onStart={() =>
           respondMission.mutate({

@@ -261,6 +261,7 @@ export interface CaseDomain {
   resolvedAt?: Date
   createdAt: Date
   updatedAt: Date
+  metadata?: Record<string, unknown>
 }
 
 export interface CaseDomainEvent {

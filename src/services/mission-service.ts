@@ -148,6 +148,11 @@ export interface CreateMissionParams {
   caseId?: string
   deadline?: Date
   createdBy: string
+  pickupCenterId?: string
+  pickupAddress?: string
+  resourceType?: string
+  resourceQty?: number
+  deliveryAddress?: string
 }
 
 export const missionService = {
@@ -209,6 +214,16 @@ export const missionService = {
       actorName,
       description: comment,
     })
+
+    // Mision logistica cancelada: liberar reserva de inventario
+    if (toStage === MISSION_STAGES.CANCELLED) {
+      try {
+        const { releaseReservationByMission } = await import('@/services/logistics-service')
+        await releaseReservationByMission(missionId, actorId)
+      } catch {
+        console.warn('[FARO_LOGISTICS] No se pudo liberar la reserva al cancelar la misión')
+      }
+    }
 
     return result
   },

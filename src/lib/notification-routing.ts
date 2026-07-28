@@ -30,6 +30,8 @@ export function parseNotificationActionUrl(actionUrl: string | null | undefined)
       target.focusReportId = parts[3]
     } else if (parts[2] === 'needs') {
       target.coordinatorModule = 'needs'
+    } else if (parts[2] === 'preparations') {
+      target.coordinatorModule = 'preparations'
     } else {
       target.coordinatorModule = 'dashboard'
     }
@@ -58,6 +60,7 @@ export function getNotificationActionLabel(actionUrl: string | null | undefined,
   if (target?.focusRequestId) return 'Abrir solicitud'
   if (target?.focusReportId) return 'Ver reporte'
   if (target?.coordinatorModule === 'needs') return 'Ver necesidades'
+  if (target?.coordinatorModule === 'preparations') return 'Ver preparaciones'
   if (target?.tab === 'ops') return 'Ir a Mi Centro'
   if (target?.tab === 'system') return 'Ir a usuarios'
   if (target?.tab === 'admin') return 'Ir a administración'
@@ -65,6 +68,7 @@ export function getNotificationActionLabel(actionUrl: string | null | undefined,
   if (target?.flow === 'coordinator-request') return 'Responder'
   if (type === 'case_application' || type === 'volunteer_interest') return 'Revisar postulación'
   if (type === 'case_approved') return 'Abrir misión'
+  if (type === 'logistics_preparation') return 'Ver preparaciones'
   if (type?.includes('approved')) return 'Ir a Mi Centro'
   if (type?.includes('rejected') || type?.includes('info_request')) return 'Ver solicitud'
   return 'Abrir'

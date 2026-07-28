@@ -20,11 +20,14 @@ import {
 
 function mapResourceRow(row: CenterResourceRow): CenterResource {
   const catalog = getResourceCatalogItem(row.resource_type)
+  const reserved = row.reserved_level ?? 0
   return {
     id: row.id,
     centerId: row.center_id,
     resourceType: row.resource_type,
     currentLevel: row.current_level,
+    reservedLevel: reserved,
+    available: Math.max(row.current_level - reserved, 0),
     maxLevel: row.max_level,
     minLevel: row.min_level ?? catalog?.minRecommended ?? getResourceMinRecommended(row.resource_type),
     unit: row.unit || catalog?.unit || getResourceUnit(row.resource_type),
