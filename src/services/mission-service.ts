@@ -263,6 +263,10 @@ export const missionService = {
     return missionRepository.list(filters)
   },
 
+  async listByCaseId(caseId: string): Promise<Mission[]> {
+    return missionRepository.listByCaseId(caseId)
+  },
+
   async getById(id: string): Promise<Mission | null> {
     return missionRepository.findById(id)
   },

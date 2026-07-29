@@ -3,77 +3,30 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, Clock, Search, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
-import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
+import { OPS_BOARD_COLUMNS, type OpsBoardColumnId } from '@/domain/ops-pipeline'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PublicNeed } from '@/domain/public-need.types'
+import { PIPELINE_LABELS, label } from '@/lib/labels'
 
-/** Columnas del pipeline operativo (agrupa etapas del dominio). */
-export const KANBAN_COLUMNS = [
-  {
-    id: 'nuevo',
-    label: 'Nuevo',
-    stages: [PIPELINE_STAGES.NUEVO] as PipelineStage[],
-    accent: 'border-t-info',
-    header: 'text-info',
-  },
-  {
-    id: 'en_revision',
-    label: 'En Revisión',
-    stages: [PIPELINE_STAGES.PENDING_REVIEW, PIPELINE_STAGES.VALIDATING] as PipelineStage[],
-    accent: 'border-t-warning',
-    header: 'text-warning',
-  },
-  {
-    id: 'esperando_postulantes',
-    label: 'Esperando postulantes',
-    stages: [PIPELINE_STAGES.OPEN_FOR_APPLICATIONS] as PipelineStage[],
-    accent: 'border-t-info',
-    header: 'text-info',
-  },
-  {
-    id: 'esperando_centro',
-    label: 'Esperando centro',
-    stages: [PIPELINE_STAGES.AWAITING_CENTER_CONFIRMATION] as PipelineStage[],
-    accent: 'border-t-warning',
-    header: 'text-warning',
-  },
-  {
-    id: 'asignado',
-    label: 'Asignado',
-    stages: [PIPELINE_STAGES.ASSIGNED, PIPELINE_STAGES.ACCEPTED] as PipelineStage[],
-    accent: 'border-t-info',
-    header: 'text-info',
-  },
-  {
-    id: 'en_progreso',
-    label: 'En Progreso',
-    stages: [PIPELINE_STAGES.IN_ATTENTION] as PipelineStage[],
-    accent: 'border-t-operational',
-    header: 'text-operational',
-  },
-  {
-    id: 'esperando',
-    label: 'Esperando info',
-    stages: [PIPELINE_STAGES.AWAITING_INFO] as PipelineStage[],
-    accent: 'border-t-warning',
-    header: 'text-warning',
-  },
-  {
-    id: 'resuelto',
-    label: 'Resuelto',
-    stages: [PIPELINE_STAGES.RESOLVED] as PipelineStage[],
-    accent: 'border-t-operational',
-    header: 'text-operational',
-  },
-] as const
+/** Columnas del pipeline operacional COE (sin drag — movimiento automático por dominio). */
+export const KANBAN_COLUMNS = OPS_BOARD_COLUMNS.map((col) => ({
+  id: col.id,
+  label: col.label,
+  description: col.description,
+  stages: col.stages as PipelineStage[],
+  accent: col.accent,
+  header: col.header,
+}))
 
-export type KanbanColumnId = (typeof KANBAN_COLUMNS)[number]['id']
+export type KanbanColumnId = OpsBoardColumnId
 
 interface CaseKanbanBoardProps {
   cases: CaseDomain[]
   needs?: PublicNeed[]
   selectedId: string | null
   onSelect: (c: CaseDomain) => void
+  /** Último evento de misión por caseId (timeline vivo en En progreso). */
+  liveMissionHints?: Record<string, string>
   className?: string
 }
 
@@ -100,7 +53,23 @@ const PRIORITY_STYLE: Record<string, { bar: string; chip: string; label: string 
   },
 }
 
-export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, className }: CaseKanbanBoardProps) {
+interface CaseCardMetrics {
+  needs: number
+  covered: number
+  pending: number
+  volunteersAccepted: number
+  volunteersRequired: number
+  callStatus: string
+}
+
+export function CaseKanbanBoard({
+  cases,
+  needs = [],
+  selectedId,
+  onSelect,
+  liveMissionHints = {},
+  className,
+}: CaseKanbanBoardProps) {
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
@@ -159,10 +128,13 @@ export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, class
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar en el flujo…"
+            placeholder="Buscar en el flujo operacional…"
             className="h-8 w-full rounded-lg border border-white/[0.08] bg-white/[0.04] pl-8 pr-2 text-xs text-ink placeholder:text-ink-muted outline-none focus:border-info/40"
           />
         </div>
+        <p className="mt-1.5 text-[10px] text-ink-faint">
+          Las columnas son estados del ciclo de vida. El movimiento es automático — sin arrastre manual.
+        </p>
       </div>
 
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-2 pb-3 lg:px-3">
@@ -177,13 +149,18 @@ export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, class
                   col.accent,
                 )}
               >
-                <header className="flex items-center justify-between gap-2 border-b border-white/[0.05] px-3 py-2.5">
-                  <h3 className={cn('text-[11px] font-semibold uppercase tracking-[0.08em]', col.header)}>
-                    {col.label}
-                  </h3>
-                  <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-ink-muted">
-                    {items.length}
-                  </span>
+                <header className="border-b border-white/[0.05] px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className={cn('text-[11px] font-semibold uppercase tracking-[0.08em]', col.header)}>
+                      {col.label}
+                    </h3>
+                    <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-ink-muted">
+                      {items.length}
+                    </span>
+                  </div>
+                  {'description' in col && col.description ? (
+                    <p className="mt-0.5 text-[10px] leading-snug text-ink-faint">{col.description}</p>
+                  ) : null}
                 </header>
 
                 <ScrollArea className="min-h-0 flex-1 px-2 py-2">
@@ -193,6 +170,8 @@ export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, class
                         key={c.id}
                         caseItem={c}
                         metrics={metricsByCase.get(c.id)}
+                        liveHint={liveMissionHints[c.id]}
+                        columnId={col.id}
                         selected={c.id === selectedId}
                         onSelect={() => onSelect(c)}
                         index={i}
@@ -216,34 +195,24 @@ export function CaseKanbanBoard({ cases, needs = [], selectedId, onSelect, class
 
 function KanbanCard({
   caseItem,
-  metrics: _metrics,
+  metrics,
+  liveHint,
+  columnId,
   selected,
   onSelect,
   index,
 }: {
   caseItem: CaseDomain
   metrics?: CaseCardMetrics
+  liveHint?: string
+  columnId: KanbanColumnId
   selected: boolean
   onSelect: () => void
   index: number
 }) {
-  void _metrics
   const priority = PRIORITY_STYLE[caseItem.priority] ?? PRIORITY_STYLE.low
-  const unassigned = !caseItem.assignedCenterId && !caseItem.assignedTo
-  const stageLabel =
-    ({
-      nuevo: 'Nuevo',
-      pending_review: 'En revisión',
-      validating: 'Validando',
-      awaiting_info: 'Esperando info',
-      open_for_applications: 'Esperando postulantes',
-      awaiting_center_confirmation: 'Esperando centro',
-      assigned: 'Asignado',
-      accepted: 'Aceptado',
-      in_attention: 'En atención',
-      resolved: 'Resuelto',
-      archived: 'Archivado',
-    } as Record<string, string>)[caseItem.pipelineStage] ?? caseItem.pipelineStage
+  const awaitingInfo = caseItem.pipelineStage === 'awaiting_info'
+  const stageLabel = label(PIPELINE_LABELS, caseItem.pipelineStage)
 
   return (
     <motion.button
@@ -268,7 +237,7 @@ function KanbanCard({
         </p>
         <span
           className={cn(
-            'shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+            'shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
             priority.chip,
           )}
         >
@@ -276,52 +245,48 @@ function KanbanCard({
         </span>
       </div>
 
-      <div className="mt-2 space-y-1.5 pl-1 text-[11px] text-ink-muted">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate font-medium text-ink-subtle">{stageLabel}</span>
-          <span className="flex shrink-0 items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {formatTimeAgo(caseItem.createdAt)}
-          </span>
-        </div>
-        <p className="flex items-center gap-1.5 min-w-0">
-          <User className="h-3 w-3 shrink-0 opacity-70" />
-          <span className="truncate">
-            {caseItem.assignedTo ??
-              (caseItem.assignedCenterId
-                ? `Centro ${caseItem.assignedCenterId.slice(0, 8)}`
-                : 'Sin responsable')}
-          </span>
-        </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-1 text-[10px] text-ink-muted">
+        <span className="inline-flex items-center gap-1">
+          <User className="h-2.5 w-2.5" />
+          {caseItem.reporterInfo.name ?? 'Ciudadano'}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Clock className="h-2.5 w-2.5" />
+          {formatShortTime(caseItem.createdAt)}
+        </span>
       </div>
 
-      {unassigned &&
-        caseItem.pipelineStage !== 'open_for_applications' &&
-        caseItem.pipelineStage !== 'pending_review' && (
-          <p className="mt-2 flex items-center gap-1 pl-1 text-[10px] font-medium text-warning">
-            <AlertTriangle className="h-3 w-3" />
-            Sin asignar
-          </p>
-        )}
+      {awaitingInfo && (
+        <p className="mt-1.5 flex items-center gap-1 pl-1 text-[10px] text-warning">
+          <AlertTriangle className="h-2.5 w-2.5" />
+          Falta información
+        </p>
+      )}
+
+      {columnId === 'esperando_cobertura' && metrics && (
+        <p className="mt-1.5 pl-1 text-[10px] text-info">
+          Cobertura {metrics.volunteersAccepted}/{metrics.volunteersRequired || '—'}
+          {metrics.callStatus === 'open' ? ' · convocatoria abierta' : ''}
+        </p>
+      )}
+
+      {columnId === 'en_progreso' && liveHint && (
+        <p className="mt-1.5 truncate pl-1 text-[10px] font-medium text-operational">
+          ● {liveHint}
+        </p>
+      )}
+
+      {columnId === 'en_revision' && !awaitingInfo && (
+        <p className="mt-1.5 pl-1 text-[10px] text-ink-faint">{stageLabel}</p>
+      )}
     </motion.button>
   )
 }
 
-interface CaseCardMetrics {
-  needs: number
-  covered: number
-  pending: number
-  volunteersAccepted: number
-  volunteersRequired: number
-  callStatus: PublicNeed['callStatus']
-}
-
-function formatTimeAgo(date: Date): string {
-  const diff = Date.now() - date.getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return 'Ahora'
-  if (min < 60) return `${min}m`
-  const hours = Math.floor(min / 60)
-  if (hours < 24) return `${hours}h`
-  return `${Math.floor(hours / 24)}d`
+function formatShortTime(d: Date): string {
+  try {
+    return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
+  }
 }

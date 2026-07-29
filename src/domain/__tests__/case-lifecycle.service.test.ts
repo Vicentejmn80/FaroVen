@@ -167,8 +167,8 @@ describe('getValidTargets', () => {
 /*  getTransitionEvent                                                 */
 /* ------------------------------------------------------------------ */
 describe('getTransitionEvent', () => {
-  it('nuevo → pending_review emite CASE_SUBMITTED', () => {
-    expect(getTransitionEvent(N.NUEVO, N.PENDING_REVIEW)).toBe(CASE_EVENT_TYPES.CASE_SUBMITTED)
+  it('nuevo → pending_review emite CASE_REVIEW_STARTED', () => {
+    expect(getTransitionEvent(N.NUEVO, N.PENDING_REVIEW)).toBe(CASE_EVENT_TYPES.CASE_REVIEW_STARTED)
   })
 
   it('nuevo → archived emite CASE_DISMISSED', () => {
@@ -243,7 +243,7 @@ describe('transitionCase', () => {
   it('emite evento con tipo correcto', () => {
     const c = makeCase()
     const { event } = transitionCase(c, N.PENDING_REVIEW)
-    expect(event.eventType).toBe(CASE_EVENT_TYPES.CASE_SUBMITTED)
+    expect(event.eventType).toBe(CASE_EVENT_TYPES.CASE_REVIEW_STARTED)
     expect(event.fromStage).toBe(N.NUEVO)
     expect(event.toStage).toBe(N.PENDING_REVIEW)
   })

@@ -1,12 +1,17 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
-import { useOperationalPublicNeeds } from '@/hooks/usePublicNeeds'
-import { useTransitionCase, useAssignCase } from '@/hooks/useCaseMutations'
+import { useOperationalPublicNeeds, useNeedInterests } from '@/hooks/usePublicNeeds'
+import { useTransitionCase, useAssignCase, useStartCaseReview } from '@/hooks/useCaseMutations'
+import { useCaseApplications } from '@/hooks/useCaseApplications'
+import { useMissionByCase, useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
+import { useVerifyAssignment } from '@/hooks/useMissionMutations'
 import { useFaro } from '@/store/faro-context'
+import { useAuth } from '@/store/auth-context'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { computeCaseSummary, sortCasesByUrgency, suggestCentersForCase } from '@/services/operations-hub-service'
 import { isActiveStage } from '@/domain/case-lifecycle.service'
+import { isProgressStage } from '@/domain/ops-pipeline'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { CommandKpiBar } from './command-kpi-bar'
@@ -14,11 +19,13 @@ import { CaseKanbanBoard } from './case-kanban-board'
 import { CaseDetailDrawer } from './case-detail-drawer'
 import { OpsMapPanel } from './ops-map-panel'
 import { cn } from '@/lib/utils'
+import { MISSION_EVENT_LABELS, label } from '@/lib/labels'
 
 type WorkspaceMode = 'pipeline' | 'map'
 
 export function OperationsHub() {
   const { state } = useFaro()
+  const { user } = useAuth()
   const { data: opsCases = [] } = useCases()
   const { data: operationalNeeds = [] } = useOperationalPublicNeeds()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -26,14 +33,46 @@ export function OperationsHub() {
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const transitionMutation = useTransitionCase()
   const assignMutation = useAssignCase()
+  const startReviewMutation = useStartCaseReview()
+  const verifyMutation = useVerifyAssignment()
 
   useRealtimeSync({
     channelName: 'ops-hub-cases',
-    tables: ['cases', 'case_events'],
-    invalidateKeys: [FARO_QUERY_KEYS.cases, FARO_QUERY_KEYS.caseEvents],
+    tables: [
+      'cases',
+      'case_events',
+      'case_applications',
+      'mission_events',
+      'mission_assignments',
+      'missions',
+      'public_needs',
+      'coverage_reservations',
+    ],
+    invalidateKeys: [
+      FARO_QUERY_KEYS.cases,
+      FARO_QUERY_KEYS.caseEvents,
+      FARO_QUERY_KEYS.caseApplications,
+      FARO_QUERY_KEYS.missionEvents,
+      FARO_QUERY_KEYS.missionAssignments,
+      FARO_QUERY_KEYS.missions,
+      FARO_QUERY_KEYS.publicNeeds,
+      FARO_QUERY_KEYS.coverage,
+    ],
   })
 
   const { data: timeline = [] } = useCaseTimeline(selectedId)
+  const { data: mission } = useMissionByCase(selectedId)
+  const missionId = mission?.id
+  const { data: missionTimeline = [] } = useMissionTimeline(missionId ?? '')
+  const { data: missionAssignments = [] } = useMissionAssignments(missionId ?? '')
+  const { data: applications = [] } = useCaseApplications(selectedId ?? undefined)
+
+  const selectedNeedId = useMemo(() => {
+    if (!selectedId) return null
+    return operationalNeeds.find((n) => n.caseId === selectedId)?.id ?? null
+  }, [operationalNeeds, selectedId])
+
+  const { data: interests = [] } = useNeedInterests(selectedNeedId)
 
   const sortedCases = useMemo(() => sortCasesByUrgency(opsCases), [opsCases])
   const mapCases = useMemo(
@@ -56,6 +95,22 @@ export function OperationsHub() {
     [selectedCase, state.centers, state.needs],
   )
 
+  /** Hints vivos para tarjetas En progreso — se alimentan del timeline del caso seleccionado
+   * y se cachean por caseId mientras el GC navega. */
+  const [liveMissionHints, setLiveMissionHints] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!selectedId || !missionTimeline.length) return
+    const latest = [...missionTimeline].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    )[0]
+    if (!latest) return
+    const text = latest.description || label(MISSION_EVENT_LABELS, latest.eventType)
+    setLiveMissionHints((prev) =>
+      prev[selectedId] === text ? prev : { ...prev, [selectedId]: text },
+    )
+  }, [selectedId, missionTimeline])
+
   const mapSites = useMemo(
     () =>
       state.centers.map((c) => ({
@@ -76,10 +131,16 @@ export function OperationsHub() {
     [state.centers],
   )
 
-  const handleSelect = useCallback((c: CaseDomain) => {
-    setSelectedId(c.id)
-    setDrawerOpen(true)
-  }, [])
+  const handleSelect = useCallback(
+    (c: CaseDomain) => {
+      setSelectedId(c.id)
+      setDrawerOpen(true)
+      if (c.pipelineStage === 'nuevo' && !startReviewMutation.isPending) {
+        startReviewMutation.mutate({ caseId: c.id, actorId: user?.id })
+      }
+    },
+    [startReviewMutation, user?.id],
+  )
 
   const handleCloseDrawer = useCallback(() => {
     setDrawerOpen(false)
@@ -87,9 +148,11 @@ export function OperationsHub() {
 
   const handleTransition = useCallback(
     (caseId: string, toStage: PipelineStage, comment?: string) => {
-      transitionMutation.mutate({ caseId, toStage, comment })
+      // Resuelto solo vía validación de misión — bloquear salto manual
+      if (toStage === 'resolved') return
+      transitionMutation.mutate({ caseId, toStage, comment, actorId: user?.id })
     },
-    [transitionMutation],
+    [transitionMutation, user?.id],
   )
 
   const handleAssign = useCallback(
@@ -98,14 +161,34 @@ export function OperationsHub() {
       assignMutation.mutate({
         caseId: selectedCase.id,
         centerId,
-        assignedBy: 'case-manager',
+        assignedBy: user?.id ?? 'case-manager',
       })
     },
-    [selectedCase, assignMutation],
+    [selectedCase, assignMutation, user?.id],
+  )
+
+  const handleStartReview = useCallback(
+    (caseId: string) => {
+      startReviewMutation.mutate({ caseId, actorId: user?.id })
+    },
+    [startReviewMutation, user?.id],
+  )
+
+  const handleVerify = useCallback(
+    (assignmentId: string) => {
+      if (!user?.id) return
+      verifyMutation.mutate({ assignmentId, verifiedBy: user.id })
+    },
+    [verifyMutation, user?.id],
   )
 
   const activeCount = useMemo(
     () => opsCases.filter((c) => isActiveStage(c.pipelineStage)).length,
+    [opsCases],
+  )
+
+  const progressCount = useMemo(
+    () => opsCases.filter((c) => isProgressStage(c.pipelineStage)).length,
     [opsCases],
   )
 
@@ -120,11 +203,10 @@ export function OperationsHub() {
             <h1 className="text-[15px] font-semibold text-ink">Centro de Comando</h1>
           </div>
           <span className="hidden rounded-full border border-info/25 bg-info/10 px-2.5 py-0.5 text-[10px] font-medium text-info sm:inline-flex">
-            {activeCount} activos · {opsCases.length} total
+            {activeCount} activos · {progressCount} en progreso · {opsCases.length} total
           </span>
         </div>
 
-        {/* Toggle Pipeline ↔ Mapa (disparador de vista interactiva) */}
         <div className="flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
           <WorkspaceToggle
             active={workspace === 'pipeline'}
@@ -154,6 +236,7 @@ export function OperationsHub() {
                 needs={operationalNeeds}
                 selectedId={selectedId}
                 onSelect={handleSelect}
+                liveMissionHints={liveMissionHints}
               />
             </div>
             <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
@@ -179,11 +262,21 @@ export function OperationsHub() {
           open={drawerOpen}
           caseItem={selectedCase}
           timeline={timeline}
+          missionTimeline={missionTimeline}
+          missionAssignments={missionAssignments}
+          coverage={{
+            applications,
+            interests,
+            centers: suggestions,
+          }}
           suggestions={suggestions}
           onClose={handleCloseDrawer}
           onTransition={handleTransition}
           onAssign={handleAssign}
-          isTransitioning={transitionMutation.isPending}
+          onStartReview={handleStartReview}
+          onVerifyAssignment={handleVerify}
+          isTransitioning={transitionMutation.isPending || startReviewMutation.isPending}
+          isVerifying={verifyMutation.isPending}
         />
       </div>
     </div>
@@ -207,12 +300,11 @@ function WorkspaceToggle({
       onClick={onClick}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors',
-        active ? 'bg-white/[0.1] text-ink' : 'text-ink-muted hover:text-ink-subtle',
+        active ? 'bg-white/[0.1] text-ink' : 'text-ink-muted hover:text-ink',
       )}
-      aria-pressed={active}
     >
       <Icon className="h-3.5 w-3.5" />
-      <span>{label}</span>
+      {label}
     </button>
   )
 }

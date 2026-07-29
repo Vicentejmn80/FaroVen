@@ -3,6 +3,9 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CaseDomain, CaseDomainEvent, PipelineStage } from '@/domain/case-lifecycle.types'
 import type { AssignmentSuggestion } from '@/types/operations-hub.types'
+import type { MissionEvent, MissionAssignment } from '@/domain/mission.types'
+import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
+import type { CoverageInterest } from '@/domain/public-need.types'
 import { CaseDetailPanel } from './case-detail-panel'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 
@@ -10,11 +13,21 @@ interface CaseDetailDrawerProps {
   open: boolean
   caseItem: CaseDomain | null
   timeline?: CaseDomainEvent[]
+  missionTimeline?: MissionEvent[]
+  missionAssignments?: MissionAssignment[]
+  coverage?: {
+    applications: CaseApplicationWithApplicant[]
+    interests: CoverageInterest[]
+    centers: AssignmentSuggestion[]
+  }
   suggestions?: AssignmentSuggestion[]
   onClose: () => void
   onTransition?: (caseId: string, toStage: PipelineStage, comment?: string) => void
   onAssign?: (centerId: string) => void
+  onStartReview?: (caseId: string) => void
+  onVerifyAssignment?: (assignmentId: string) => void
   isTransitioning?: boolean
+  isVerifying?: boolean
 }
 
 /**
@@ -25,11 +38,17 @@ export function CaseDetailDrawer({
   open,
   caseItem,
   timeline,
+  missionTimeline,
+  missionAssignments,
+  coverage,
   suggestions,
   onClose,
   onTransition,
   onAssign,
+  onStartReview,
+  onVerifyAssignment,
   isTransitioning,
+  isVerifying,
 }: CaseDetailDrawerProps) {
   return (
     <AnimatePresence>
@@ -77,10 +96,16 @@ export function CaseDetailDrawer({
               <CaseDetailPanel
                 caseItem={caseItem}
                 timeline={timeline}
+                missionTimeline={missionTimeline}
+                missionAssignments={missionAssignments}
+                coverage={coverage}
                 suggestions={suggestions}
                 onTransition={onTransition}
                 onAssign={onAssign}
+                onStartReview={onStartReview}
+                onVerifyAssignment={onVerifyAssignment}
                 isTransitioning={isTransitioning}
+                isVerifying={isVerifying}
                 dense
               />
             </div>

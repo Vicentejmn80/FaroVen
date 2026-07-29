@@ -43,6 +43,9 @@ export const MISSION_EVENT_TYPES = {
   MISSION_ARCHIVED: 'mission_archived',
   VOLUNTEER_UNAVAILABLE: 'volunteer_unavailable',
   NEEDS_INFO: 'needs_info',
+  ETA_DELAY: 'eta_delay',
+  DELIVERY_PARTIAL: 'delivery_partial',
+  AWAITING_VALIDATION: 'awaiting_validation',
 } as const
 
 export type MissionEventType = typeof MISSION_EVENT_TYPES[keyof typeof MISSION_EVENT_TYPES]

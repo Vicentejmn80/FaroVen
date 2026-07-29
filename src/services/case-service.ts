@@ -79,33 +79,25 @@ export const caseService = {
     const domain: CaseDomain = {
       ...caseData,
       priority: (params.priority ?? caseData.priority) as CasePriority,
-      pipelineStage: caseData.pipelineStage as PipelineStage,
+      pipelineStage: 'nuevo',
     }
 
-    // Entrada canónica al pipeline: pending_review
-    const transitioned =
-      domain.pipelineStage === 'pending_review'
-        ? { case: domain, event: {
-            id: crypto.randomUUID(),
-            caseId: domain.id,
-            eventType: 'case_submitted' as const,
-            toStage: 'pending_review' as PipelineStage,
-            actorId: params.actorId,
-            createdAt: new Date(),
-          } }
-        : await caseService.transition(
-            domain.id,
-            'pending_review',
-            params.actorId,
-            params.priority === 'critical'
-              ? 'Caso crítico — requiere atención inmediata'
-              : 'Solicitud operativa creada',
-          )
+    // Evento de ingreso — el caso permanece en NUEVO hasta que el GC abra revisión.
+    await caseRepository.addEvent({
+      caseId: domain.id,
+      eventType: 'case_submitted',
+      toStage: 'nuevo',
+      actorId: params.actorId,
+      comment:
+        params.priority === 'critical'
+          ? 'Caso crítico recibido — pendiente de revisión'
+          : 'Solicitud operativa recibida',
+    })
 
     pipelineLog('request_created', {
-      entityId: transitioned.case.id,
+      entityId: domain.id,
       actorId: params.actorId,
-      to: 'pending_review',
+      to: 'nuevo',
       payload: {
         requestSource,
         requestType,
@@ -115,7 +107,43 @@ export const caseService = {
       },
     })
 
-    return transitioned
+    return {
+      case: domain,
+      event: {
+        id: crypto.randomUUID(),
+        caseId: domain.id,
+        eventType: 'case_submitted' as const,
+        toStage: 'nuevo' as PipelineStage,
+        actorId: params.actorId,
+        createdAt: new Date(),
+      },
+    }
+  },
+
+  /** Gestor abre el caso: Nuevo → En revisión. */
+  async startReview(caseId: string, actorId?: string): Promise<TransitionResult> {
+    const existing = await caseRepository.findById(caseId)
+    if (!existing) throw new Error(`Caso no encontrado: ${caseId}`)
+    if (existing.pipelineStage !== 'nuevo') {
+      return {
+        case: existing,
+        event: {
+          id: crypto.randomUUID(),
+          caseId,
+          eventType: 'case_review_started',
+          fromStage: existing.pipelineStage,
+          toStage: existing.pipelineStage,
+          actorId,
+          createdAt: new Date(),
+        },
+      }
+    }
+    return caseService.transition(
+      caseId,
+      'pending_review',
+      actorId,
+      'Revisión iniciada por el gestor de casos',
+    )
   },
 
   async transition(

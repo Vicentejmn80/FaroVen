@@ -249,56 +249,43 @@ export function computeCaseSummary(
   centers: Center[],
 ): OpsSummaryItem[] {
   const active = cases.filter((c) => isActiveStage(c.pipelineStage))
+  const nuevo = cases.filter((c) => c.pipelineStage === 'nuevo').length
+  const coverage = cases.filter(
+    (c) =>
+      c.pipelineStage === 'open_for_applications' ||
+      c.pipelineStage === 'awaiting_center_confirmation',
+  ).length
+  const inProgress = cases.filter(
+    (c) =>
+      c.pipelineStage === 'assigned' ||
+      c.pipelineStage === 'accepted' ||
+      c.pipelineStage === 'in_attention',
+  ).length
   const critical = active.filter(
     (c) => c.priority === 'critical' || c.priority === 'high',
   ).length
-  const unassigned = active.filter(
-    (c) =>
-      !c.assignedCenterId &&
-      !c.assignedTo &&
-      c.pipelineStage !== 'in_attention',
-  ).length
-
-  const responseSamples = cases
-    .map((c) => {
-      if (c.firstResponseAt) {
-        return c.firstResponseAt.getTime() - c.createdAt.getTime()
-      }
-      if (c.assignedAt) {
-        return c.assignedAt.getTime() - c.createdAt.getTime()
-      }
-      return null
-    })
-    .filter((v): v is number => v !== null && v >= 0)
-
-  const avgMs =
-    responseSamples.length > 0
-      ? responseSamples.reduce((a, b) => a + b, 0) / responseSamples.length
-      : 0
-  const avgMin = Math.round(avgMs / 60000)
-  const avgLabel =
-    avgMin <= 0
-      ? '—'
-      : avgMin < 60
-        ? `${avgMin} min`
-        : `${(avgMin / 60).toFixed(1)} h`
 
   void centers
 
   return [
-    { id: 'active', label: 'Casos activos', value: active.length, tone: 'info' },
+    { id: 'nuevo', label: 'Nuevos', value: nuevo, tone: nuevo > 0 ? 'info' : 'neutral' },
     {
       id: 'critical',
-      label: 'Casos críticos',
+      label: 'Críticos activos',
       value: critical,
       tone: critical > 0 ? 'critical' : 'neutral',
     },
-    { id: 'avg_response', label: 'Tiempo resp. promedio', value: avgLabel, tone: 'neutral' },
     {
-      id: 'unassigned',
-      label: 'Sin asignar',
-      value: unassigned,
-      tone: unassigned > 0 ? 'warning' : 'operational',
+      id: 'coverage',
+      label: 'Esperando cobertura',
+      value: coverage,
+      tone: coverage > 0 ? 'warning' : 'neutral',
+    },
+    {
+      id: 'in_progress',
+      label: 'En progreso',
+      value: inProgress,
+      tone: inProgress > 0 ? 'operational' : 'neutral',
     },
   ]
 }

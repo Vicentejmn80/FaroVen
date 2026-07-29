@@ -30,7 +30,13 @@ export class ReportRepository {
       .select('*')
       .single()
     if (error) throw error
-    return reportRowToReport(data as ReportRow)
+    const report = reportRowToReport(data as ReportRow)
+    void import('@/services/auto-case-service')
+      .then(({ autoCaseService }) => autoCaseService.intakeFromReport(report))
+      .catch((err) => {
+        console.warn('[AUTO-CASE] No se pudo crear caso desde reporte:', report.id, err)
+      })
+    return report
   }
 
   async listBySite(siteType: RegisterSiteType, siteId: string): Promise<Report[]> {
@@ -79,7 +85,14 @@ export class ReportRepository {
       .select('*')
       .single()
     if (error) throw error
-    return { report: reportRowToReport(data as ReportRow), trackingCode }
+    const report = reportRowToReport(data as ReportRow)
+    // Ingesta automática al tablero operacional (columna Nuevo)
+    void import('@/services/auto-case-service')
+      .then(({ autoCaseService }) => autoCaseService.intakeFromReport(report))
+      .catch((err) => {
+        console.warn('[AUTO-CASE] No se pudo crear caso desde reporte público:', report.id, err)
+      })
+    return { report, trackingCode }
   }
 
   async findByTrackingCode(code: string): Promise<Report | null> {

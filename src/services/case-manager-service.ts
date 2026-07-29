@@ -160,23 +160,67 @@ export const caseManagerService = {
       )
     }
 
-    // Evitar duplicados: si ya hay un caso abierto ligado a este reporte, reutilizarlo
+    // Evitar duplicados: si el reporte ya ingresó a Nuevo, enriquecer y abrir revisión
     const existingCaseId = await findOpenCaseForReport(data.reportId)
     if (existingCaseId) {
       await reportRepository.markConverted({ id: data.reportId, caseId: existingCaseId })
       const existing = await caseService.getById(existingCaseId)
       if (!existing) throw new Error('Caso existente no encontrado')
-      return {
-        case: existing,
-        event: {
-          id: crypto.randomUUID(),
-          caseId: existing.id,
-          eventType: 'case_review_started' as const,
-          toStage: existing.pipelineStage,
-          actorId,
-          createdAt: new Date(),
+
+      await caseRepository.update(existingCaseId, {
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        zone: data.zone,
+        category: data.category,
+        affectedCount: data.affectedCount,
+        location: {
+          lat,
+          lng,
+          address: report.location.address,
         },
+        reporterInfo: {
+          name: data.reporterName ?? undefined,
+          phone: data.reporterPhone ?? undefined,
+          email: data.reporterEmail ?? undefined,
+        },
+      })
+
+      const reviewed =
+        existing.pipelineStage === 'nuevo'
+          ? await caseService.startReview(existingCaseId, actorId)
+          : {
+              case: { ...existing, title: data.title, description: data.description },
+              event: {
+                id: crypto.randomUUID(),
+                caseId: existing.id,
+                eventType: 'case_review_started' as const,
+                toStage: existing.pipelineStage,
+                actorId,
+                createdAt: new Date(),
+              },
+            }
+
+      const needs = await publicNeedRepository.listByCaseId(reviewed.case.id)
+      if (needs.length === 0) {
+        await publicNeedRepository.createFromCase({
+          caseId: reviewed.case.id,
+          title: data.title,
+          summary: data.description,
+          category: data.category,
+          priority: data.priority,
+          zone: data.zone,
+          location: {
+            lat,
+            lng,
+            address: report.location.address,
+            zone: data.zone,
+          },
+          actorId,
+        })
       }
+
+      return reviewed
     }
 
     const result = await caseService.create({

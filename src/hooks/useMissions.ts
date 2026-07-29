@@ -3,6 +3,18 @@ import { FARO_QUERY_KEYS } from './query-keys'
 import { missionService } from '@/services/mission-service'
 import type { MissionFilters } from '@/repositories/mission-repository'
 
+export function useMissionByCase(caseId: string | null | undefined) {
+  return useQuery({
+    queryKey: [FARO_QUERY_KEYS.missions, 'by-case', caseId],
+    queryFn: async () => {
+      const missions = await missionService.listByCaseId(caseId!)
+      return missions[0] ?? null
+    },
+    enabled: !!caseId,
+    staleTime: 5_000,
+  })
+}
+
 export function useMissions(filters?: MissionFilters) {
   return useQuery({
     queryKey: [FARO_QUERY_KEYS.missions, filters],

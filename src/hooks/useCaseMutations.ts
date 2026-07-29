@@ -23,6 +23,22 @@ function invalidateClosedCaseCaches(queryClient: ReturnType<typeof useQueryClien
   void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
 }
 
+export function useStartCaseReview() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ caseId, actorId }: { caseId: string; actorId?: string }) => {
+      try {
+        return await caseService.startReview(caseId, actorId)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      invalidateCaseData(queryClient)
+    },
+  })
+}
+
 export function useTransitionCase() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
@@ -145,7 +161,7 @@ export function useCreateCase() {
     },
     onSuccess: () => {
       invalidateCaseData(queryClient)
-      showToast('Solicitud enviada a En revisión.', 'success')
+      showToast('Solicitud recibida en Nuevo.', 'success')
     },
   })
 }

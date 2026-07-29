@@ -1,27 +1,29 @@
 import { cn } from '@/lib/utils'
 import type { PipelineStage } from '@/domain/case-lifecycle.types'
+import { stageToBoardColumn } from '@/domain/ops-pipeline'
 
 interface CaseStatusBadgeProps {
   stage: PipelineStage
   className?: string
 }
 
-const STAGE_META: Record<PipelineStage, { label: string; color: string; bg: string }> = {
+const BOARD_META: Record<
+  NonNullable<ReturnType<typeof stageToBoardColumn>>,
+  { label: string; color: string; bg: string }
+> = {
   nuevo: { label: 'Nuevo', color: 'text-info', bg: 'bg-info/10' },
-  pending_review: { label: 'En revisión', color: 'text-warning', bg: 'bg-warning/10' },
-  validating: { label: 'Planificando', color: 'text-warning', bg: 'bg-warning/10' },
-  awaiting_info: { label: 'Monitoreando', color: 'text-ink-muted', bg: 'bg-white/[0.06]' },
-  open_for_applications: { label: 'Esperando postulantes', color: 'text-info', bg: 'bg-info/10' },
-  awaiting_center_confirmation: { label: 'Esperando centro', color: 'text-warning', bg: 'bg-warning/10' },
-  assigned: { label: 'Asignado', color: 'text-info', bg: 'bg-info/10' },
-  accepted: { label: 'Ejecucion', color: 'text-operational', bg: 'bg-operational/10' },
-  in_attention: { label: 'Ejecucion', color: 'text-operational', bg: 'bg-operational/10' },
-  resolved: { label: 'Completado', color: 'text-operational', bg: 'bg-operational/10' },
-  archived: { label: 'Archivado', color: 'text-ink-muted', bg: 'bg-white/[0.04]' },
+  en_revision: { label: 'En revisión', color: 'text-warning', bg: 'bg-warning/10' },
+  esperando_cobertura: { label: 'Esperando cobertura', color: 'text-info', bg: 'bg-info/10' },
+  en_progreso: { label: 'En progreso', color: 'text-operational', bg: 'bg-operational/10' },
+  resuelto: { label: 'Resuelto', color: 'text-operational', bg: 'bg-operational/10' },
 }
 
+const FALLBACK = { label: 'Archivado', color: 'text-ink-muted', bg: 'bg-white/[0.04]' }
+
 export function CaseStatusBadge({ stage, className }: CaseStatusBadgeProps) {
-  const meta = STAGE_META[stage]
+  const col = stageToBoardColumn(stage)
+  const meta = col ? BOARD_META[col] : FALLBACK
+  const infoHint = stage === 'awaiting_info' ? ' · info pendiente' : ''
   return (
     <span
       className={cn(
@@ -32,6 +34,7 @@ export function CaseStatusBadge({ stage, className }: CaseStatusBadgeProps) {
       )}
     >
       {meta.label}
+      {infoHint}
     </span>
   )
 }

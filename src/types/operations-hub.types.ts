@@ -50,8 +50,11 @@ export interface OpsCaseRecord {
 export type OpsSummaryMetric =
   | 'critical'
   | 'new'
+  | 'nuevo'
   | 'in_review'
   | 'in_attention'
+  | 'in_progress'
+  | 'coverage'
   | 'avg_response'
   | 'centers_saturated'
   | 'centers_available'
