@@ -30,9 +30,7 @@ const OPERATION_OPTIONS: Array<{ value: OperationType; label: string }> = [
   { value: 'resource_request', label: 'Solicitud de recursos' },
 ]
 
-/**
- * Creación manual GC → solicitud en Nuevo; la revisión inicia al abrir el caso.
- */
+/** Creación manual GC — mapa primero; caso entra en Nuevo. */
 export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
   const { user } = useAuth()
   const createCase = useCreateCase()
@@ -79,46 +77,31 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!title.trim() || !zone.trim()) {
-      setError('Título y zona (destino) son obligatorios.')
+    if (!place || !hasValidCoordinates(place)) {
+      setError('Toca el mapa para marcar la ubicación antes de guardar.')
       return
     }
-    if (!hasValidCoordinates(place)) {
-      setError('Marca una ubicación válida en el mapa. No se puede guardar sin coordenadas.')
-      return
-    }
-    if (!category.trim()) {
-      setError('Selecciona una categoría.')
-      return
-    }
-    if (!user?.id) {
-      setError('Debes iniciar sesión como Gestor de Casos.')
-      return
-    }
+    const qty = Math.max(1, Number.parseInt(affectedCount, 10) || 1)
     try {
       const result = await createCase.mutateAsync({
         title: title.trim(),
         description: description.trim() || undefined,
-        zone: zone.trim(),
         priority,
-        category: category.trim(),
-        affectedCount: Math.max(1, Number(affectedCount) || 1),
-        location: {
-          lat: place!.lat,
-          lng: place!.lng,
-          address: place!.name ?? zone.trim(),
-        },
+        zone: zone.trim() || place.name || place.address || 'Zona por confirmar',
+        category,
+        affectedCount: qty,
+        location: { lat: place.lat, lng: place.lng, address: place.address || place.name },
         reporterInfo: {
           name: reporterName.trim() || undefined,
           phone: reporterPhone.trim() || undefined,
         },
-        actorId: user.id,
-        responsibleId: user.id,
-        destination: zone.trim(),
-        requirePublishReady: true,
+        actorId: user?.id,
         requestSource: 'manual',
         requestType: 'manual_request',
         operationType,
+        requirePublishReady: true,
+        responsibleId: user?.id,
+        destination: zone.trim() || place.name,
       })
       onCreated?.(result.case.id)
       onClose()
@@ -130,10 +113,34 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
   return (
     <FlowSheet
       title="Crear solicitud operativa"
-      subtitle="Entra a Nuevo — el GC inicia la revisión al abrir el caso"
+      subtitle="Toca el mapa → guardar → entra a Nuevo"
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 px-1 pb-8">
+        <FormField label="Ubicación">
+          <p className="mb-2 text-[11px] text-ink-subtle">
+            {geoBusy
+              ? 'Solicitando GPS…'
+              : geoHint
+                ? `${geoHint} — toca el mapa para marcar el punto.`
+                : 'Toca el mapa para fijar la ubicación. Obligatorio.'}
+          </p>
+          <LocationPickerMap
+            value={place}
+            onChange={(p) => {
+              setPlace(p)
+              if (p?.name || p?.address) setZone(p.name || p.address || '')
+            }}
+            onNameHint={(name) => setZone(name)}
+            className="min-h-[280px] overflow-hidden rounded-2xl border border-white/10"
+          />
+          {place && hasValidCoordinates(place) && (
+            <p className="mt-1.5 text-[11px] text-operational">
+              Punto guardado · {place.address || place.name || `${place.lat.toFixed(4)}, ${place.lng.toFixed(4)}`}
+            </p>
+          )}
+        </FormField>
+
         <FormField label="Título">
           <input
             className={fieldClassName}
@@ -177,37 +184,14 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
           </select>
         </FormField>
 
-        <FormField label="Destino (zona / sector)">
+        <FormField label="Zona (desde el mapa)">
           <input
             className={fieldClassName}
             value={zone}
             onChange={(e) => setZone(e.target.value)}
-            placeholder="Ej. Maiquetía, Sector 3"
+            placeholder="Se completa al tocar el mapa"
             required
           />
-        </FormField>
-
-        <FormField label="Ubicación en el mapa">
-          <p className="mb-2 text-[11px] text-ink-subtle">
-            {geoBusy
-              ? 'Solicitando permiso de geolocalización…'
-              : geoHint
-                ? geoHint
-                : 'Toca el mapa para fijar el punto. Obligatorio para publicar.'}
-          </p>
-          <LocationPickerMap
-            value={place}
-            onChange={setPlace}
-            onNameHint={(name) => {
-              if (!zone.trim()) setZone(name)
-            }}
-            className="min-h-[240px] overflow-hidden rounded-2xl border border-white/10"
-          />
-          {place && hasValidCoordinates(place) && (
-            <p className="mt-1 text-[11px] text-operational">
-              Lat {place.lat.toFixed(5)} · Lng {place.lng.toFixed(5)}
-            </p>
-          )}
         </FormField>
 
         <FormField label="Prioridad">
@@ -249,7 +233,7 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
               required
             />
           </FormField>
-          <FormField label="Teléfono contacto">
+          <FormField label="Teléfono">
             <input
               className={fieldClassName}
               value={reporterPhone}
@@ -268,14 +252,10 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
           />
         </FormField>
 
-        <p className="text-[11px] text-ink-subtle">
-          Responsable: {user?.email ?? user?.id ?? '—'}
-        </p>
-
         {error && <p className="text-sm text-critical">{error}</p>}
 
         <EmergencyButton type="submit" className="w-full" disabled={createCase.isPending}>
-          {createCase.isPending ? 'Publicando…' : 'Publicar en Nuevo'}
+          {createCase.isPending ? 'Publicando…' : 'Guardar en Nuevo'}
         </EmergencyButton>
       </form>
     </FlowSheet>

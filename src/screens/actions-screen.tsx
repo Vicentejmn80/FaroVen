@@ -59,11 +59,11 @@ const VOLUNTEER_ACTIONS: ActionDef[] = [
   { id: 'navigate', icon: PackagePlus, label: 'Registrar nueva necesidad', hint: 'Ver y apoyar necesidades activas', accent: 'warning', tab: 'needs' },
 ]
 
-const CASE_MANAGER_ACTIONS: ActionDef[] = [
+  const CASE_MANAGER_ACTIONS: ActionDef[] = [
   { id: 'create-case', icon: ClipboardPlus, label: 'Crear solicitud manual', hint: 'Entra a Nuevo en el pipeline', accent: 'info' },
-  { id: 'assign-resource', icon: UserPlus, label: 'Asignar recurso', hint: 'Abrir comando y asignar centro', accent: 'operational' },
-  { id: 'navigate', icon: Building2, label: 'Centro de comando', hint: 'Pipeline operativo', accent: 'info', tab: 'map' },
-  { id: 'navigate', icon: ClipboardPlus, label: 'Bandeja gestor', hint: 'Reportes y conversiones', accent: 'warning', tab: 'case-manager' },
+  { id: 'navigate', icon: Building2, label: 'Operaciones', hint: 'Kanban y timeline vivo', accent: 'info', tab: 'map' },
+  { id: 'navigate', icon: UserPlus, label: 'Postulaciones', hint: 'Voluntarios esperando aprobación', accent: 'operational', tab: 'applications' },
+  { id: 'navigate', icon: ClipboardPlus, label: 'Bandeja', hint: 'Reportes entrantes', accent: 'warning', tab: 'case-manager' },
 ]
 
 const ADMIN_ACTIONS: ActionDef[] = [

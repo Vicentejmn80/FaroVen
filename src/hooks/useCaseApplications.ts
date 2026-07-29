@@ -25,6 +25,20 @@ function invalidateAfterApplicationChange(queryClient: ReturnType<typeof useQuer
   queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
 }
 
+export function usePendingApplicationsQueue() {
+  useRealtimeSync({
+    channelName: 'gc-apps-queue',
+    tables: ['case_applications', 'case_events'],
+    invalidateKeys: [FARO_QUERY_KEYS.caseApplications, FARO_QUERY_KEYS.cases],
+  })
+
+  return useQuery({
+    queryKey: [FARO_QUERY_KEYS.caseApplications, 'pending-queue'],
+    queryFn: () => caseApplicationService.listPendingQueue(),
+    staleTime: 8_000,
+  })
+}
+
 export function useCaseApplications(caseId: string | undefined) {
   // Sin caseId no suscribir: evita canal `case-apps-undefined` + invalidaciones a ciegas.
   useRealtimeSync({

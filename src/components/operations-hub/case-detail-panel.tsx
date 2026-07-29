@@ -5,15 +5,20 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CaseDomain, CaseDomainEvent, PipelineStage } from '@/domain/case-lifecycle.types'
 import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
-import { isCoverageStage, isProgressStage, isReviewStage } from '@/domain/ops-pipeline'
+import { isCoverageStage, isReviewStage } from '@/domain/ops-pipeline'
 import { slaService } from '@/services/sla-service'
 import type { AssignmentSuggestion } from '@/types/operations-hub.types'
 import { CaseStatusBadge } from './case-status-badge'
-import { INCIDENT_TYPE_LABELS, MISSION_EVENT_LABELS, label } from '@/lib/labels'
+import { INCIDENT_TYPE_LABELS, label } from '@/lib/labels'
 import type { MissionEvent } from '@/domain/mission.types'
 import type { MissionAssignment } from '@/domain/mission.types'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CoverageInterest } from '@/domain/public-need.types'
+import {
+  buildAuditTimeline,
+  LiveMissionAuditTimeline,
+} from '@/components/dispatch/live-mission-audit-timeline'
+import { OperationalRecoPanel } from '@/components/operations-hub/operational-reco-panel'
 
 interface CoverageBundle {
   applications: CaseApplicationWithApplicant[]
@@ -67,8 +72,11 @@ export function CaseDetailPanel({
 
   const slaInfo = slaService.getSlaInfo(caseItem)
   const showCoverage = isCoverageStage(caseItem.pipelineStage) || isReviewStage(caseItem.pipelineStage)
-  const showMissionLive = isProgressStage(caseItem.pipelineStage)
   const pendingValidation = missionAssignments.filter((a) => a.status === 'completed')
+  const auditItems = buildAuditTimeline({
+    caseEvents: timeline,
+    missionEvents: missionTimeline,
+  })
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
@@ -135,6 +143,10 @@ export function CaseDetailPanel({
             </GlassCard>
           )}
 
+          {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
+            <OperationalRecoPanel caseData={caseItem} />
+          )}
+
           <GlassCard className="!rounded-xl !border-white/[0.08] !p-3 !shadow-none !bg-white/[0.03]">
             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Ciudadano
@@ -184,9 +196,7 @@ export function CaseDetailPanel({
             />
           )}
 
-          {showMissionLive && (
-            <LiveMissionTimeline events={missionTimeline} />
-          )}
+          <LiveMissionAuditTimeline items={auditItems} dense={dense} />
 
           {pendingValidation.length > 0 && onVerifyAssignment && (
             <GlassCard className="!rounded-xl !border-warning/30 !bg-warning/[0.06] !p-3 !shadow-none">
@@ -231,40 +241,26 @@ export function CaseDetailPanel({
             </GlassCard>
           )}
 
-          {onTransition && (
+          {onTransition && caseItem.pipelineStage === PIPELINE_STAGES.RESOLVED && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-ink-muted">Acciones</p>
+              <p className="text-xs font-medium text-ink-muted">Cierre</p>
               <div className="flex flex-wrap gap-1.5">
-                {caseItem.pipelineStage !== PIPELINE_STAGES.ARCHIVED &&
-                  caseItem.pipelineStage !== PIPELINE_STAGES.RESOLVED && (
-                    <EmergencyButton
-                      variant="glass"
-                      size="sm"
-                      onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar')}
-                      disabled={isTransitioning}
-                    >
-                      Archivar
-                    </EmergencyButton>
-                  )}
-                {caseItem.pipelineStage === PIPELINE_STAGES.RESOLVED && (
-                  <EmergencyButton
-                    variant="glass"
-                    size="sm"
-                    onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar')}
-                    disabled={isTransitioning}
-                  >
-                    Archivar
-                  </EmergencyButton>
-                )}
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar caso exitoso')}
+                  disabled={isTransitioning}
+                >
+                  Archivar
+                </EmergencyButton>
               </div>
               <p className="text-[10px] text-ink-faint">
-                Resuelto solo tras validar evidencia. Publicar cobertura y aprobar postulaciones se gestionan en el Gestor de Casos.
+                Solo tras validación. Al archivar el caso queda en el historial de éxito.
               </p>
             </div>
           )}
 
-          {/* Timeline de caso (auditoría) — secundario si hay misión viva */}
-          {!showMissionLive && <CaseTimeline events={timeline} />}
+          {/* Timeline unificado arriba — no duplicar auditoría técnica */}
         </div>
       </ScrollArea>
     </div>
@@ -347,41 +343,6 @@ function CoverageSection({
               />
             ))}
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function LiveMissionTimeline({ events }: { events: MissionEvent[] }) {
-  const sorted = [...events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-operational">Timeline en vivo</p>
-      <p className="text-[10px] text-ink-faint">Actualización por Realtime — sin refrescar</p>
-      {sorted.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-white/[0.08] px-3 py-4 text-center text-[11px] text-ink-muted">
-          Esperando eventos del voluntario…
-        </p>
-      ) : (
-        <div className="space-y-0">
-          {sorted.map((e) => (
-            <div key={e.id} className="flex gap-2.5">
-              <div className="flex flex-col items-center pt-1">
-                <div className="h-2 w-2 rounded-full bg-operational shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
-                <div className="w-px flex-1 bg-white/[0.08]" />
-              </div>
-              <div className="min-w-0 flex-1 pb-3">
-                <p className="text-[10px] tabular-nums text-ink-faint">
-                  {formatClock(e.createdAt)}
-                </p>
-                <p className="text-xs font-medium text-ink">
-                  {e.description || label(MISSION_EVENT_LABELS, e.eventType)}
-                </p>
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>
@@ -475,61 +436,4 @@ function SuggestedCenterCard({
       )}
     </div>
   )
-}
-
-function CaseTimeline({ events }: { events: CaseDomainEvent[] }) {
-  if (events.length === 0) return null
-  const sorted = [...events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-ink-muted">Auditoría del caso</p>
-      <div className="space-y-0">
-        {sorted.map((e) => (
-          <div key={e.id} className="flex gap-2.5">
-            <div className="flex flex-col items-center">
-              <div className="h-2 w-2 rounded-full bg-white/[0.12]" />
-            </div>
-            <div className="min-w-0 flex-1 pb-2">
-              <p className="text-xs text-ink">
-                {e.comment || EVENT_LABELS[e.eventType] || e.eventType}
-              </p>
-              <p className="text-[10px] text-ink-muted">
-                {timeAgo(e.createdAt)}
-                {e.fromStage && e.toStage && ` · ${e.fromStage} → ${e.toStage}`}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function formatClock(d: Date): string {
-  try {
-    return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
-}
-
-const EVENT_LABELS: Record<string, string> = {
-  case_submitted: 'Caso creado',
-  case_review_started: 'Revisión iniciada',
-  case_validated: 'Caso validado',
-  case_info_requested: 'Información solicitada',
-  case_info_received: 'Información recibida',
-  case_assigned: 'Caso asignado',
-  case_accepted: 'Asignación aceptada',
-  case_attention_started: 'Atención iniciada',
-  case_resolved: 'Caso resuelto',
-  case_reopened: 'Caso reabierto',
-  case_closed: 'Caso cerrado',
-  case_dismissed: 'Caso descartado',
-  case_stale_archived: 'Archivado por inactividad',
-  case_unable_to_assign: 'No se pudo asignar',
-  case_opened_for_applications: 'Cobertura abierta',
-  case_awaiting_center: 'Centro propuesto',
-  case_center_confirmed: 'Centro confirmado',
 }

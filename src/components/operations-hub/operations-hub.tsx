@@ -148,11 +148,14 @@ export function OperationsHub() {
 
   const handleTransition = useCallback(
     (caseId: string, toStage: PipelineStage, comment?: string) => {
-      // Resuelto solo vía validación de misión — bloquear salto manual
       if (toStage === 'resolved') return
+      if (toStage === 'archived') {
+        const c = opsCases.find((x) => x.id === caseId)
+        if (c && c.pipelineStage !== 'resolved') return
+      }
       transitionMutation.mutate({ caseId, toStage, comment, actorId: user?.id })
     },
-    [transitionMutation, user?.id],
+    [transitionMutation, user?.id, opsCases],
   )
 
   const handleAssign = useCallback(

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases, useArchiveCase } from '@/hooks/useCases'
@@ -34,6 +34,13 @@ import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { VOLUNTEER_AVAILABILITY_LABELS } from '@/domain/volunteer.types'
 
 type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'success' | 'solicitudes'
+
+export type CaseManagerSection = 'inbox' | 'success' | 'full'
+
+interface CaseManagerWorkspaceProps {
+  /** Vista fijada desde la barra inferior del GC (sin pestañas internas). */
+  section?: CaseManagerSection
+}
 
 function InterestsPanel() {
   const { data: interests, isLoading } = useVolunteerInterests()
@@ -275,8 +282,15 @@ function MissionDetailCard({ mission, onClose }: { mission: Mission; onClose: ()
   )
 }
 
-export function CaseManagerWorkspace() {
-  const [tab, setTab] = useState<ManagerTab>('inbox')
+export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceProps) {
+  const [tab, setTab] = useState<ManagerTab>(
+    section === 'success' ? 'success' : 'inbox',
+  )
+
+  useEffect(() => {
+    if (section === 'inbox') setTab('inbox')
+    else if (section === 'success') setTab('success')
+  }, [section])
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null)
@@ -384,24 +398,38 @@ export function CaseManagerWorkspace() {
     setSelectedReportId((prev) => prev === id ? null : id)
   }, [])
 
-  const tabs: Array<{ id: ManagerTab; label: string; badge?: number }> = [
-    { id: 'inbox', label: 'Bandeja', badge: pendingReports.length },
-    { id: 'public-needs', label: 'Necesidades', badge: pendingPublicNeeds.length },
-    { id: 'cases', label: 'Casos', badge: activeCases.length },
-    { id: 'missions', label: 'Misiones', badge: activeMissions.length },
-    { id: 'success', label: 'Casos de éxito' },
-    { id: 'solicitudes', label: 'Solicitudes', badge: pendingRequests.length },
-  ]
+  const tabs: Array<{ id: ManagerTab; label: string; badge?: number }> =
+    section === 'full'
+      ? [
+          { id: 'inbox', label: 'Bandeja', badge: pendingReports.length },
+          { id: 'public-needs', label: 'Necesidades', badge: pendingPublicNeeds.length },
+          { id: 'cases', label: 'Casos', badge: activeCases.length },
+          { id: 'missions', label: 'Misiones', badge: activeMissions.length },
+          { id: 'success', label: 'Casos de éxito' },
+          { id: 'solicitudes', label: 'Solicitudes', badge: pendingRequests.length },
+        ]
+      : []
+
+  const headerTitle =
+    section === 'success'
+      ? 'Casos de éxito'
+      : section === 'inbox'
+        ? 'Bandeja'
+        : 'Centro de Operaciones'
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 items-center justify-between px-4 pt-safe pb-3 lg:px-8">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO</p>
-          <h1 className="text-lg font-semibold text-ink">Centro de Operaciones</h1>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO · Gestor</p>
+          <h1 className="text-lg font-semibold text-ink">{headerTitle}</h1>
+          {section === 'inbox' && (
+            <p className="mt-0.5 text-xs text-ink-muted">Reportes y solicitudes entrantes</p>
+          )}
         </div>
       </header>
 
+      {section === 'full' && (
       <div className="shrink-0 px-4 pb-2">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {tabs.map((t) => (
@@ -416,6 +444,7 @@ export function CaseManagerWorkspace() {
           ))}
         </div>
       </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'inbox' && (
@@ -535,14 +564,16 @@ export function CaseManagerWorkspace() {
                           <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', c.priority === 'critical' ? 'bg-critical/20 text-critical' : c.priority === 'high' ? 'bg-warning/20 text-warning' : 'bg-info/20 text-info')}>
                             {label(PRIORITY_LABELS, c.priority, c.priority)}
                           </span>
+                          {c.pipelineStage === 'resolved' && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); if (window.confirm(`¿Archivar el caso "${c.title}"? Se moverá a casos archivados.`)) { archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Archivado por gestor de casos' }) } }}
+                            onClick={(e) => { e.stopPropagation(); if (window.confirm(`¿Archivar el caso "${c.title}"? Se moverá a casos de éxito / archivados.`)) { archiveCase.mutate({ caseId: c.id, actorId: user?.id, comment: 'Archivado tras validación' }) } }}
                             disabled={archiveCase.isPending}
                             className="rounded-full p-1 text-ink-faint hover:bg-critical/15 hover:text-critical"
-                            title="Archivar caso"
+                            title="Archivar caso resuelto"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
                           </button>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">

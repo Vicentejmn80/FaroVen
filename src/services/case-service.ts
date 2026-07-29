@@ -12,6 +12,7 @@ import type {
 import { caseRepository, type CaseFilters } from '@/repositories/case-repository'
 import { operationalLog, pipelineLog } from '@/lib/operational-log'
 import { assertCaseReadyToPublish } from '@/domain/case-publish-validation'
+import { supabase } from '@/lib/supabase'
 
 export interface CreateCaseParams {
   title: string
@@ -247,6 +248,38 @@ export const caseService = {
   },
 
   async archive(caseId: string, actorId?: string, comment?: string): Promise<TransitionResult> {
+    const existing = await caseRepository.findById(caseId)
+    if (!existing) throw new Error(`Caso no encontrado: ${caseId}`)
+    if (existing.pipelineStage !== 'resolved') {
+      throw new Error('Solo se puede archivar un caso ya resuelto (tras validación).')
+    }
+
+    // Garantizar Success Case si la validación no lo creó
+    try {
+      const { data: existingSuccess } = await supabase
+        .from('success_cases')
+        .select('id')
+        .eq('case_id', caseId)
+        .limit(1)
+        .maybeSingle()
+      if (!existingSuccess) {
+        await supabase.from('success_cases').insert({
+          case_id: caseId,
+          title: existing.title,
+          category: existing.category ?? 'humanitarian',
+          zone: existing.zone,
+          help_type: 'humanitarian',
+          collaborator_type: 'system',
+          impact_summary: existing.description ?? existing.title,
+          public_code: `FARO-${new Date().getFullYear()}-${caseId.slice(0, 6).toUpperCase()}`,
+          verified_by: actorId ?? null,
+          verified_at: new Date().toISOString(),
+        })
+      }
+    } catch {
+      console.warn('[CASE] No se pudo asegurar Success Case al archivar', caseId)
+    }
+
     return caseService.transition(caseId, 'archived', actorId, comment)
   },
 }

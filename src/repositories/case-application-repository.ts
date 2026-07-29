@@ -48,6 +48,46 @@ function mapRow(row: CaseApplicationRow): CaseApplication {
   }
 }
 
+async function enrichApplications(
+  rows: Array<CaseApplicationRow & { profiles: ProfileEmbed | ProfileEmbed[] | null }>,
+): Promise<CaseApplicationWithApplicant[]> {
+  const applicantIds = [...new Set(rows.map((row) => row.applicant_id).filter(Boolean))]
+  const metricsByUserId = new Map<string, VolunteerMetricsRow>()
+  if (applicantIds.length > 0) {
+    const { data: volunteers, error: volunteersError } = await supabase
+      .from('volunteers')
+      .select(
+        'user_id, total_missions, completed_missions, service_hours, trust_score, avg_response_minutes, specialties, last_activity_at',
+      )
+      .in('user_id', applicantIds)
+
+    if (volunteersError) throw volunteersError
+    for (const volunteer of (volunteers ?? []) as VolunteerMetricsRow[]) {
+      metricsByUserId.set(volunteer.user_id, volunteer)
+    }
+  }
+
+  return rows.map((row) => {
+    const app = mapRow(row)
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+    const metrics = metricsByUserId.get(row.applicant_id)
+
+    return {
+      ...app,
+      applicantName: profile?.full_name?.trim() || 'Voluntario',
+      applicantPhone: profile?.phone ?? undefined,
+      applicantPhoto: undefined,
+      totalMissions: metrics?.total_missions ?? undefined,
+      completedMissions: metrics?.completed_missions ?? undefined,
+      serviceHours: metrics?.service_hours ?? undefined,
+      trustScore: metrics?.trust_score ?? undefined,
+      avgResponseMin: metrics?.avg_response_minutes ?? undefined,
+      specialties: metrics?.specialties ?? undefined,
+      lastActivity: metrics?.last_activity_at ? new Date(metrics.last_activity_at) : undefined,
+    }
+  })
+}
+
 /**
  * Modelo Operations Hub:
  * - case_applications.applicant_id → profiles.id  (identidad del postulante)
@@ -84,43 +124,33 @@ export const caseApplicationRepository = {
 
     if (error) throw error
 
+    return enrichApplications(
+      (data ?? []) as Array<CaseApplicationRow & { profiles: ProfileEmbed | ProfileEmbed[] | null }>,
+    )
+  },
+
+  /** Cola global de postulaciones pendientes (vista Postulaciones del GC). */
+  async listPendingQueue(): Promise<Array<CaseApplicationWithApplicant & { caseTitle?: string }>> {
+    const { data, error } = await supabase
+      .from('case_applications')
+      .select('*, profiles!case_applications_applicant_id_fkey(id, full_name, phone)')
+      .in('status', ['pending', 'under_review'])
+      .order('created_at', { ascending: false })
+      .limit(80)
+
+    if (error) throw error
+
     const rows = (data ?? []) as Array<CaseApplicationRow & { profiles: ProfileEmbed | ProfileEmbed[] | null }>
-    const applicantIds = [...new Set(rows.map((row) => row.applicant_id).filter(Boolean))]
-
-    const metricsByUserId = new Map<string, VolunteerMetricsRow>()
-    if (applicantIds.length > 0) {
-      const { data: volunteers, error: volunteersError } = await supabase
-        .from('volunteers')
-        .select(
-          'user_id, total_missions, completed_missions, service_hours, trust_score, avg_response_minutes, specialties, last_activity_at',
-        )
-        .in('user_id', applicantIds)
-
-      if (volunteersError) throw volunteersError
-      for (const volunteer of (volunteers ?? []) as VolunteerMetricsRow[]) {
-        metricsByUserId.set(volunteer.user_id, volunteer)
+    const apps = await enrichApplications(rows)
+    const caseIds = [...new Set(apps.map((a) => a.caseId))]
+    const titleByCase = new Map<string, string>()
+    if (caseIds.length > 0) {
+      const { data: cases } = await supabase.from('cases').select('id, title').in('id', caseIds)
+      for (const c of (cases ?? []) as Array<{ id: string; title: string }>) {
+        titleByCase.set(c.id, c.title)
       }
     }
-
-    return rows.map((row) => {
-      const app = mapRow(row)
-      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
-      const metrics = metricsByUserId.get(row.applicant_id)
-
-      return {
-        ...app,
-        applicantName: profile?.full_name?.trim() || 'Voluntario',
-        applicantPhone: profile?.phone ?? undefined,
-        applicantPhoto: undefined,
-        totalMissions: metrics?.total_missions ?? undefined,
-        completedMissions: metrics?.completed_missions ?? undefined,
-        serviceHours: metrics?.service_hours ?? undefined,
-        trustScore: metrics?.trust_score ?? undefined,
-        avgResponseMin: metrics?.avg_response_minutes ?? undefined,
-        specialties: metrics?.specialties ?? undefined,
-        lastActivity: metrics?.last_activity_at ? new Date(metrics.last_activity_at) : undefined,
-      }
-    })
+    return apps.map((a) => ({ ...a, caseTitle: titleByCase.get(a.caseId) }))
   },
 
   async apply(caseId: string, applicantId: string, params?: {

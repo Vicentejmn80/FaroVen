@@ -19,6 +19,10 @@ export const caseApplicationService = {
     return caseApplicationRepository.listByCase(caseId)
   },
 
+  async listPendingQueue() {
+    return caseApplicationRepository.listPendingQueue()
+  },
+
   async findByCaseAndApplicant(caseId: string, applicantId: string) {
     return caseApplicationRepository.findByCaseAndApplicant(caseId, applicantId)
   },

@@ -548,11 +548,134 @@ function ProfileSection() {
 }
 
 const TABS: Array<{ id: VolunteerTab; label: string }> = [
-  { id: 'available', label: 'Disponibles' },
-  { id: 'my-missions', label: 'Mis misiones' },
+  { id: 'available', label: 'Centro' },
+  { id: 'my-missions', label: 'Activas' },
   { id: 'history', label: 'Historial' },
   { id: 'profile', label: 'Perfil' },
 ]
+
+const ACTIVE_ASSIGNMENT_STATUSES = [
+  'assigned',
+  'accepted',
+  'preparing',
+  'en_route',
+  'on_site',
+  'in_progress',
+] as const
+
+function MissionCenterHome({ onExplore }: { onExplore: () => void }) {
+  const { data: profile } = useVolunteerProfile()
+  const { data: assignments = [] } = useVolunteerMissions(profile?.id ?? '')
+  const { data: allMissions } = useMissions()
+
+  const active = useMemo(
+    () => assignments.filter((a) => (ACTIVE_ASSIGNMENT_STATUSES as readonly string[]).includes(a.status)),
+    [assignments],
+  )
+  const pastCount = useMemo(
+    () => assignments.filter((a) => !(ACTIVE_ASSIGNMENT_STATUSES as readonly string[]).includes(a.status)).length,
+    [assignments],
+  )
+  const current = active[0]
+  const currentMission = useMemo(() => {
+    if (!current || !allMissions) return null
+    return allMissions.find((m) => m.id === current.missionId) ?? null
+  }, [current, allMissions])
+
+  const statusLabel = current
+    ? label(ASSIGNMENT_STATUS_LABELS, current.status, current.status)
+    : null
+
+  return (
+    <div className="space-y-4 pt-1">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <GlassCard className="!p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Misiones activas</p>
+          <AnimatedMetric value={active.length} />
+        </GlassCard>
+        <GlassCard className="!p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Historial</p>
+          <AnimatedMetric value={pastCount} />
+        </GlassCard>
+        <GlassCard className="!p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Horas</p>
+          <AnimatedMetric value={profile?.serviceHours ?? 0} suffix="h" />
+        </GlassCard>
+        <GlassCard className="!p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Impacto</p>
+          <AnimatedMetric value={profile?.completedMissions ?? 0} />
+        </GlassCard>
+        <GlassCard className="!p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Participación</p>
+          <AnimatedMetric value={profile?.trustScore ?? 0} suffix="%" />
+        </GlassCard>
+        <GlassCard className="!p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">Resp. promedio</p>
+          <p className="text-lg font-semibold tabular-nums text-ink">
+            {profile?.avgResponseMinutes != null ? `${profile.avgResponseMinutes}m` : '—'}
+          </p>
+        </GlassCard>
+      </div>
+
+      <GlassCard className="!border-info/20 !bg-info/[0.05] !p-4 space-y-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
+          Mi misión actual
+        </p>
+        {current && currentMission ? (
+          <>
+            <p className="text-base font-semibold text-ink">{currentMission.title}</p>
+            <div className="flex flex-wrap gap-3 text-xs text-ink-muted">
+              <span>
+                Estado · <span className="font-medium text-operational">{statusLabel}</span>
+              </span>
+              {currentMission.eta && (
+                <span>
+                  Llegada estimada ·{' '}
+                  {currentMission.eta.toLocaleTimeString('es-VE', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('faro:open-immersive-mission', {
+                    detail: { assignmentId: current.id },
+                  }),
+                )
+              }
+              className="w-full rounded-2xl bg-info py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(10,132,255,0.35)]"
+            >
+              Continuar misión
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-ink">No tienes misiones activas</p>
+            <p className="text-xs text-ink-muted">
+              Explora necesidades abiertas y postúlate para ayudar.
+            </p>
+            <button
+              type="button"
+              onClick={onExplore}
+              className="w-full rounded-2xl border border-info/40 bg-info/10 py-2.5 text-sm font-medium text-info"
+            >
+              Explorar necesidades
+            </button>
+          </>
+        )}
+      </GlassCard>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Necesidades abiertas</h2>
+        <AvailableMissions />
+      </div>
+    </div>
+  )
+}
 
 /**
  * Overlay global: si hay misión en curso, invade toda la app del voluntario
@@ -797,7 +920,7 @@ export function VolunteerWorkspace({
       <header className="flex shrink-0 items-center justify-between px-4 pt-safe pb-3 lg:px-8">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO</p>
-          <h1 className="text-lg font-semibold text-ink">Voluntarios</h1>
+          <h1 className="text-lg font-semibold text-ink">Mi Centro de Misiones</h1>
         </div>
       </header>
 
@@ -822,13 +945,11 @@ export function VolunteerWorkspace({
 
       <div className="faro-scroll px-4 pb-6 lg:pb-8">
         {tab === 'available' && (
-          <div className="space-y-4 pt-2">
-            <h2 className="text-sm font-semibold text-ink">Necesidades disponibles</h2>
-            <p className="text-xs text-ink-subtle">
-              Solo aparecen convocatorias abiertas por el gestor de casos. Cuando una misión se completa, desaparece de aquí.
-            </p>
-            <AvailableMissions />
-          </div>
+          <MissionCenterHome onExplore={() => {
+            /* scroll to needs below — already on center; jump to needs section via my-missions explore */
+            const el = document.getElementById('volunteer-explore-needs')
+            el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }} />
         )}
         {tab === 'my-missions' && <div className="pt-2"><MyMissions /></div>}
         {tab === 'history' && <div className="pt-2"><VolunteerHistory /></div>}

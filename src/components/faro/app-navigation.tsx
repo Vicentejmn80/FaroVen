@@ -2,15 +2,18 @@ import { motion } from 'framer-motion'
 import {
   BookOpen,
   Building2,
+  CheckCircle2,
   ClipboardCheck,
   FileText,
   Handshake,
   HeartHandshake,
+  Inbox,
   Map,
   Plus,
   Settings2,
   Shield,
   User,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { FaroIcon } from '@/components/brand/faro-icon'
@@ -26,6 +29,7 @@ import {
 
 /**
  * Vistas del shell (navegación manual, sin react-router).
+ * GC: case-manager | map | applications | success | profile
  * Voluntario: map | needs | collaborations | profile
  */
 export type TabId =
@@ -38,6 +42,8 @@ export type TabId =
   | 'profile'
   | 'ops'
   | 'case-manager'
+  | 'applications'
+  | 'success'
   | 'admin'
   | 'system'
 
@@ -55,16 +61,29 @@ const CITIZEN_BASE: NavTab[] = [
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
-/** Navegación voluntario — una vista distinta por ítem. */
+/** Navegación voluntario — Mi Centro de Misiones. */
 const VOLUNTEER_TABS: NavTab[] = [
   { id: 'map', label: 'Mapa', icon: Map },
-  { id: 'needs', label: 'Necesidades', icon: HeartHandshake },
-  { id: 'collaborations', label: 'Colaboraciones', icon: Handshake },
+  { id: 'needs', label: 'Misiones', icon: HeartHandshake },
+  { id: 'collaborations', label: 'Historial', icon: Handshake },
+  { id: 'profile', label: 'Perfil', icon: User },
+]
+
+/** Gestor: 4 vistas operativas + perfil. Sin Reportar. */
+const CASE_MANAGER_TABS: NavTab[] = [
+  { id: 'case-manager', label: 'Bandeja', icon: Inbox },
+  { id: 'map', label: 'Operaciones', icon: ClipboardCheck },
+  { id: 'applications', label: 'Postulaciones', icon: Users },
+  { id: 'success', label: 'Éxito', icon: CheckCircle2 },
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
 function isVolunteerRole(role: FaroRole): boolean {
   return role === FARO_ROLES.VOLUNTEER
+}
+
+function isCaseManagerRole(role: FaroRole): boolean {
+  return role === FARO_ROLES.CASE_MANAGER
 }
 
 /** Normaliza aliases legacy (home → needs). */
@@ -80,13 +99,24 @@ export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab
     return [...VOLUNTEER_TABS]
   }
 
+  if (isCaseManagerRole(role)) {
+    const tabs = [...CASE_MANAGER_TABS]
+    if (canAccessAdminPanel(role)) {
+      tabs.push({ id: 'admin', label: 'Administración', icon: Shield })
+    }
+    if (canAccessSystemPanel(role, email)) {
+      tabs.push({ id: 'system', label: 'Sistema', icon: Settings2 })
+    }
+    return tabs
+  }
+
   const tabs = [...CITIZEN_BASE]
 
   if (canAccessCoordinatorPanel(role)) {
     tabs.splice(1, 0, { id: 'ops', label: 'Mi Centro', icon: Building2 })
   }
 
-  if (canAccessCaseManagerPanel(role)) {
+  if (canAccessCaseManagerPanel(role) && role !== FARO_ROLES.CASE_MANAGER) {
     tabs.splice(1, 0, { id: 'case-manager', label: 'Gestor', icon: ClipboardCheck })
   }
 
@@ -101,19 +131,16 @@ export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab
   return tabs
 }
 
-/** Tabs primarios móviles según rol (máx. 4 + FAB). */
+/** Tabs primarios móviles según rol (máx. 5 + FAB para GC). */
 export function getMobilePrimaryTabs(role: FaroRole, email?: string | null): NavTab[] {
-  const tabs = getNavigationTabs(role, email)
-  if (isVolunteerRole(role)) return tabs.slice(0, 4)
+  if (isVolunteerRole(role)) return getNavigationTabs(role, email).slice(0, 4)
 
-  if (canAccessCaseManagerPanel(role)) {
-    const manager = tabs.find((t) => t.id === 'case-manager')
-    const map = tabs.find((t) => t.id === 'map')
-    const reports = tabs.find((t) => t.id === 'reports')
-    const profile = tabs.find((t) => t.id === 'profile')
-    return [manager, map, reports, profile].filter(Boolean) as NavTab[]
+  if (isCaseManagerRole(role)) {
+    // Bandeja | Operaciones | Postulaciones | Éxito — Perfil en rail / 5º si cabe
+    return CASE_MANAGER_TABS.slice(0, 5)
   }
 
+  const tabs = getNavigationTabs(role, email)
   const baseIds = new Set(CITIZEN_BASE.map((t) => t.id))
   const primary = tabs.filter((t) => baseIds.has(t.id)).slice(0, 4)
   return primary.length === 4 ? primary : CITIZEN_BASE
@@ -150,9 +177,10 @@ export function BottomNavigation({
   createLabel = 'Acciones',
   mobileTabs = CITIZEN_BASE,
 }: Omit<NavigationProps, 'tabs'> & { mobileTabs?: NavTab[] }) {
-  const primary = mobileTabs.slice(0, 4)
-  const left = primary.slice(0, 2)
-  const right = primary.slice(2)
+  const primary = mobileTabs.slice(0, 5)
+  const leftCount = Math.min(2, Math.ceil(primary.length / 2))
+  const left = primary.slice(0, leftCount)
+  const right = primary.slice(leftCount)
   const activeView = normalizeTabId(active) ?? active
 
   return (
@@ -215,13 +243,19 @@ export function BottomNavigation({
 function shortMobileLabel(tab: NavTab): string {
   switch (tab.id) {
     case 'needs':
-      return 'Ayuda'
+      return 'Misiones'
     case 'collaborations':
-      return 'Mías'
+      return 'Historial'
     case 'activity':
       return 'Guía'
     case 'case-manager':
-      return 'Gestor'
+      return 'Bandeja'
+    case 'map':
+      return tab.label === 'Operaciones' ? 'Ops' : 'Mapa'
+    case 'applications':
+      return 'Postula'
+    case 'success':
+      return 'Éxito'
     case 'reports':
       return 'Reportar'
     default:

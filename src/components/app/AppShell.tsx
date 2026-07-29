@@ -95,6 +95,12 @@ const CreateCaseForm = lazyWithRetry(() =>
 const CaseManagerWorkspace = lazyWithRetry(() =>
   import('@/components/case-manager/case-manager-workspace').then((m) => ({ default: m.CaseManagerWorkspace })),
 )
+const GcApplicationsQueue = lazyWithRetry(() =>
+  import('@/components/case-manager/gc-applications-queue').then((m) => ({ default: m.GcApplicationsQueue })),
+)
+const SuccessCasesPanelLazy = lazyWithRetry(() =>
+  import('@/components/shared/success-cases-panel').then((m) => ({ default: m.SuccessCasesPanel })),
+)
 const RoleRequestForm = lazyWithRetry(() =>
   import('@/components/role-request/role-request-form').then((m) => ({ default: m.RoleRequestForm })),
 )
@@ -145,7 +151,9 @@ export function AppShell() {
   const { session, user, pendingAuthIntent, clearPendingAuthIntent, refreshProfile, simulatedRole, setSimulatedRole } = useAuth()
   const { assignment } = useCoordinatorAssignment()
   const { cachedAt, state } = useFaro()
-  const [activeView, setActiveViewState] = useState<TabId>(isVolunteer ? 'needs' : 'map')
+  const [activeView, setActiveViewState] = useState<TabId>(
+    isVolunteer ? 'needs' : role === FARO_ROLES.CASE_MANAGER ? 'case-manager' : 'map',
+  )
   const [flow, setFlow] = useState<FlowId | null>(null)
   const [needPresetSiteId, setNeedPresetSiteId] = useState<string | undefined>()
   const [detailSite, setDetailSite] = useState<Site | null>(null)
@@ -169,7 +177,11 @@ export function AppShell() {
   const mobileTabs = useMemo(() => getMobilePrimaryTabs(role, user?.email), [role, user?.email])
   const isCoordinatorOps = canAccessCoordinatorPanel
   const isCaseManager = role === FARO_ROLES.CASE_MANAGER
-  const defaultTab: TabId = isVolunteer ? 'needs' : 'map'
+  const defaultTab: TabId = isVolunteer
+    ? 'needs'
+    : isCaseManager
+      ? 'case-manager'
+      : 'map'
   const { data: inboxReports = [] } = useReports()
   const pendingReportCount = useMemo(
     () => (isCaseManager ? inboxReports.filter((r) => r.status === 'new').length : 0),
@@ -865,9 +877,17 @@ function ShellActiveView({
       return <VolunteerWorkspace initialTab="available" />
 
     case 'collaborations':
-      return <VolunteerWorkspace initialTab="my-missions" />
+      return <VolunteerWorkspace initialTab="history" />
 
     case 'reports':
+      // El Gestor no crea reportes ciudadanos — redirigir a Bandeja
+      if (role === FARO_ROLES.CASE_MANAGER) {
+        return (
+          <RequireRole allowed={[FARO_ROLES.CASE_MANAGER]} onRequestAuth={onRequestAuth}>
+            <CaseManagerWorkspace section="inbox" />
+          </RequireRole>
+        )
+      }
       return <ReportsScreen />
 
     case 'activity':
@@ -907,7 +927,29 @@ function ShellActiveView({
     case 'case-manager':
       return (
         <RequireRole allowed={[FARO_ROLES.CASE_MANAGER]} onRequestAuth={onRequestAuth}>
-          <CaseManagerWorkspace />
+          <CaseManagerWorkspace section="inbox" />
+        </RequireRole>
+      )
+
+    case 'applications':
+      return (
+        <RequireRole allowed={[FARO_ROLES.CASE_MANAGER]} onRequestAuth={onRequestAuth}>
+          <GcApplicationsQueue />
+        </RequireRole>
+      )
+
+    case 'success':
+      return (
+        <RequireRole allowed={[FARO_ROLES.CASE_MANAGER]} onRequestAuth={onRequestAuth}>
+          <div className="flex h-full min-h-0 flex-col">
+            <header className="shrink-0 px-4 pt-safe pb-3 lg:px-8">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO · Gestor</p>
+              <h1 className="text-lg font-semibold text-ink">Casos de éxito</h1>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-nav">
+              <SuccessCasesPanelLazy emptyDescription="Cuando valides una misión completada, el caso aparecerá aquí." />
+            </div>
+          </div>
         </RequireRole>
       )
 
