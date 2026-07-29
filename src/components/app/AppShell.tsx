@@ -48,6 +48,7 @@ import { PendingRoleBanner } from '@/components/auth/pending-role-banner'
 import { useReports } from '@/hooks/useReports'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
+import { CreateCaseHintSheet } from '@/components/case-manager/create-case-hint-sheet'
 
 type FlowId =
   | ActionId
@@ -155,6 +156,7 @@ export function AppShell() {
     isVolunteer ? 'needs' : role === FARO_ROLES.CASE_MANAGER ? 'case-manager' : 'map',
   )
   const [flow, setFlow] = useState<FlowId | null>(null)
+  const [createCaseHintOpen, setCreateCaseHintOpen] = useState(false)
   const [needPresetSiteId, setNeedPresetSiteId] = useState<string | undefined>()
   const [detailSite, setDetailSite] = useState<Site | null>(null)
   const [hubOpen, setHubOpen] = useState(false)
@@ -388,6 +390,11 @@ export function AppShell() {
       return
     }
     if (action === 'create-case') {
+      closeFlow()
+      if (role === FARO_ROLES.CASE_MANAGER) {
+        setCreateCaseHintOpen(true)
+        return
+      }
       openFlow('create-case')
       return
     }
@@ -537,9 +544,9 @@ export function AppShell() {
         <DesktopNavigation
           active={activeView}
           onChange={setActiveView}
-          onCreate={openMenu}
+          onCreate={isCaseManager ? () => setCreateCaseHintOpen(true) : openMenu}
           tabs={tabsWithBadges}
-          createLabel={fabContext.label}
+          createLabel={isCaseManager ? 'Crear caso manual' : fabContext.label}
           compactCreate={isCaseManager}
         />
 
@@ -550,9 +557,7 @@ export function AppShell() {
             onNotifications={handleNotifications}
             connectionState={network.state}
             connectionLabel={network.label}
-            onCreate={isCaseManager ? () => openFlow('create-case') : undefined}
-            createLabel="Crear solicitud"
-            onProfile={isCaseManager ? () => setActiveView('profile') : undefined}
+            showHelp={activeView === 'profile'}
           />
           <ConnectionBanner state={network.state} label={network.label} cachedAt={cachedAt} />
 
@@ -635,12 +640,17 @@ export function AppShell() {
           <BottomNavigation
             active={activeView}
             onChange={setActiveView}
-            onCreate={isCaseManager ? undefined : openMenu}
+            onCreate={isCaseManager ? () => setCreateCaseHintOpen(true) : openMenu}
             mobileTabs={mobileTabsWithBadges}
-            createLabel={fabContext.label}
-            flat={isCaseManager}
+            createLabel={isCaseManager ? 'Crear caso manual' : fabContext.label}
           />
         </div>
+
+        <CreateCaseHintSheet
+          open={createCaseHintOpen && isCaseManager}
+          onClose={() => setCreateCaseHintOpen(false)}
+          onConfirm={() => openFlow('create-case')}
+        />
 
         <AnimatePresence>
           {flow === 'menu' && (
@@ -949,7 +959,7 @@ function ShellActiveView({
           <div className="flex h-full min-h-0 flex-col">
             <header className="shrink-0 px-4 pt-safe pb-3 lg:px-8">
               <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO · Gestor</p>
-              <h1 className="text-lg font-semibold text-ink">Casos de éxito</h1>
+              <h1 className="text-lg font-semibold text-ink">Historial de éxito</h1>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-nav">
               <SuccessCasesPanelLazy emptyDescription="Cuando valides una misión completada, el caso aparecerá aquí." />

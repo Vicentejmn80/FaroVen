@@ -345,7 +345,7 @@ export function OperationsHub() {
           isVerifying={verifyMutation.isPending}
         />
 
-        {selectedCase && (
+        {radarOpen && selectedCase && (
           <EsperarPostulanteModal
             caseData={selectedCase}
             open={radarOpen}

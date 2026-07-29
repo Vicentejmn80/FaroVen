@@ -24,7 +24,7 @@ interface CenterGeoRow {
   address: string | null
   latitude: number | null
   longitude: number | null
-  operational_mode: string | null
+  operational_mode?: string | null
 }
 
 function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
@@ -42,9 +42,13 @@ function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 async function fetchCenterGeo(centerIds: string[]): Promise<Map<string, { name: string; address?: string; lat: number; lng: number; siteType: RegisterSiteType; operationalMode: string }>> {
   const map = new Map<string, { name: string; address?: string; lat: number; lng: number; siteType: RegisterSiteType; operationalMode: string }>()
-  if (centerIds.length === 0) return map
+  // Solo UUIDs válidos: ids no-UUID / enteros legacy provocan 400 en PostgREST.
+  const uuidIds = [...new Set(centerIds.filter((id) => UUID_RE.test(id)))]
+  if (uuidIds.length === 0) return map
 
   const tables: Array<{ table: string; siteType: RegisterSiteType }> = [
     { table: 'hospitals', siteType: 'hospital' },
@@ -53,17 +57,32 @@ async function fetchCenterGeo(centerIds: string[]): Promise<Map<string, { name: 
   ]
 
   for (const { table, siteType } of tables) {
-    const { data } = await supabase
+    let rows: CenterGeoRow[] = []
+
+    const withMode = await supabase
       .from(table)
       .select('id, name, address, latitude, longitude, operational_mode')
-      .in('id', centerIds)
-    for (const row of (data ?? []) as CenterGeoRow[]) {
+      .in('id', uuidIds)
+
+    if (withMode.error) {
+      // Fallback si operational_mode no existe aún en prod
+      const fallback = await supabase
+        .from(table)
+        .select('id, name, address, latitude, longitude')
+        .in('id', uuidIds)
+      if (fallback.error) continue
+      rows = (fallback.data ?? []) as CenterGeoRow[]
+    } else {
+      rows = (withMode.data ?? []) as CenterGeoRow[]
+    }
+
+    for (const row of rows) {
       if (row.latitude == null || row.longitude == null) continue
       map.set(row.id, {
         name: row.name,
         address: row.address ?? undefined,
-        lat: row.latitude,
-        lng: row.longitude,
+        lat: Number(row.latitude),
+        lng: Number(row.longitude),
         siteType,
         operationalMode: row.operational_mode ?? 'active',
       })

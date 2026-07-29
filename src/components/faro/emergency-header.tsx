@@ -1,4 +1,4 @@
-import { Bell, CircleHelp, Plus, User } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ConnectivityIndicator } from './live-indicator'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -9,9 +9,13 @@ import type { ConnectionState } from '@/hooks/useNetworkStatus'
 interface EmergencyHeaderProps {
   notifications?: number
   onNotifications?: () => void
+  /** @deprecated Crear caso vive en el FAB; se ignora. */
   onCreate?: () => void
   createLabel?: string
+  /** @deprecated Perfil vive en el navbar; se ignora. */
   onProfile?: () => void
+  /** Solo mostrar ayuda (FAQ) en la vista Perfil. */
+  showHelp?: boolean
   connectionState?: ConnectionState
   connectionLabel?: string
   className?: string
@@ -29,9 +33,7 @@ function FaroWordmark() {
 export function EmergencyHeader({
   notifications = 0,
   onNotifications,
-  onCreate,
-  createLabel = 'Crear',
-  onProfile,
+  showHelp = false,
   connectionState = 'online',
   connectionLabel = 'En linea',
   className,
@@ -50,27 +52,17 @@ export function EmergencyHeader({
       <FaroWordmark />
       <div className="flex items-center gap-1.5">
         <ConnectivityIndicator state={connectionState} label={connectionLabel} />
-        {onCreate && (
+        {showHelp && (
           <EmergencyButton
             variant="glass"
             size="icon"
-            onClick={onCreate}
-            aria-label={createLabel}
-            title={createLabel}
-            className="lg:hidden"
+            onClick={openHelp}
+            aria-label="¿Cómo funciona FARO?"
+            title="¿Cómo funciona FARO?"
           >
-            <Plus className="h-[18px] w-[18px]" strokeWidth={2} />
+            <span className="text-[15px] font-semibold leading-none text-ink-muted">?</span>
           </EmergencyButton>
         )}
-        <EmergencyButton
-          variant="glass"
-          size="icon"
-          onClick={openHelp}
-          aria-label="¿Cómo funciona FARO?"
-          title="¿Cómo funciona FARO?"
-        >
-          <CircleHelp className="h-[18px] w-[18px]" strokeWidth={1.75} />
-        </EmergencyButton>
         <EmergencyButton
           variant="glass"
           size="icon"
@@ -98,18 +90,6 @@ export function EmergencyHeader({
             )}
           </AnimatePresence>
         </EmergencyButton>
-        {onProfile && (
-          <EmergencyButton
-            variant="glass"
-            size="icon"
-            onClick={onProfile}
-            aria-label="Perfil"
-            title="Perfil"
-            className="lg:hidden"
-          >
-            <User className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          </EmergencyButton>
-        )}
       </div>
     </header>
   )

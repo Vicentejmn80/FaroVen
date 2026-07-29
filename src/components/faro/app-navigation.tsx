@@ -2,15 +2,14 @@ import { motion } from 'framer-motion'
 import {
   BookOpen,
   Building2,
-  CheckCircle2,
   ClipboardCheck,
   FileText,
   Handshake,
   HeartHandshake,
+  History,
   Inbox,
   Map,
   Plus,
-  Radar,
   Settings2,
   Shield,
   User,
@@ -29,7 +28,7 @@ import {
 
 /**
  * Vistas del shell (navegación manual, sin react-router).
- * GC: case-manager | map | applications | success | profile
+ * GC: case-manager | map | success | profile  (radar solo desde ficha del caso)
  */
 export type TabId =
   | 'map'
@@ -67,21 +66,20 @@ const VOLUNTEER_TABS: NavTab[] = [
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
-/** Desktop rail: 4 vistas + perfil. */
+/** Desktop rail: Bandeja · Ops · Historial · Perfil. Radar solo desde ficha del caso. */
 const CASE_MANAGER_TABS: NavTab[] = [
   { id: 'case-manager', label: 'Bandeja', icon: Inbox },
   { id: 'map', label: 'Operaciones', icon: ClipboardCheck },
-  { id: 'applications', label: 'Radar', icon: Radar },
-  { id: 'success', label: 'Éxito', icon: CheckCircle2 },
+  { id: 'success', label: 'Historial', icon: History },
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
-/** Móvil: 4 tabs iguales, sin FAB central. Perfil vive en el header. */
+/** Móvil: 4 tabs + FAB central (crear caso manual). */
 const CASE_MANAGER_MOBILE: NavTab[] = [
   { id: 'case-manager', label: 'Bandeja', icon: Inbox },
   { id: 'map', label: 'Ops', icon: ClipboardCheck },
-  { id: 'applications', label: 'Radar', icon: Radar },
-  { id: 'success', label: 'Éxito', icon: CheckCircle2 },
+  { id: 'success', label: 'Historial', icon: History },
+  { id: 'profile', label: 'Perfil', icon: User },
 ]
 
 function isVolunteerRole(role: FaroRole): boolean {
@@ -95,6 +93,7 @@ function isCaseManagerRole(role: FaroRole): boolean {
 export function normalizeTabId(tab: TabId | string | null | undefined): TabId | null {
   if (!tab) return null
   if (tab === 'home') return 'needs'
+  if (tab === 'applications') return 'map'
   return tab as TabId
 }
 
@@ -157,44 +156,20 @@ interface NavigationProps {
   tabs: NavTab[]
   createLabel?: string
   mobileTabs?: NavTab[]
-  /** Sin botón central — barra plana (Gestor). */
+  /** @deprecated GC vuelve a FAB central; se ignora. */
   flat?: boolean
 }
 
-/** Mobile bottom bar */
+/** Mobile bottom bar — 4 tabs + FAB central */
 export function BottomNavigation({
   active,
   onChange,
   onCreate,
   createLabel = 'Acciones',
   mobileTabs = CITIZEN_BASE,
-  flat = false,
 }: Omit<NavigationProps, 'tabs'> & { mobileTabs?: NavTab[]; flat?: boolean }) {
-  const primary = mobileTabs.slice(0, flat ? 4 : 5)
+  const primary = mobileTabs.slice(0, 4)
   const activeView = normalizeTabId(active) ?? active
-
-  if (flat) {
-    return (
-      <nav className="relative z-50 w-full shrink-0 lg:hidden" aria-label="Navegación principal">
-        <div className="border-t border-white/[0.06] bg-[#060b16]/96 backdrop-blur-2xl">
-          <div className="grid grid-cols-4 gap-0 px-1 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
-            {primary.map((t) => (
-              <NavButton
-                key={t.id}
-                {...t}
-                label={shortMobileLabel(t)}
-                active={activeView === t.id}
-                onClick={() => onChange(t.id)}
-                compact
-                flat
-              />
-            ))}
-          </div>
-        </div>
-      </nav>
-    )
-  }
-
   const left = primary.slice(0, 2)
   const right = primary.slice(2)
 
@@ -264,10 +239,10 @@ function shortMobileLabel(tab: NavTab): string {
       return 'Bandeja'
     case 'map':
       return tab.label === 'Operaciones' || tab.label === 'Ops' ? 'Ops' : 'Mapa'
-    case 'applications':
-      return 'Radar'
     case 'success':
-      return 'Éxito'
+      return 'Historial'
+    case 'profile':
+      return 'Perfil'
     case 'reports':
       return 'Reportar'
     default:
@@ -334,7 +309,6 @@ function NavButton({
   onClick,
   rail,
   badge,
-  flat,
 }: {
   label: string
   icon: LucideIcon
@@ -343,7 +317,6 @@ function NavButton({
   compact?: boolean
   rail?: boolean
   badge?: number
-  flat?: boolean
 }) {
   if (rail) {
     return (
@@ -378,15 +351,12 @@ function NavButton({
       onClick={onClick}
       className={cn(
         'relative flex h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40',
-        flat ? 'max-w-none' : 'max-w-[4.75rem] sm:max-w-none sm:min-w-[56px]',
-        active && !flat && 'bg-white/[0.08]',
+        'max-w-[4.75rem] sm:max-w-none sm:min-w-[56px]',
+        active && 'bg-white/[0.08]',
       )}
       aria-current={active ? 'page' : undefined}
       title={label}
     >
-      {flat && active && (
-        <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-info" aria-hidden />
-      )}
       <span className="relative">
         <Icon
           className={cn('h-[20px] w-[20px]', active ? 'text-info' : 'text-ink-muted')}
