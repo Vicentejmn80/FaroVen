@@ -540,6 +540,7 @@ export function AppShell() {
           onCreate={openMenu}
           tabs={tabsWithBadges}
           createLabel={fabContext.label}
+          compactCreate={isCaseManager}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -549,6 +550,9 @@ export function AppShell() {
             onNotifications={handleNotifications}
             connectionState={network.state}
             connectionLabel={network.label}
+            onCreate={isCaseManager ? () => openFlow('create-case') : undefined}
+            createLabel="Crear solicitud"
+            onProfile={isCaseManager ? () => setActiveView('profile') : undefined}
           />
           <ConnectionBanner state={network.state} label={network.label} cachedAt={cachedAt} />
 
@@ -631,9 +635,10 @@ export function AppShell() {
           <BottomNavigation
             active={activeView}
             onChange={setActiveView}
-            onCreate={openMenu}
+            onCreate={isCaseManager ? undefined : openMenu}
             mobileTabs={mobileTabsWithBadges}
             createLabel={fabContext.label}
+            flat={isCaseManager}
           />
         </div>
 

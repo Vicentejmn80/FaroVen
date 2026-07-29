@@ -10,10 +10,10 @@ import {
   Inbox,
   Map,
   Plus,
+  Radar,
   Settings2,
   Shield,
   User,
-  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { FaroIcon } from '@/components/brand/faro-icon'
@@ -30,13 +30,12 @@ import {
 /**
  * Vistas del shell (navegación manual, sin react-router).
  * GC: case-manager | map | applications | success | profile
- * Voluntario: map | needs | collaborations | profile
  */
 export type TabId =
   | 'map'
   | 'needs'
   | 'collaborations'
-  | 'home' // alias legacy → needs
+  | 'home'
   | 'reports'
   | 'activity'
   | 'profile'
@@ -61,7 +60,6 @@ const CITIZEN_BASE: NavTab[] = [
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
-/** Navegación voluntario — Mi Centro de Misiones. */
 const VOLUNTEER_TABS: NavTab[] = [
   { id: 'map', label: 'Mapa', icon: Map },
   { id: 'needs', label: 'Misiones', icon: HeartHandshake },
@@ -69,13 +67,21 @@ const VOLUNTEER_TABS: NavTab[] = [
   { id: 'profile', label: 'Perfil', icon: User },
 ]
 
-/** Gestor: 4 vistas operativas + perfil. Sin Reportar. */
+/** Desktop rail: 4 vistas + perfil. */
 const CASE_MANAGER_TABS: NavTab[] = [
   { id: 'case-manager', label: 'Bandeja', icon: Inbox },
   { id: 'map', label: 'Operaciones', icon: ClipboardCheck },
-  { id: 'applications', label: 'Postulaciones', icon: Users },
+  { id: 'applications', label: 'Radar', icon: Radar },
   { id: 'success', label: 'Éxito', icon: CheckCircle2 },
   { id: 'profile', label: 'Perfil', icon: User },
+]
+
+/** Móvil: 4 tabs iguales, sin FAB central. Perfil vive en el header. */
+const CASE_MANAGER_MOBILE: NavTab[] = [
+  { id: 'case-manager', label: 'Bandeja', icon: Inbox },
+  { id: 'map', label: 'Ops', icon: ClipboardCheck },
+  { id: 'applications', label: 'Radar', icon: Radar },
+  { id: 'success', label: 'Éxito', icon: CheckCircle2 },
 ]
 
 function isVolunteerRole(role: FaroRole): boolean {
@@ -86,18 +92,14 @@ function isCaseManagerRole(role: FaroRole): boolean {
   return role === FARO_ROLES.CASE_MANAGER
 }
 
-/** Normaliza aliases legacy (home → needs). */
 export function normalizeTabId(tab: TabId | string | null | undefined): TabId | null {
   if (!tab) return null
   if (tab === 'home') return 'needs'
   return tab as TabId
 }
 
-/** Tabs completos — rail lateral en desktop */
 export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab[] {
-  if (isVolunteerRole(role)) {
-    return [...VOLUNTEER_TABS]
-  }
+  if (isVolunteerRole(role)) return [...VOLUNTEER_TABS]
 
   if (isCaseManagerRole(role)) {
     const tabs = [...CASE_MANAGER_TABS]
@@ -111,34 +113,24 @@ export function getNavigationTabs(role: FaroRole, email?: string | null): NavTab
   }
 
   const tabs = [...CITIZEN_BASE]
-
   if (canAccessCoordinatorPanel(role)) {
     tabs.splice(1, 0, { id: 'ops', label: 'Mi Centro', icon: Building2 })
   }
-
   if (canAccessCaseManagerPanel(role) && role !== FARO_ROLES.CASE_MANAGER) {
     tabs.splice(1, 0, { id: 'case-manager', label: 'Gestor', icon: ClipboardCheck })
   }
-
   if (canAccessAdminPanel(role)) {
     tabs.push({ id: 'admin', label: 'Administración', icon: Shield })
   }
-
   if (canAccessSystemPanel(role, email)) {
     tabs.push({ id: 'system', label: 'Sistema', icon: Settings2 })
   }
-
   return tabs
 }
 
-/** Tabs primarios móviles según rol (máx. 5 + FAB para GC). */
 export function getMobilePrimaryTabs(role: FaroRole, email?: string | null): NavTab[] {
   if (isVolunteerRole(role)) return getNavigationTabs(role, email).slice(0, 4)
-
-  if (isCaseManagerRole(role)) {
-    // Bandeja | Operaciones | Postulaciones | Éxito — Perfil en rail / 5º si cabe
-    return CASE_MANAGER_TABS.slice(0, 5)
-  }
+  if (isCaseManagerRole(role)) return [...CASE_MANAGER_MOBILE]
 
   const tabs = getNavigationTabs(role, email)
   const baseIds = new Set(CITIZEN_BASE.map((t) => t.id))
@@ -146,13 +138,11 @@ export function getMobilePrimaryTabs(role: FaroRole, email?: string | null): Nav
   return primary.length === 4 ? primary : CITIZEN_BASE
 }
 
-/** @deprecated Usar getMobilePrimaryTabs(role) */
+/** @deprecated */
 export const MOBILE_PRIMARY_TABS: NavTab[] = CITIZEN_BASE
-
-/** @deprecated Usar getNavigationTabs(role) */
+/** @deprecated */
 export const CITIZEN_TABS = CITIZEN_BASE
-
-/** @deprecated Usar getNavigationTabs(role) */
+/** @deprecated */
 export const COORDINATOR_TABS: NavTab[] = [
   { id: 'ops', label: 'Panel', icon: Building2 },
   { id: 'map', label: 'Centros', icon: Map },
@@ -167,29 +157,51 @@ interface NavigationProps {
   tabs: NavTab[]
   createLabel?: string
   mobileTabs?: NavTab[]
+  /** Sin botón central — barra plana (Gestor). */
+  flat?: boolean
 }
 
-/** Mobile — barra inferior en el flujo del layout (evita saltos de 100vh / URL bar) */
+/** Mobile bottom bar */
 export function BottomNavigation({
   active,
   onChange,
   onCreate,
   createLabel = 'Acciones',
   mobileTabs = CITIZEN_BASE,
-}: Omit<NavigationProps, 'tabs'> & { mobileTabs?: NavTab[] }) {
-  const primary = mobileTabs.slice(0, 5)
-  const leftCount = Math.min(2, Math.ceil(primary.length / 2))
-  const left = primary.slice(0, leftCount)
-  const right = primary.slice(leftCount)
+  flat = false,
+}: Omit<NavigationProps, 'tabs'> & { mobileTabs?: NavTab[]; flat?: boolean }) {
+  const primary = mobileTabs.slice(0, flat ? 4 : 5)
   const activeView = normalizeTabId(active) ?? active
 
+  if (flat) {
+    return (
+      <nav className="relative z-50 w-full shrink-0 lg:hidden" aria-label="Navegación principal">
+        <div className="border-t border-white/[0.06] bg-[#060b16]/96 backdrop-blur-2xl">
+          <div className="grid grid-cols-4 gap-0 px-1 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
+            {primary.map((t) => (
+              <NavButton
+                key={t.id}
+                {...t}
+                label={shortMobileLabel(t)}
+                active={activeView === t.id}
+                onClick={() => onChange(t.id)}
+                compact
+                flat
+              />
+            ))}
+          </div>
+        </div>
+      </nav>
+    )
+  }
+
+  const left = primary.slice(0, 2)
+  const right = primary.slice(2)
+
   return (
-    <nav
-      className="relative z-50 w-full shrink-0 lg:hidden"
-      aria-label="Navegación principal"
-    >
+    <nav className="relative z-50 w-full shrink-0 lg:hidden" aria-label="Navegación principal">
       <div className="border-t border-white/[0.1] bg-[#060b16]/98 backdrop-blur-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.45)]">
-        <div className="flex w-full items-end justify-between gap-0.5 overflow-x-auto no-scrollbar px-1 pt-1 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+        <div className="flex w-full items-end justify-between gap-0.5 px-1 pt-1 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
           <div className="flex min-w-0 flex-1 justify-around">
             {left.map((t) => (
               <NavButton
@@ -251,9 +263,9 @@ function shortMobileLabel(tab: NavTab): string {
     case 'case-manager':
       return 'Bandeja'
     case 'map':
-      return tab.label === 'Operaciones' ? 'Ops' : 'Mapa'
+      return tab.label === 'Operaciones' || tab.label === 'Ops' ? 'Ops' : 'Mapa'
     case 'applications':
-      return 'Postula'
+      return 'Radar'
     case 'success':
       return 'Éxito'
     case 'reports':
@@ -263,17 +275,24 @@ function shortMobileLabel(tab: NavTab): string {
   }
 }
 
-/** Desktop — rail lateral estático */
-export function DesktopNavigation({ active, onChange, onCreate, tabs, createLabel = 'Acciones' }: NavigationProps) {
+/** Desktop rail — create discreto */
+export function DesktopNavigation({
+  active,
+  onChange,
+  onCreate,
+  tabs,
+  createLabel = 'Acciones',
+  compactCreate = false,
+}: NavigationProps & { compactCreate?: boolean }) {
   const activeView = normalizeTabId(active) ?? active
 
   return (
-    <aside className="hidden w-[88px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-base-800/50 py-5 lg:flex">
-      <div className="mb-6">
-        <FaroIcon size={28} title="FARO" />
+    <aside className="hidden w-[80px] shrink-0 flex-col items-center border-r border-white/[0.06] bg-base-800/40 py-5 lg:flex">
+      <div className="mb-5">
+        <FaroIcon size={26} title="FARO" />
       </div>
 
-      <nav className="flex flex-1 flex-col items-center gap-1" aria-label="Navegación principal">
+      <nav className="flex flex-1 flex-col items-center gap-0.5" aria-label="Navegación principal">
         {tabs.map((t) => (
           <NavButton
             key={t.id}
@@ -291,12 +310,18 @@ export function DesktopNavigation({ active, onChange, onCreate, tabs, createLabe
           onClick={onCreate}
           whileTap={{ scale: 0.94 }}
           aria-label={createLabel}
-          className="mt-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-info text-white shadow-focal"
+          title={createLabel}
+          className={cn(
+            'mt-3 flex items-center justify-center transition-colors',
+            compactCreate
+              ? 'h-10 w-10 rounded-xl border border-white/[0.1] bg-white/[0.04] text-ink-muted hover:bg-white/[0.08] hover:text-ink'
+              : 'h-11 w-11 rounded-xl bg-info/90 text-white shadow-sm',
+          )}
         >
-          <Plus className="h-5 w-5" strokeWidth={2.25} />
+          <Plus className="h-5 w-5" strokeWidth={2} />
         </motion.button>
       ) : (
-        <div className="mt-4 h-12 w-12" aria-hidden />
+        <div className="mt-3 h-10 w-10" aria-hidden />
       )}
     </aside>
   )
@@ -309,6 +334,7 @@ function NavButton({
   onClick,
   rail,
   badge,
+  flat,
 }: {
   label: string
   icon: LucideIcon
@@ -317,6 +343,7 @@ function NavButton({
   compact?: boolean
   rail?: boolean
   badge?: number
+  flat?: boolean
 }) {
   if (rail) {
     return (
@@ -326,21 +353,21 @@ function NavButton({
         aria-current={active ? 'page' : undefined}
         title={label}
         className={cn(
-          'relative flex w-[68px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 transition-colors',
+          'relative flex w-[68px] flex-col items-center gap-1 rounded-xl px-1.5 py-2 transition-colors',
           active
-            ? 'bg-white/[0.12] text-ink ring-1 ring-white/[0.08]'
+            ? 'bg-white/[0.1] text-ink'
             : 'text-ink-faint hover:bg-white/[0.04] hover:text-ink-muted',
         )}
       >
         <span className="relative">
-          <Icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.25 : 1.75} />
+          <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.25 : 1.75} />
           {badge != null && badge > 0 && (
             <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[9px] font-bold text-white">
               {badge > 9 ? '9+' : badge}
             </span>
           )}
         </span>
-        <span className="text-[10px] font-medium leading-none">{label}</span>
+        <span className="text-[9px] font-medium leading-none tracking-wide">{label}</span>
       </button>
     )
   }
@@ -350,15 +377,19 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'relative flex h-[52px] min-w-0 max-w-[4.75rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 sm:max-w-none sm:min-w-[56px] sm:px-1',
-        active && 'bg-white/[0.08]',
+        'relative flex h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40',
+        flat ? 'max-w-none' : 'max-w-[4.75rem] sm:max-w-none sm:min-w-[56px]',
+        active && !flat && 'bg-white/[0.08]',
       )}
       aria-current={active ? 'page' : undefined}
       title={label}
     >
+      {flat && active && (
+        <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-info" aria-hidden />
+      )}
       <span className="relative">
         <Icon
-          className={cn('h-[21px] w-[21px]', active ? 'text-info' : 'text-ink-muted')}
+          className={cn('h-[20px] w-[20px]', active ? 'text-info' : 'text-ink-muted')}
           strokeWidth={active ? 2.25 : 1.75}
         />
         {badge != null && badge > 0 && (
@@ -369,7 +400,7 @@ function NavButton({
       </span>
       <span
         className={cn(
-          'w-full truncate text-center text-[10px] font-medium leading-tight transition-colors',
+          'w-full truncate text-center text-[10px] font-medium leading-tight',
           active ? 'text-info' : 'text-ink-muted',
         )}
       >

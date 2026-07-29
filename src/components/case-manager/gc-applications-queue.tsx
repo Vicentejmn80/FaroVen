@@ -1,6 +1,7 @@
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { cn } from '@/lib/utils'
+import { formatDistance } from '@/hooks/useGeolocation'
 import { label, SKILL_LABELS } from '@/lib/labels'
 import { useAuth } from '@/store/auth-context'
 import {
@@ -11,7 +12,12 @@ import {
 import { ApplicationReviewModal } from '@/components/case-manager/application-review-modal'
 import { useState } from 'react'
 
-/** Cola operativa: voluntarios esperando aprobación del GC. */
+function formatRangeToReport(km?: number | null): string {
+  if (km == null || !Number.isFinite(km)) return 'Rango no disponible'
+  return `${formatDistance(km)} del reporte`
+}
+
+/** Cola operativa: voluntarios esperando aprobación del GC (Radar). */
 export function GcApplicationsQueue() {
   const { user } = useAuth()
   const { data: queue = [], isLoading } = usePendingApplicationsQueue()
@@ -23,9 +29,9 @@ export function GcApplicationsQueue() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 px-4 pt-safe pb-3 lg:px-8">
         <p className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">FARO · Gestor</p>
-        <h1 className="text-lg font-semibold text-ink">Postulaciones</h1>
+        <h1 className="text-lg font-semibold text-ink">Radar de cobertura</h1>
         <p className="mt-0.5 text-xs text-ink-muted">
-          Voluntarios esperando aprobación — al aceptar el caso pasa a En progreso.
+          Voluntarios postulados con distancia a la zona del reporte.
         </p>
       </header>
 
@@ -36,7 +42,7 @@ export function GcApplicationsQueue() {
           <GlassCard className="p-6 text-center">
             <p className="text-sm text-ink-muted">No hay postulaciones pendientes</p>
             <p className="mt-1 text-xs text-ink-faint">
-              Cuando un voluntario se postule a una necesidad abierta, aparecerá aquí.
+              Abre el radar desde Operaciones para convocar voluntarios cercanos.
             </p>
           </GlassCard>
         ) : (
@@ -45,6 +51,9 @@ export function GcApplicationsQueue() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">{app.applicantName}</p>
+                  <p className="text-[11px] font-medium text-info">
+                    {formatRangeToReport(app.distanceKm)}
+                  </p>
                   <p className="text-xs text-ink-muted line-clamp-1">
                     {app.caseTitle ?? app.caseId.slice(0, 8)}
                   </p>

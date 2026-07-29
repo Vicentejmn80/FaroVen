@@ -75,14 +75,18 @@ export function OperationalRecoPanel({
           )}
 
           <div className="flex flex-wrap gap-1.5">
-            {data.primary === 'inventory' && onUseInventory && (
+            {(data.primary === 'inventory' || data.inventory[0]) && onUseInventory && (
               <EmergencyButton variant="primary" size="sm" onClick={onUseInventory}>
                 Usar inventario
               </EmergencyButton>
             )}
             {onOpenCoverage && (
-              <EmergencyButton variant="glass" size="sm" onClick={onOpenCoverage}>
-                Abrir cobertura
+              <EmergencyButton
+                variant={data.primary === 'volunteers' ? 'primary' : 'glass'}
+                size="sm"
+                onClick={onOpenCoverage}
+              >
+                Abrir radar
               </EmergencyButton>
             )}
             {onEscalateInstitution && (

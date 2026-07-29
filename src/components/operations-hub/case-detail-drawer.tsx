@@ -26,6 +26,16 @@ interface CaseDetailDrawerProps {
   onAssign?: (centerId: string) => void
   onStartReview?: (caseId: string) => void
   onVerifyAssignment?: (assignmentId: string) => void
+  onOpenRadar?: () => void
+  onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
+  onRejectApplication?: (applicationId: string) => void
+  inventoryTips?: Array<{
+    centerId: string
+    centerName: string
+    available: number
+    unit: string
+    distanceKm: number
+  }>
   isTransitioning?: boolean
   isVerifying?: boolean
 }
@@ -47,6 +57,10 @@ export function CaseDetailDrawer({
   onAssign,
   onStartReview,
   onVerifyAssignment,
+  onOpenRadar,
+  onApproveApplication,
+  onRejectApplication,
+  inventoryTips,
   isTransitioning,
   isVerifying,
 }: CaseDetailDrawerProps) {
@@ -104,6 +118,10 @@ export function CaseDetailDrawer({
                 onAssign={onAssign}
                 onStartReview={onStartReview}
                 onVerifyAssignment={onVerifyAssignment}
+                onOpenRadar={onOpenRadar}
+                onApproveApplication={onApproveApplication}
+                onRejectApplication={onRejectApplication}
+                inventoryTips={inventoryTips}
                 isTransitioning={isTransitioning}
                 isVerifying={isVerifying}
                 dense

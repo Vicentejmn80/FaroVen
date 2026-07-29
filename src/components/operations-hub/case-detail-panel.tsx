@@ -38,6 +38,16 @@ interface CaseDetailPanelProps {
   onAssign?: (centerId: string) => void
   onStartReview?: (caseId: string) => void
   onVerifyAssignment?: (assignmentId: string) => void
+  onOpenRadar?: () => void
+  onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
+  onRejectApplication?: (applicationId: string) => void
+  inventoryTips?: Array<{
+    centerId: string
+    centerName: string
+    available: number
+    unit: string
+    distanceKm: number
+  }>
   isTransitioning?: boolean
   isVerifying?: boolean
   className?: string
@@ -51,10 +61,14 @@ export function CaseDetailPanel({
   missionAssignments = [],
   coverage,
   suggestions = [],
+  inventoryTips = [],
   onTransition,
   onAssign,
   onStartReview,
   onVerifyAssignment,
+  onOpenRadar,
+  onApproveApplication,
+  onRejectApplication,
   isTransitioning,
   isVerifying,
   className,
@@ -144,7 +158,15 @@ export function CaseDetailPanel({
           )}
 
           {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
-            <OperationalRecoPanel caseData={caseItem} />
+            <OperationalRecoPanel
+              caseData={caseItem}
+              onOpenCoverage={onOpenRadar}
+              onUseInventory={
+                inventoryTips[0]
+                  ? () => onAssign?.(inventoryTips[0].centerId)
+                  : undefined
+              }
+            />
           )}
 
           <GlassCard className="!rounded-xl !border-white/[0.08] !p-3 !shadow-none !bg-white/[0.03]">
@@ -191,8 +213,13 @@ export function CaseDetailPanel({
               applications={coverage?.applications ?? []}
               interests={coverage?.interests ?? []}
               centers={coverage?.centers ?? suggestions}
+              inventoryTips={inventoryTips}
               onAssign={onAssign}
               assignedCenterId={caseItem.assignedCenterId}
+              onOpenRadar={onOpenRadar}
+              onApproveApplication={onApproveApplication}
+              onRejectApplication={onRejectApplication}
+              bestPickupCenterId={inventoryTips[0]?.centerId}
             />
           )}
 
@@ -267,18 +294,40 @@ export function CaseDetailPanel({
   )
 }
 
+function formatRangeToReport(km?: number | null): string {
+  if (km == null || !Number.isFinite(km)) return 'Rango no disponible'
+  if (km < 1) return `a ${Math.round(km * 1000)} m del reporte`
+  return `a ${km.toFixed(1)} km del reporte`
+}
+
 function CoverageSection({
   applications,
   interests,
   centers,
+  inventoryTips,
   onAssign,
   assignedCenterId,
+  onOpenRadar,
+  onApproveApplication,
+  onRejectApplication,
+  bestPickupCenterId,
 }: {
   applications: CaseApplicationWithApplicant[]
   interests: CoverageInterest[]
   centers: AssignmentSuggestion[]
+  inventoryTips: Array<{
+    centerId: string
+    centerName: string
+    available: number
+    unit: string
+    distanceKm: number
+  }>
   onAssign?: (centerId: string) => void
   assignedCenterId?: string
+  onOpenRadar?: () => void
+  onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
+  onRejectApplication?: (applicationId: string) => void
+  bestPickupCenterId?: string
 }) {
   const pendingApps = applications.filter((a) => a.status === 'pending' || a.status === 'under_review')
   const pendingInterests = interests.filter(
@@ -287,23 +336,106 @@ function CoverageSection({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-ink-muted">Cobertura unificada</p>
-      <p className="text-[10px] text-ink-faint">
-        Voluntarios, instituciones y centros en un solo lugar.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-medium text-ink-muted">Cobertura unificada</p>
+          <p className="text-[10px] text-ink-faint">
+            Inventario · voluntarios · instituciones
+          </p>
+        </div>
+        {onOpenRadar && (
+          <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
+            Abrir radar
+          </EmergencyButton>
+        )}
+      </div>
+
+      {inventoryTips.length > 0 && (
+        <GlassCard className="!rounded-xl !border-operational/25 !bg-operational/[0.06] !p-3 !shadow-none">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-operational">
+            Inventario cercano
+          </p>
+          <ul className="mt-1.5 space-y-1.5">
+            {inventoryTips.slice(0, 3).map((tip) => (
+              <li key={tip.centerId} className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-ink">{tip.centerName}</p>
+                  <p className="text-[10px] text-ink-muted">
+                    {tip.available} {tip.unit} · {tip.distanceKm.toFixed(1)} km
+                  </p>
+                </div>
+                <EmergencyButton
+                  variant="glass"
+                  size="sm"
+                  onClick={() => onAssign?.(tip.centerId)}
+                >
+                  Asignar
+                </EmergencyButton>
+              </li>
+            ))}
+          </ul>
+        </GlassCard>
+      )}
 
       <GlassCard className="!rounded-xl !border-white/[0.06] !p-3 !shadow-none !bg-white/[0.02]">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
           Voluntarios postulados ({pendingApps.length})
         </p>
         {pendingApps.length === 0 ? (
-          <p className="mt-1 text-[11px] text-ink-muted">Sin postulaciones pendientes</p>
+          <div className="mt-1.5 space-y-2">
+            <p className="text-[11px] text-ink-muted">Sin postulaciones pendientes</p>
+            {onOpenRadar && (
+              <p className="text-[10px] text-ink-faint">
+                Abre el radar para que voluntarios cercanos puedan postularse.
+              </p>
+            )}
+          </div>
         ) : (
-          <ul className="mt-1.5 space-y-1">
-            {pendingApps.slice(0, 5).map((a) => (
-              <li key={a.id} className="text-xs text-ink">
-                {a.applicantName || a.applicantId.slice(0, 8)}
-                <span className="text-ink-muted"> · {a.status}</span>
+          <ul className="mt-1.5 space-y-2">
+            {pendingApps.slice(0, 6).map((a) => (
+              <li
+                key={a.id}
+                className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">
+                    {a.applicantName || 'Voluntario'}
+                  </p>
+                  <p className="text-[11px] text-info">
+                    {formatRangeToReport(a.distanceKm)}
+                  </p>
+                  {bestPickupCenterId && inventoryTips[0] && (
+                    <p className="mt-0.5 text-[10px] text-operational">
+                      Tip: {inventoryTips[0].centerName} tiene stock — puede recoger ahí
+                    </p>
+                  )}
+                </div>
+                {(onApproveApplication || onRejectApplication) && (
+                  <div className="mt-2 flex gap-1.5">
+                    {onApproveApplication && (
+                      <EmergencyButton
+                        variant="primary"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() =>
+                          onApproveApplication(a.id, bestPickupCenterId)
+                        }
+                      >
+                        Aceptar
+                      </EmergencyButton>
+                    )}
+                    {onRejectApplication && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onRejectApplication(a.id)}
+                      >
+                        Rechazar
+                      </EmergencyButton>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -321,7 +453,7 @@ function CoverageSection({
             {pendingInterests.slice(0, 5).map((i) => (
               <li key={i.id} className="text-xs text-ink">
                 {i.collaboratorName ?? i.collaboratorUserId?.slice(0, 8) ?? i.id.slice(0, 8)}
-                <span className="text-ink-muted"> · {i.collaboratorType} · {i.status}</span>
+                <span className="text-ink-muted"> · {i.collaboratorType}</span>
               </li>
             ))}
           </ul>
@@ -331,7 +463,7 @@ function CoverageSection({
       {centers.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-            Centros disponibles
+            Centros sugeridos
           </p>
           <div className="space-y-1">
             {centers.slice(0, 3).map((s) => (

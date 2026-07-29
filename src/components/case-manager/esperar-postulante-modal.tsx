@@ -212,6 +212,13 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-ink">{app.applicantName}</p>
+                          <p className="text-[11px] text-info">
+                            {app.distanceKm != null
+                              ? app.distanceKm < 1
+                                ? `a ${Math.round(app.distanceKm * 1000)} m del reporte`
+                                : `a ${app.distanceKm.toFixed(1)} km del reporte`
+                              : 'Rango no disponible'}
+                          </p>
                           {app.organization && <p className="text-xs text-ink-subtle">{app.organization}</p>}
                         </div>
                         <span className="shrink-0 animate-pulse rounded-full bg-operational/20 px-2 py-0.5 text-[10px] font-medium text-operational">
@@ -299,6 +306,13 @@ export function EsperarPostulanteModal({ caseData, open, onClose, onTimeUp, acto
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-ink">{app.applicantName}</p>
+                      <p className="text-[11px] text-info">
+                        {app.distanceKm != null
+                          ? app.distanceKm < 1
+                            ? `a ${Math.round(app.distanceKm * 1000)} m del reporte`
+                            : `a ${app.distanceKm.toFixed(1)} km del reporte`
+                          : 'Rango no disponible'}
+                      </p>
                       {app.organization && <p className="text-xs text-ink-subtle">{app.organization}</p>}
                       {app.trustScore !== undefined && (
                         <p className="text-[10px] text-ink-faint mt-0.5">Confianza: {app.trustScore}%</p>

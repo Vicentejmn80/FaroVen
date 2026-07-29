@@ -16,11 +16,24 @@ import type { Mission } from '@/domain/mission.types'
 
 export const caseApplicationService = {
   async listByCase(caseId: string): Promise<CaseApplicationWithApplicant[]> {
-    return caseApplicationRepository.listByCase(caseId)
+    const apps = await caseApplicationRepository.listByCase(caseId)
+    return enrichApplicationDistances(caseId, apps)
   },
 
   async listPendingQueue() {
-    return caseApplicationRepository.listPendingQueue()
+    const apps = await caseApplicationRepository.listPendingQueue()
+    const byCase = new Map<string, typeof apps>()
+    for (const app of apps) {
+      const list = byCase.get(app.caseId) ?? []
+      list.push(app)
+      byCase.set(app.caseId, list)
+    }
+    const enriched: typeof apps = []
+    for (const [caseId, list] of byCase) {
+      enriched.push(...(await enrichApplicationDistances(caseId, list)))
+    }
+    // Preserve newest-first across cases
+    return enriched.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   },
 
   async findByCaseAndApplicant(caseId: string, applicantId: string) {
@@ -32,15 +45,24 @@ export const caseApplicationService = {
     message?: string
     skills?: string[]
     availability?: string
+    distanceKm?: number
   }) {
     const existing = await caseApplicationRepository.findByCaseAndApplicant(caseId, applicantId)
     if (existing) return existing
 
-    const app = await caseApplicationRepository.apply(caseId, applicantId, params)
+    let distanceKm = params?.distanceKm
+    if (distanceKm == null) {
+      distanceKm = await resolveApplicantDistanceKm(caseId, applicantId)
+    }
+
+    const app = await caseApplicationRepository.apply(caseId, applicantId, {
+      ...params,
+      distanceKm,
+    })
     missionLog('application_received', {
       entityId: app.id,
       volunteerId: applicantId,
-      payload: { caseId },
+      payload: { caseId, distanceKm },
     })
     try {
       const caseData = await caseService.getById(caseId)
@@ -48,20 +70,29 @@ export const caseApplicationService = {
         const managers = await getActiveManagers()
         const applicantName =
           (await getApplicantDisplayName(applicantId)) ?? 'Un voluntario'
+        const rangeLabel =
+          distanceKm != null && Number.isFinite(distanceKm)
+            ? distanceKm < 1
+              ? `a ${Math.round(distanceKm * 1000)} m`
+              : `a ${distanceKm.toFixed(1)} km`
+            : null
         for (const m of managers) {
           await notifyUser(
             m.id,
             'Nuevo postulante',
-            `${applicantName} quiere ayudar en "${caseData.title}"`,
+            rangeLabel
+              ? `${applicantName} (${rangeLabel}) quiere ayudar en "${caseData.title}"`
+              : `${applicantName} quiere ayudar en "${caseData.title}"`,
             'case_application',
             {
               caseId,
               applicationId: app.id,
               applicant_name: applicantName,
+              distance_km: distanceKm ?? null,
             },
             {
               priority: 'high',
-              actionUrl: `tab:case-manager:application:${caseId}:${app.id}`,
+              actionUrl: `tab:applications`,
               icon: 'users',
             },
           )
@@ -408,5 +439,67 @@ async function getApplicantDisplayName(profileId: string): Promise<string | null
     return (data as { full_name: string | null } | null)?.full_name ?? null
   } catch {
     return null
+  }
+}
+
+async function resolveApplicantDistanceKm(
+  caseId: string,
+  applicantId: string,
+): Promise<number | undefined> {
+  try {
+    const caseData = await caseService.getById(caseId)
+    if (!caseData?.location?.lat || !caseData?.location?.lng) return undefined
+    const nearby = await getActiveVolunteersNear(
+      caseData.location.lat,
+      caseData.location.lng,
+      80,
+    )
+    const hit = nearby.find((v) => v.userId === applicantId)
+    if (hit) return hit.distanceKm
+
+    const volunteer = await volunteerRepository.findByUserId(applicantId)
+    if (volunteer && Number.isFinite(volunteer.lat) && Number.isFinite(volunteer.lng)) {
+      const { haversineDistance } = await import('@/hooks/useGeolocation')
+      return (
+        Math.round(
+          haversineDistance(
+            caseData.location.lat,
+            caseData.location.lng,
+            volunteer.lat,
+            volunteer.lng,
+          ) * 10,
+        ) / 10
+      )
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function enrichApplicationDistances<T extends CaseApplicationWithApplicant>(
+  caseId: string,
+  apps: T[],
+): Promise<T[]> {
+  if (apps.length === 0) return apps
+  const missing = apps.filter((a) => a.distanceKm == null)
+  if (missing.length === 0) return apps
+
+  try {
+    const caseData = await caseService.getById(caseId)
+    if (!caseData?.location?.lat || !caseData?.location?.lng) return apps
+    const nearby = await getActiveVolunteersNear(
+      caseData.location.lat,
+      caseData.location.lng,
+      80,
+    )
+    const byUser = new Map(nearby.map((v) => [v.userId, v.distanceKm]))
+    return apps.map((a) => {
+      if (a.distanceKm != null) return a
+      const km = byUser.get(a.applicantId)
+      return km != null ? { ...a, distanceKm: km } : a
+    })
+  } catch {
+    return apps
   }
 }

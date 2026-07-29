@@ -1,4 +1,4 @@
-import { Bell, CircleHelp } from 'lucide-react'
+import { Bell, CircleHelp, Plus, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ConnectivityIndicator } from './live-indicator'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -9,6 +9,9 @@ import type { ConnectionState } from '@/hooks/useNetworkStatus'
 interface EmergencyHeaderProps {
   notifications?: number
   onNotifications?: () => void
+  onCreate?: () => void
+  createLabel?: string
+  onProfile?: () => void
   connectionState?: ConnectionState
   connectionLabel?: string
   className?: string
@@ -26,6 +29,9 @@ function FaroWordmark() {
 export function EmergencyHeader({
   notifications = 0,
   onNotifications,
+  onCreate,
+  createLabel = 'Crear',
+  onProfile,
   connectionState = 'online',
   connectionLabel = 'En linea',
   className,
@@ -42,8 +48,20 @@ export function EmergencyHeader({
       )}
     >
       <FaroWordmark />
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <ConnectivityIndicator state={connectionState} label={connectionLabel} />
+        {onCreate && (
+          <EmergencyButton
+            variant="glass"
+            size="icon"
+            onClick={onCreate}
+            aria-label={createLabel}
+            title={createLabel}
+            className="lg:hidden"
+          >
+            <Plus className="h-[18px] w-[18px]" strokeWidth={2} />
+          </EmergencyButton>
+        )}
         <EmergencyButton
           variant="glass"
           size="icon"
@@ -80,6 +98,18 @@ export function EmergencyHeader({
             )}
           </AnimatePresence>
         </EmergencyButton>
+        {onProfile && (
+          <EmergencyButton
+            variant="glass"
+            size="icon"
+            onClick={onProfile}
+            aria-label="Perfil"
+            title="Perfil"
+            className="lg:hidden"
+          >
+            <User className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          </EmergencyButton>
+        )}
       </div>
     </header>
   )

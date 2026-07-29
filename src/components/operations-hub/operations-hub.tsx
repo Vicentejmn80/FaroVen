@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
 import { useOperationalPublicNeeds, useNeedInterests } from '@/hooks/usePublicNeeds'
 import { useTransitionCase, useAssignCase, useStartCaseReview } from '@/hooks/useCaseMutations'
-import { useCaseApplications } from '@/hooks/useCaseApplications'
+import {
+  useCaseApplications,
+  useApproveCaseApplication,
+  useRejectCaseApplication,
+} from '@/hooks/useCaseApplications'
 import { useMissionByCase, useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
 import { useFaro } from '@/store/faro-context'
 import { useAuth } from '@/store/auth-context'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { computeCaseSummary, sortCasesByUrgency, suggestCentersForCase } from '@/services/operations-hub-service'
+import { operationalRecommendationService } from '@/services/operational-recommendation-service'
 import { isActiveStage } from '@/domain/case-lifecycle.service'
-import { isProgressStage } from '@/domain/ops-pipeline'
+import { isCoverageStage, isProgressStage, isReviewStage } from '@/domain/ops-pipeline'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
+import { EsperarPostulanteModal } from '@/components/case-manager/esperar-postulante-modal'
 import { CommandKpiBar } from './command-kpi-bar'
 import { CaseKanbanBoard } from './case-kanban-board'
 import { CaseDetailDrawer } from './case-detail-drawer'
@@ -30,11 +37,14 @@ export function OperationsHub() {
   const { data: operationalNeeds = [] } = useOperationalPublicNeeds()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [radarOpen, setRadarOpen] = useState(false)
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const transitionMutation = useTransitionCase()
   const assignMutation = useAssignCase()
   const startReviewMutation = useStartCaseReview()
   const verifyMutation = useVerifyAssignment()
+  const approveApp = useApproveCaseApplication()
+  const rejectApp = useRejectCaseApplication()
 
   useRealtimeSync({
     channelName: 'ops-hub-cases',
@@ -93,6 +103,34 @@ export function OperationsHub() {
   const suggestions = useMemo(
     () => (selectedCase ? suggestCentersForCase(selectedCase, state.centers, state.needs) : []),
     [selectedCase, state.centers, state.needs],
+  )
+
+  const recoEnabled =
+    !!selectedCase &&
+    (isReviewStage(selectedCase.pipelineStage) || isCoverageStage(selectedCase.pipelineStage))
+
+  const { data: reco } = useQuery({
+    queryKey: [
+      FARO_QUERY_KEYS.coverage,
+      'ops-reco',
+      selectedCase?.id,
+      selectedCase?.pipelineStage,
+    ],
+    queryFn: () => operationalRecommendationService.recommend(selectedCase!),
+    enabled: recoEnabled,
+    staleTime: 20_000,
+  })
+
+  const inventoryTips = useMemo(
+    () =>
+      (reco?.inventory ?? []).map((c) => ({
+        centerId: c.centerId,
+        centerName: c.centerName,
+        available: c.available,
+        unit: c.unit,
+        distanceKm: c.distanceKm,
+      })),
+    [reco?.inventory],
   )
 
   /** Hints vivos para tarjetas En progreso — se alimentan del timeline del caso seleccionado
@@ -185,6 +223,27 @@ export function OperationsHub() {
     [verifyMutation, user?.id],
   )
 
+  const handleOpenRadar = useCallback(() => {
+    if (!selectedCase) return
+    setRadarOpen(true)
+  }, [selectedCase])
+
+  const handleApproveApplication = useCallback(
+    (applicationId: string, pickupCenterId?: string) => {
+      if (!user?.id) return
+      approveApp.mutate({ applicationId, operatorId: user.id, pickupCenterId })
+    },
+    [approveApp, user?.id],
+  )
+
+  const handleRejectApplication = useCallback(
+    (applicationId: string) => {
+      if (!user?.id) return
+      rejectApp.mutate({ applicationId, operatorId: user.id })
+    },
+    [rejectApp, user?.id],
+  )
+
   const activeCount = useMemo(
     () => opsCases.filter((c) => isActiveStage(c.pipelineStage)).length,
     [opsCases],
@@ -273,14 +332,28 @@ export function OperationsHub() {
             centers: suggestions,
           }}
           suggestions={suggestions}
+          inventoryTips={inventoryTips}
           onClose={handleCloseDrawer}
           onTransition={handleTransition}
           onAssign={handleAssign}
           onStartReview={handleStartReview}
           onVerifyAssignment={handleVerify}
+          onOpenRadar={handleOpenRadar}
+          onApproveApplication={handleApproveApplication}
+          onRejectApplication={handleRejectApplication}
           isTransitioning={transitionMutation.isPending || startReviewMutation.isPending}
           isVerifying={verifyMutation.isPending}
         />
+
+        {selectedCase && (
+          <EsperarPostulanteModal
+            caseData={selectedCase}
+            open={radarOpen}
+            onClose={() => setRadarOpen(false)}
+            onTimeUp={() => undefined}
+            actorId={user?.id}
+          />
+        )}
       </div>
     </div>
   )
