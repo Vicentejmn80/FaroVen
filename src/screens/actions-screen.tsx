@@ -60,7 +60,7 @@ const VOLUNTEER_ACTIONS: ActionDef[] = [
 ]
 
 const CASE_MANAGER_ACTIONS: ActionDef[] = [
-  { id: 'create-case', icon: ClipboardPlus, label: 'Crear solicitud manual', hint: 'Entra a En revisión del pipeline', accent: 'info' },
+  { id: 'create-case', icon: ClipboardPlus, label: 'Crear solicitud manual', hint: 'Entra a Nuevo en el pipeline', accent: 'info' },
   { id: 'assign-resource', icon: UserPlus, label: 'Asignar recurso', hint: 'Abrir comando y asignar centro', accent: 'operational' },
   { id: 'navigate', icon: Building2, label: 'Centro de comando', hint: 'Pipeline operativo', accent: 'info', tab: 'map' },
   { id: 'navigate', icon: ClipboardPlus, label: 'Bandeja gestor', hint: 'Reportes y conversiones', accent: 'warning', tab: 'case-manager' },

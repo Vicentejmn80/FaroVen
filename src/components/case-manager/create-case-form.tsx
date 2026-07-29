@@ -31,7 +31,7 @@ const OPERATION_OPTIONS: Array<{ value: OperationType; label: string }> = [
 ]
 
 /**
- * Creación manual GC → solicitud en pending_review con coords obligatorias.
+ * Creación manual GC → solicitud en Nuevo; la revisión inicia al abrir el caso.
  */
 export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
   const { user } = useAuth()
@@ -130,7 +130,7 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
   return (
     <FlowSheet
       title="Crear solicitud operativa"
-      subtitle="Entra a En revisión — solo el GC la convierte en misión"
+      subtitle="Entra a Nuevo — el GC inicia la revisión al abrir el caso"
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 px-1 pb-8">
@@ -275,7 +275,7 @@ export function CreateCaseForm({ onClose, onCreated }: CreateCaseFormProps) {
         {error && <p className="text-sm text-critical">{error}</p>}
 
         <EmergencyButton type="submit" className="w-full" disabled={createCase.isPending}>
-          {createCase.isPending ? 'Publicando…' : 'Publicar en En revisión'}
+          {createCase.isPending ? 'Publicando…' : 'Publicar en Nuevo'}
         </EmergencyButton>
       </form>
     </FlowSheet>

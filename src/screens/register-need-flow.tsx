@@ -23,7 +23,7 @@ interface RegisterNeedFlowProps {
 }
 
 /**
- * Solicitud operativa del coordinador → caso en pending_review del GC.
+ * Solicitud operativa del coordinador → caso en Nuevo del GC.
  * Ya no escribe en la tabla legacy `needs`.
  */
 export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProps) {
@@ -156,8 +156,8 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
             <NeedItemLabel name={savedItemName} className="font-semibold text-ink" />
           </div>
           <p className="text-sm text-ink-muted">
-            Tu solicitud entró a <strong className="text-ink">En revisión</strong>. El Gestor de Casos
-            decidirá si abrir radar, transferir inventario o asignar una institución.
+            Tu solicitud entró a <strong className="text-ink">Nuevo</strong>. El Gestor de Casos
+            la abrirá en revisión y decidirá si abrir cobertura, transferir inventario o asignar una institución.
           </p>
           <EmergencyButton variant="primary" size="lg" className="w-full" onClick={onClose}>
             Listo

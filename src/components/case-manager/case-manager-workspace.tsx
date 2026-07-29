@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases, useArchiveCase } from '@/hooks/useCases'
-import { useConfirmCenterAssignment, useRejectCenterAssignment, useConfirmTransferDecision } from '@/hooks/useCaseMutations'
+import { useConfirmCenterAssignment, useRejectCenterAssignment, useConfirmTransferDecision, useStartCaseReview } from '@/hooks/useCaseMutations'
 import { useRoleRequests } from '@/hooks/useRoleRequests'
 import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -288,6 +288,7 @@ export function CaseManagerWorkspace() {
   const closeNeedCall = useCloseNeedCall()
   const deleteReport = useDeleteReport()
   const archiveCase = useArchiveCase()
+  const startCaseReview = useStartCaseReview()
   const confirmCenter = useConfirmCenterAssignment()
   const rejectCenter = useRejectCenterAssignment()
   const confirmTransfer = useConfirmTransferDecision()
@@ -517,7 +518,16 @@ export function CaseManagerWorkspace() {
                 const isExpanded = expandedCaseId === c.id
                 return (
                 <div key={c.id}>
-                  <button onClick={() => setExpandedCaseId(isExpanded ? null : c.id)} className="w-full text-left">
+                  <button
+                    onClick={() => {
+                      const next = isExpanded ? null : c.id
+                      setExpandedCaseId(next)
+                      if (next && c.pipelineStage === 'nuevo') {
+                        startCaseReview.mutate({ caseId: c.id, actorId: user?.id })
+                      }
+                    }}
+                    className="w-full text-left"
+                  >
                     <GlassCard className={cn('p-3 transition-all', isExpanded ? 'ring-1 ring-info/30' : '')}>
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <p className="text-sm font-medium text-ink line-clamp-2">{c.title}</p>

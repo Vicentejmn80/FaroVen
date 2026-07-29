@@ -29,7 +29,7 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
       </div>
 
       <GlassCard className="border-info/20 bg-info/5 text-xs text-ink-muted">
-        Las solicitudes van a la bandeja <span className="text-ink">En revisión</span> del Gestor de Casos.
+        Las solicitudes van a la bandeja <span className="text-ink">Nuevo</span> del Gestor de Casos.
         Ya no se publican necesidades operativas desde el nodo.
       </GlassCard>
 
