@@ -37,7 +37,7 @@ begin
     into v_committed
   from public.coverage_reservations
   where public_need_id = p_public_need_id
-    and status in ('reserved', 'confirmed', 'under_review');
+    and status in ('reserved', 'confirmed');
 
   if v_committed + p_quantity > v_need.required_quantity then
     raise exception 'Cantidad excede lo pendiente por cubrir';

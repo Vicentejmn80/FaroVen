@@ -14,7 +14,8 @@ import {
   notifyMissionOperators,
   type MissionNoticeEvent,
 } from '@/services/mission-notification-service'
-import { missionLog } from '@/lib/operational-log'
+import { missionLog, operationalLog } from '@/lib/operational-log'
+import { notifyUser } from '@/lib/notify'
 
 async function emitAssignmentStatus(
   assignment: MissionAssignment,
@@ -29,6 +30,57 @@ async function emitAssignmentStatus(
   })
 }
 
+const CENTER_NOTICE: Partial<
+  Record<MissionNoticeEvent, { title: string; body: (name: string, mission: string) => string }>
+> = {
+  volunteer_en_route: {
+    title: 'Voluntario en camino al centro',
+    body: (name, t) => `${name} va en camino a recoger recursos de "${t}".`,
+  },
+  volunteer_on_site: {
+    title: 'Voluntario llegó al centro',
+    body: (name, t) => `${name} llegó al centro para "${t}". Puedes entregar los recursos.`,
+  },
+  mission_in_progress: {
+    title: 'Voluntario inició traslado',
+    body: (name, t) => `${name} salió del centro con los recursos de "${t}".`,
+  },
+  mission_completed: {
+    title: 'Voluntario entregó recursos',
+    body: (name, t) => `${name} marcó entregada la misión "${t}".`,
+  },
+}
+
+async function notifyPickupCenterCoordinators(
+  mission: Mission,
+  event: MissionNoticeEvent,
+  volunteerName?: string,
+) {
+  if (!mission.pickupCenterId) return
+  const template = CENTER_NOTICE[event]
+  if (!template) return
+
+  const { data } = await supabase
+    .from('coordinator_profiles')
+    .select('auth_user_id')
+    .eq('site_id', mission.pickupCenterId)
+    .eq('onboarding_complete', true)
+
+  const name = volunteerName ?? 'El voluntario'
+  await Promise.all(
+    ((data ?? []) as { auth_user_id: string }[]).map((row) =>
+      notifyUser(
+        row.auth_user_id,
+        template.title,
+        template.body(name, mission.title),
+        'mission_center_update',
+        { missionId: mission.id, caseId: mission.caseId, event, centerId: mission.pickupCenterId },
+        { priority: event === 'volunteer_on_site' ? 'high' : 'normal', actionUrl: 'tab:ops:needs', icon: 'truck' },
+      ),
+    ),
+  )
+}
+
 /**
  * Avisa a las audiencias de un paso del motor de ejecución. El evento del
  * timeline lo escribe `advanceMissionStage`; aquí solo se notifica, y un fallo
@@ -37,12 +89,26 @@ async function emitAssignmentStatus(
 async function announce(
   assignment: MissionAssignment,
   event: MissionNoticeEvent,
-  audience: { volunteer?: boolean; operators?: boolean } = { operators: true },
+  audience: { volunteer?: boolean; operators?: boolean; center?: boolean } = { operators: true },
 ) {
   try {
     const mission = await missionRepository.findById(assignment.missionId)
     if (!mission) return
     const identity = await volunteerRepository.findIdentity(assignment.volunteerId)
+
+    operationalLog({
+      entityType: 'mission',
+      entityId: mission.id,
+      action: `mission_${event}`,
+      caseId: mission.caseId ?? null,
+      centerId: mission.pickupCenterId ?? mission.centerId ?? null,
+      missionId: mission.id,
+      volunteerId: assignment.volunteerId,
+      actorRole: 'volunteer',
+      from: assignment.status,
+      source: 'service',
+      payload: { event, assignmentId: assignment.id },
+    })
 
     if (audience.volunteer) {
       await notifyVolunteer({
@@ -61,6 +127,9 @@ async function announce(
         event,
         excludeUserId: identity?.userId,
       })
+    }
+    if (audience.center !== false) {
+      await notifyPickupCenterCoordinators(mission, event, identity?.fullName)
     }
   } catch {
     console.warn('[MISSION_ENGINE] No se pudo publicar el evento', event)
@@ -325,7 +394,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'en_route', 'El voluntario está en camino')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.EN_ROUTE)
-    await announce(updated, 'volunteer_en_route', { volunteer: true, operators: true })
+    await announce(updated, 'volunteer_en_route', { volunteer: true, operators: true, center: true })
     return updated
   },
 
@@ -336,7 +405,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'on_site', 'El voluntario llegó al sitio')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.ON_SITE)
-    await announce(updated, 'volunteer_on_site', { volunteer: true, operators: true })
+    await announce(updated, 'volunteer_on_site', { volunteer: true, operators: true, center: true })
     return updated
   },
 
@@ -411,7 +480,7 @@ export const missionService = {
     })
     await emitAssignmentStatus(updated, 'in_progress', 'La operación está en progreso')
     await advanceMissionStage(updated.missionId, MISSION_STAGES.IN_PROGRESS)
-    await announce(updated, 'mission_in_progress')
+    await announce(updated, 'mission_in_progress', { operators: true, center: true })
     return updated
   },
 

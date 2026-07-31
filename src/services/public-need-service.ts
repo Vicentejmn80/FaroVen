@@ -282,9 +282,26 @@ export async function openNeedCall(input: {
   publicNeedId: string
   operatorId: string
 }): Promise<PublicNeed> {
+  const { operationalLog } = await import('@/lib/operational-log')
   const updated = await publicNeedRepository.updateCallStatus({
     publicNeedId: input.publicNeedId,
     callStatus: 'open',
+  })
+
+  operationalLog({
+    entityType: 'public_need',
+    entityId: updated.id,
+    action: 'radar_call_opened',
+    caseId: updated.caseId,
+    actorId: input.operatorId,
+    actorRole: 'case_manager',
+    source: 'service',
+    payload: {
+      callStatus: updated.callStatus,
+      visibilityStatus: updated.visibilityStatus,
+      lat: updated.locationPublic.lat,
+      lng: updated.locationPublic.lng,
+    },
   })
 
   // Avisar a voluntarios activos (incluye perfiles sin fila en volunteers)
@@ -310,11 +327,37 @@ export async function openNeedCall(input: {
             lat: updated.locationPublic.lat,
             lng: updated.locationPublic.lng,
           },
+          { priority: updated.priority === 'critical' ? 'high' : 'normal', actionUrl: 'tab:map', icon: 'radar' },
         ),
       ),
     )
   } catch {
     console.warn('[PUBLIC_NEED] Failed to notify volunteers about open call')
+  }
+
+  // Trazabilidad en campana para otros gestores
+  try {
+    const { data: managers } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+      .eq('status', 'active')
+    await Promise.all(
+      (managers ?? [])
+        .filter((m) => String(m.id) !== input.operatorId)
+        .map((m) =>
+          notifyUser(
+            String(m.id),
+            'GC abrió Radar',
+            `Convocatoria abierta: "${updated.title}".`,
+            'radar_opened',
+            { publicNeedId: updated.id, caseId: updated.caseId, operatorId: input.operatorId },
+            { priority: 'low', actionUrl: 'tab:ops', icon: 'radar' },
+          ),
+        ),
+    )
+  } catch {
+    // non-blocking
   }
 
   await operationalIntelligenceService.emitTimelineEvent({

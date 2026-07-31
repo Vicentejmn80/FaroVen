@@ -39,6 +39,8 @@ interface CaseDetailPanelProps {
   radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
+  onApproveInterest?: (reservationId: string) => void
+  onRejectInterest?: (reservationId: string) => void
   inventoryTips?: Array<{
     centerId: string
     centerName: string
@@ -68,6 +70,8 @@ export function CaseDetailPanel({
   radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
+  onApproveInterest,
+  onRejectInterest,
   isTransitioning,
   isVerifying,
   className,
@@ -176,6 +180,8 @@ export function CaseDetailPanel({
               radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
               onApproveApplication={onApproveApplication}
               onRejectApplication={onRejectApplication}
+              onApproveInterest={onApproveInterest}
+              onRejectInterest={onRejectInterest}
               bestPickupCenterId={inventoryTips[0]?.centerId}
             />
           )}
@@ -223,12 +229,15 @@ function formatRangeToReport(km?: number | null): string {
 
 function CoverageSection({
   applications,
+  interests,
   inventoryTips,
   onAssign,
   onOpenRadar,
   radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
+  onApproveInterest,
+  onRejectInterest,
   bestPickupCenterId,
 }: {
   applications: CaseApplicationWithApplicant[]
@@ -247,10 +256,14 @@ function CoverageSection({
   radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
+  onApproveInterest?: (reservationId: string) => void
+  onRejectInterest?: (reservationId: string) => void
   bestPickupCenterId?: string
 }) {
   const pendingApps = applications.filter((a) => a.status === 'pending' || a.status === 'under_review')
+  const pendingInterests = interests.filter((i) => i.status === 'reserved')
   const tip = inventoryTips[0]
+  const empty = pendingApps.length === 0 && pendingInterests.length === 0
 
   return (
     <div className="space-y-2">
@@ -280,7 +293,7 @@ function CoverageSection({
         </div>
       )}
 
-      {pendingApps.length > 0 ? (
+      {pendingApps.length > 0 && (
         <ul className="space-y-2">
           {pendingApps.slice(0, 4).map((a) => (
             <li
@@ -316,9 +329,57 @@ function CoverageSection({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-[11px] text-ink-faint">Sin postulaciones aún.</p>
       )}
+
+      {pendingInterests.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+            Reservas parciales
+          </p>
+          <ul className="space-y-2">
+            {pendingInterests.slice(0, 4).map((interest) => (
+              <li
+                key={interest.id}
+                className="rounded-xl border border-operational/20 bg-operational/[0.04] px-3 py-2"
+              >
+                <p className="text-sm font-medium text-ink">
+                  {interest.collaboratorName || 'Voluntario'}
+                </p>
+                <p className="text-[11px] text-ink-muted">
+                  Ofrece {interest.quantity} unidad(es)
+                  {interest.distanceKm != null ? ` · ${formatRangeToReport(interest.distanceKm)}` : ''}
+                </p>
+                {(onApproveInterest || onRejectInterest) && (
+                  <div className="mt-2 flex gap-1.5">
+                    {onApproveInterest && (
+                      <EmergencyButton
+                        variant="primary"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onApproveInterest(interest.id)}
+                      >
+                        Aceptar reserva
+                      </EmergencyButton>
+                    )}
+                    {onRejectInterest && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onRejectInterest(interest.id)}
+                      >
+                        Rechazar
+                      </EmergencyButton>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {empty && <p className="text-[11px] text-ink-faint">Sin postulaciones aún.</p>}
     </div>
   )
 }

@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
 import { Flag } from 'lucide-react'
 import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
-import { usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
 import { useApplyToCase } from '@/hooks/useCaseApplications'
 import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
 import { PickupCenterContactBlock } from '@/components/volunteer/pickup-center-contact-block'
@@ -79,7 +79,9 @@ function AvailableMissions() {
   const { isVolunteer } = usePermissions()
   const { data: profile } = useVolunteerProfile()
   const applyToCase = useApplyToCase()
+  const reserveCoverage = useCreateCoverageReservation()
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
   const needs = useMemo(
     () =>
       publicNeeds?.filter(
@@ -133,9 +135,17 @@ function AvailableMissions() {
     <div className="space-y-3">
       {needs.map((need) => {
         const alreadyApplied = appliedIds.has(need.id)
+        const partialMode = need.requiredQuantity > 1
         const canApply =
-          isVolunteer && !!user?.id && !!need.caseId && !alreadyApplied && need.remainingQuantity > 0
+          isVolunteer &&
+          !!user?.id &&
+          !!need.caseId &&
+          !alreadyApplied &&
+          need.remainingQuantity > 0 &&
+          (!partialMode || !!profile)
         const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
+        const qty = quantities[need.id] ?? 1
+        const pending = applyToCase.isPending || reserveCoverage.isPending
 
         return (
           <GlassCard key={need.id} className="p-4">
@@ -153,7 +163,33 @@ function AvailableMissions() {
               <span>{need.remainingQuantity} {need.unit} por cubrir</span>
               <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
               <span>{label(PUBLIC_NEED_STATUS_LABELS, need.status, need.status)}</span>
+              {partialMode && (
+                <span className="rounded-full bg-operational/15 px-2 py-0.5 text-[10px] text-operational">
+                  Reservas parciales
+                </span>
+              )}
             </div>
+            {partialMode && (
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-[10px] text-ink-faint">Cantidad a cubrir</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={need.remainingQuantity}
+                  value={qty}
+                  onChange={(e) =>
+                    setQuantities((prev) => ({
+                      ...prev,
+                      [need.id]: Math.min(
+                        need.remainingQuantity,
+                        Math.max(1, Number(e.target.value) || 1),
+                      ),
+                    }))
+                  }
+                  className="w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-ink"
+                />
+              </div>
+            )}
             <div className="mt-3">
               <button
                 type="button"
@@ -163,9 +199,32 @@ function AvailableMissions() {
                     ? 'bg-info text-white hover:bg-info/90'
                     : 'cursor-not-allowed border border-white/10 text-ink-faint',
                 )}
-                disabled={!canApply || applyToCase.isPending}
+                disabled={!canApply || pending}
                 onClick={() => {
                   if (!user?.id || !need.caseId) return
+                  if (partialMode) {
+                    if (!profile) return
+                    reserveCoverage.mutate(
+                      {
+                        publicNeedId: need.id,
+                        collaboratorType: 'volunteer',
+                        collaboratorName: profile.fullName,
+                        quantity: qty,
+                      },
+                      {
+                        onSuccess: () => {
+                          setAppliedIds((prev) => new Set(prev).add(need.id))
+                          console.info('[FARO_OPS]', {
+                            action: 'volunteer_reserved_coverage',
+                            caseId: need.caseId,
+                            publicNeedId: need.id,
+                            quantity: qty,
+                          })
+                        },
+                      },
+                    )
+                    return
+                  }
                   applyToCase.mutate(
                     {
                       caseId: need.caseId,
@@ -188,7 +247,7 @@ function AvailableMissions() {
               >
                 {alreadyApplied
                   ? 'Postulación enviada'
-                  : applyToCase.isPending
+                  : pending
                     ? 'Enviando...'
                     : 'Quiero ayudar'}
               </button>

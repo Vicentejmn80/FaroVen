@@ -32,6 +32,8 @@ interface CaseDetailDrawerProps {
   radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
+  onApproveInterest?: (reservationId: string) => void
+  onRejectInterest?: (reservationId: string) => void
   inventoryTips?: Array<{
     centerId: string
     centerName: string
@@ -66,6 +68,8 @@ export function CaseDetailDrawer({
   radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
+  onApproveInterest,
+  onRejectInterest,
   inventoryTips,
   isTransitioning,
   isVerifying,
@@ -130,6 +134,8 @@ export function CaseDetailDrawer({
                 radarBlockedReason={radarBlockedReason}
                 onApproveApplication={onApproveApplication}
                 onRejectApplication={onRejectApplication}
+                onApproveInterest={onApproveInterest}
+                onRejectInterest={onRejectInterest}
                 inventoryTips={inventoryTips}
                 isTransitioning={isTransitioning}
                 isVerifying={isVerifying}

@@ -142,21 +142,21 @@ const OPERATOR_NOTICES: Partial<Record<MissionNoticeEvent, NoticeTemplate>> = {
     priority: 'high',
   },
   mission_in_progress: {
-    title: 'Ayuda en proceso',
-    message: (t, name) => `${name ?? 'El voluntario'} comenzó la ayuda en "${t}".`,
+    title: 'Voluntario inició traslado / ayuda',
+    message: (t, name) => `${name ?? 'El voluntario'} está ejecutando "${t}".`,
   },
   evidence_submitted: {
     title: 'Evidencia recibida',
     message: (t, name) => `${name ?? 'El voluntario'} adjuntó evidencia de "${t}".`,
   },
   mission_completed: {
-    title: 'Ayuda finalizada — requiere validación',
-    message: (t, name) => `${name ?? 'El voluntario'} finalizó "${t}". Revisa la evidencia.`,
+    title: 'GC pendiente de verificar entrega',
+    message: (t, name) => `${name ?? 'El voluntario'} finalizó "${t}". Revisa la evidencia y cierra el caso.`,
     priority: 'high',
   },
   mission_verified: {
-    title: 'Caso validado',
-    message: (t) => `"${t}" fue validada y cerrada.`,
+    title: 'Caso listo para cerrar — validado',
+    message: (t) => `"${t}" fue validada. El caso puede archivarse.`,
   },
   success_case_created: {
     title: 'Caso convertido en éxito',

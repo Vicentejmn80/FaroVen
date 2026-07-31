@@ -109,6 +109,8 @@ export function useCreateCoverageReservation() {
     }) => reserveNeedCoverage(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
+      void queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
     },
   })
 }

@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
-import { useOperationalPublicNeeds, useNeedInterests } from '@/hooks/usePublicNeeds'
+import {
+  useOperationalPublicNeeds,
+  useNeedInterests,
+  useApproveNeedInterest,
+  useRejectNeedInterest,
+} from '@/hooks/usePublicNeeds'
 import { useTransitionCase, useStartCaseReview } from '@/hooks/useCaseMutations'
 import { assignCaseWithDispatchRules, canOpenRadarForCase, resolveCenterDispatchMode } from '@/services/faro-assignment-service'
 import { humanizeSupabaseError } from '@/lib/supabase-errors'
@@ -77,6 +82,8 @@ export function OperationsHub() {
   const verifyMutation = useVerifyAssignment()
   const approveApp = useApproveCaseApplication()
   const rejectApp = useRejectCaseApplication()
+  const approveInterest = useApproveNeedInterest()
+  const rejectInterest = useRejectNeedInterest()
 
   useRealtimeSync({
     channelName: 'ops-hub-cases',
@@ -329,6 +336,22 @@ export function OperationsHub() {
     [rejectApp, user?.id],
   )
 
+  const handleApproveInterest = useCallback(
+    (reservationId: string) => {
+      if (!user?.id) return
+      approveInterest.mutate({ reservationId, operatorId: user.id })
+    },
+    [approveInterest, user?.id],
+  )
+
+  const handleRejectInterest = useCallback(
+    (reservationId: string) => {
+      if (!user?.id) return
+      rejectInterest.mutate({ reservationId, operatorId: user.id })
+    },
+    [rejectInterest, user?.id],
+  )
+
   const activeCount = useMemo(
     () => opsCases.filter((c) => isActiveStage(c.pipelineStage)).length,
     [opsCases],
@@ -429,6 +452,8 @@ export function OperationsHub() {
           radarBlockedReason={radarGate.reason}
           onApproveApplication={handleApproveApplication}
           onRejectApplication={handleRejectApplication}
+          onApproveInterest={handleApproveInterest}
+          onRejectInterest={handleRejectInterest}
           isTransitioning={transitionMutation.isPending || startReviewMutation.isPending}
           isVerifying={verifyMutation.isPending}
         />
