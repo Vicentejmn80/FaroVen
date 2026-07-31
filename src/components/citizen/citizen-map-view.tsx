@@ -12,10 +12,11 @@ import { useFaro } from '@/store/faro-context'
 import type { Site } from '@/lib/types'
 import { generatePublicSummary, type PublicSummaryMessage } from '@/services/public-summary-engine'
 import { CenterPublicSummary } from '@/components/citizen/center-public-summary'
-import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { usePublicNeeds } from '@/hooks/usePublicNeeds'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { PublicNeed } from '@/domain/public-need.types'
+import { CoverageCenterReserveModal } from '@/components/shared/coverage-center-reserve-modal'
 
 /** Superficie sólida sobre el mapa — legible, blur mínimo */
 const MAP_SEARCH_SURFACE =
@@ -38,13 +39,13 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
     tables: ['public_needs', 'coverage_reservations'],
     invalidateKeys: [FARO_QUERY_KEYS.publicNeeds],
   })
-  const reserveCoverage = useCreateCoverageReservation()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<PortalCategoryId | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showList, setShowList] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
   const [helpNotice, setHelpNotice] = useState<string | null>(null)
+  const [helpingNeedId, setHelpingNeedId] = useState<string | null>(null)
 
   const publicNeedSites = useMemo(() => publicNeeds.map(publicNeedToSite), [publicNeeds])
   const usingPublicNeeds = publicNeedSites.length > 0
@@ -147,17 +148,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
   const handleHelpIntent = async () => {
     if (!selectedPublicNeed) return
     setHelpNotice(null)
-    try {
-      await reserveCoverage.mutateAsync({
-        publicNeedId: selectedPublicNeed.id,
-        collaboratorType: 'citizen',
-        collaboratorName: 'Colaborador web',
-        quantity: Math.min(Math.max(selectedPublicNeed.remainingQuantity, 1), 10),
-      })
-      setHelpNotice('Tu intención de ayuda fue registrada. Un gestor confirmará el apoyo.')
-    } catch {
-      setHelpNotice('No se pudo registrar tu ayuda ahora. Intenta de nuevo en unos segundos.')
-    }
+    setHelpingNeedId(selectedPublicNeed.id)
   }
 
   const showCategory = category !== 'soup_kitchen'
@@ -348,10 +339,10 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
                   size="sm"
                   className="flex-1"
                   onClick={usingPublicNeeds ? handleHelpIntent : onReport}
-                  disabled={usingPublicNeeds && reserveCoverage.isPending}
+                  disabled={usingPublicNeeds && !selectedPublicNeed}
                 >
                   {usingPublicNeeds
-                    ? (reserveCoverage.isPending ? 'Registrando…' : 'Quiero ayudar')
+                    ? 'Quiero ayudar'
                     : 'Reportar situación'}
                 </EmergencyButton>
               </div>
@@ -379,6 +370,17 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
           </div>
         </div>
       )}
+
+      <CoverageCenterReserveModal
+        open={Boolean(helpingNeedId)}
+        publicNeed={publicNeeds.find((n) => n.id === helpingNeedId) ?? null}
+        collaboratorType="citizen"
+        collaboratorName="Colaborador web"
+        onClose={() => setHelpingNeedId(null)}
+        onReserved={() => {
+          setHelpNotice('Tu compromiso fue registrado. Gracias por apoyar.')
+        }}
+      />
     </div>
   )
 }

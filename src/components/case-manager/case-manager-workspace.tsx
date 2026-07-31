@@ -9,7 +9,7 @@ import { useVolunteerInterests } from '@/hooks/useVolunteerInterests'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { ReportDetailPanel } from '@/components/case-manager/report-detail-panel'
-import { ConvertReportWizard } from '@/components/case-manager/convert-report-wizard'
+import { OperationalCaseWizardModal } from '@/components/case-manager/operational-case-wizard-modal'
 import { EsperarPostulanteModal } from '@/components/case-manager/esperar-postulante-modal'
 import { AsignarCentroModal } from '@/components/case-manager/asignar-centro-modal'
 import { GcDecisionPanel } from '@/components/case-manager/gc-decision-panel'
@@ -295,7 +295,7 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
   const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null)
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null)
-  const [convertingReportId, setConvertingReportId] = useState<string | null>(null)
+  const [wizardReportId, setWizardReportId] = useState<string | null>(null)
   const { user } = useAuth()
   const { data: publicNeeds = [], isLoading: publicNeedsLoading } = useOperationalPublicNeeds()
   const verifyPublicNeed = useVerifyPublicNeedEntry()
@@ -514,21 +514,11 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
             </div>
             {selectedReportId ? (
               <div className="flex-1 border-l border-white/[0.06]">
-                {convertingReportId === selectedReportId ? (
-                  <div className="overflow-y-auto p-4">
-                    <ConvertReportWizard
-                      reportId={selectedReportId}
-                      onDone={() => { setConvertingReportId(null); setSelectedReportId(null) }}
-                      onCancel={() => setConvertingReportId(null)}
-                    />
-                  </div>
-                ) : (
-                  <ReportDetailPanel
-                    reportId={selectedReportId}
-                    onClose={() => setSelectedReportId(null)}
-                    onConvertToCase={() => setConvertingReportId(selectedReportId)}
-                  />
-                )}
+                <ReportDetailPanel
+                  reportId={selectedReportId}
+                  onClose={() => setSelectedReportId(null)}
+                  onConvertToCase={(id) => setWizardReportId(id)}
+                />
               </div>
             ) : (
               <div className="hidden flex-1 items-center justify-center border-l border-white/[0.06] lg:flex">
@@ -995,6 +985,17 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
           />
         )
       })()}
+
+      <OperationalCaseWizardModal
+        open={Boolean(wizardReportId)}
+        reportId={wizardReportId}
+        actorId={user?.id}
+        onClose={() => setWizardReportId(null)}
+        onDone={(_result) => {
+          setWizardReportId(null)
+          setSelectedReportId(null)
+        }}
+      />
     </div>
   )
 }

@@ -18,9 +18,9 @@ import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
 import { Flag } from 'lucide-react'
 import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
-import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { usePublicNeeds } from '@/hooks/usePublicNeeds'
 import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
-import { CoverageQuickPickModal } from '@/components/shared/coverage-quick-pick-modal'
+import { CoverageCenterReserveModal } from '@/components/shared/coverage-center-reserve-modal'
 import {
   dismissMissionForUser,
   loadDismissedMissionIds,
@@ -77,7 +77,6 @@ function AvailableMissions() {
   const { data: publicNeeds, isLoading, error } = usePublicNeeds()
   const { isVolunteer } = usePermissions()
   const { data: profile } = useVolunteerProfile()
-  const reserveCoverage = useCreateCoverageReservation()
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
   const [quickPickNeedId, setQuickPickNeedId] = useState<string | null>(null)
   const needs = useMemo(
@@ -143,7 +142,6 @@ function AvailableMissions() {
           need.remainingQuantity > 0 &&
           !!profile
         const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
-        const pending = reserveCoverage.isPending
 
         return (
           <GlassCard key={need.id} className="p-4">
@@ -174,7 +172,7 @@ function AvailableMissions() {
                     ? 'bg-info text-white hover:bg-info/90'
                     : 'cursor-not-allowed border border-white/10 text-ink-faint',
                 )}
-                disabled={!canApply || pending}
+                disabled={!canApply}
                 onClick={() => {
                   if (!user?.id || !need.caseId || !profile) return
                   setQuickPickNeedId(need.id)
@@ -182,43 +180,23 @@ function AvailableMissions() {
               >
                 {alreadyApplied
                   ? 'Postulación enviada'
-                  : pending
-                    ? 'Enviando...'
-                    : 'Reservar cobertura'}
+                  : 'Reservar cobertura'}
               </button>
             </div>
           </GlassCard>
         )
       })}
 
-      <CoverageQuickPickModal
+      <CoverageCenterReserveModal
         open={Boolean(quickPickNeed)}
-        remaining={quickPickNeed?.remainingQuantity ?? 0}
-        unit={quickPickNeed?.unit ?? 'unidades'}
-        loading={reserveCoverage.isPending}
+        publicNeed={quickPickNeed}
+        collaboratorType="volunteer"
+        collaboratorName={profile?.fullName}
         onClose={() => setQuickPickNeedId(null)}
-        onPick={(qty) => {
-          if (!quickPickNeed || !profile) return
-          reserveCoverage.mutate(
-            {
-              publicNeedId: quickPickNeed.id,
-              collaboratorType: 'volunteer',
-              collaboratorName: profile.fullName,
-              quantity: qty,
-            },
-            {
-              onSuccess: () => {
-                setAppliedIds((prev) => new Set(prev).add(quickPickNeed.id))
-                setQuickPickNeedId(null)
-                console.info('[FARO_OPS]', {
-                  action: 'volunteer_reserved_coverage',
-                  caseId: quickPickNeed.caseId,
-                  publicNeedId: quickPickNeed.id,
-                  quantity: qty,
-                })
-              },
-            },
-          )
+        onReserved={() => {
+          if (!quickPickNeed) return
+          setAppliedIds((prev) => new Set(prev).add(quickPickNeed.id))
+          setQuickPickNeedId(null)
         }}
       />
     </div>
