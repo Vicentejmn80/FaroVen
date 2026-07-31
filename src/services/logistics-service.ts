@@ -161,6 +161,158 @@ export async function prepareMissionWithReservation(input: {
   return reservation
 }
 
+/**
+ * Respuesta operativa del coordinador a una solicitud del GC.
+ * - brigade / delivery → confirma centro + marca ready
+ * - needs_volunteer → cancela reserva y notifica al GC para abrir radar
+ */
+export async function respondToInventoryRequest(input: {
+  reservationId: string
+  resolutionMode: 'brigade' | 'delivery' | 'needs_volunteer'
+  actorId: string
+  notes?: string
+  meta?: {
+    responsibleName?: string
+    etaMinutes?: number
+    driverName?: string
+    driverPhone?: string
+    vehicle?: string
+  }
+}): Promise<InventoryReservation> {
+  const { operationalLog } = await import('@/lib/operational-log')
+  const { caseService } = await import('@/services/case-service')
+  const { assignmentService } = await import('@/services/assignment-service')
+
+  const { data: raw, error: rawErr } = await supabase
+    .from('inventory_reservations')
+    .select('*')
+    .eq('id', input.reservationId)
+    .maybeSingle()
+  if (rawErr || !raw) throw new Error('Solicitud no encontrada')
+
+  const caseId = String(raw.case_id)
+  const centerId = String(raw.center_id)
+  const missionId = String(raw.mission_id)
+  if (String(raw.status) !== 'reserved') {
+    throw new Error('Esta solicitud ya fue respondida')
+  }
+
+  operationalLog({
+    entityType: 'mission',
+    entityId: missionId,
+    action: 'center_resolution_selected',
+    caseId,
+    centerId,
+    actorId: input.actorId,
+    actorRole: 'coordinator',
+    source: 'service',
+    payload: { resolutionMode: input.resolutionMode, notes: input.notes ?? null },
+  })
+
+  const caseData = await caseService.getById(caseId)
+  const title = caseData?.title ?? caseId.slice(0, 8)
+
+  if (input.resolutionMode === 'needs_volunteer') {
+    const reservation = await logisticsRepository.saveCoordinatorResolution({
+      reservationId: input.reservationId,
+      resolutionMode: 'needs_volunteer',
+      resolutionMeta: input.meta ?? {},
+      coordinatorNotes: input.notes,
+      status: 'cancelled',
+    })
+
+    const { data: managers } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+      .eq('status', 'active')
+
+    await Promise.all(
+      (managers ?? []).map((m) =>
+        notifyUser(
+          String(m.id),
+          'El centro necesita voluntario',
+          `El centro no posee brigada propia para "${title}". Se requiere abrir Radar.`,
+          'center_needs_volunteer',
+          {
+            caseId,
+            centerId,
+            reservationId: reservation.id,
+            notes: input.notes ?? null,
+          },
+          { priority: 'high', actionUrl: 'tab:ops', icon: 'users' },
+        ),
+      ),
+    )
+
+    logisticsLog('reservation_released', {
+      entityId: reservation.id,
+      entityType: 'mission',
+      missionId,
+      caseId,
+      centerId,
+      actorId: input.actorId,
+      payload: { reason: 'needs_volunteer', notes: input.notes ?? null },
+    })
+
+    return reservation
+  }
+
+  if (caseData?.pipelineStage === 'awaiting_center_confirmation') {
+    await assignmentService.confirmCenter(caseId, input.actorId)
+  }
+
+  const reservation = await logisticsRepository.saveCoordinatorResolution({
+    reservationId: input.reservationId,
+    resolutionMode: input.resolutionMode,
+    resolutionMeta: input.meta ?? {},
+    coordinatorNotes: input.notes,
+    status: 'ready',
+  })
+
+  const { data: managers } = await supabase
+    .from('profiles')
+    .select('id')
+    .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+    .eq('status', 'active')
+
+  const modeLabel = input.resolutionMode === 'brigade' ? 'brigada propia' : 'delivery propio'
+  await Promise.all(
+    (managers ?? []).map((m) =>
+      notifyUser(
+        String(m.id),
+        'Centro aceptó solicitud',
+        `El centro resolverá "${title}" con ${modeLabel}.`,
+        'center_accepted_request',
+        {
+          caseId,
+          centerId,
+          reservationId: reservation.id,
+          resolutionMode: input.resolutionMode,
+          notes: input.notes ?? null,
+        },
+        { priority: 'normal', actionUrl: 'tab:ops', icon: 'package' },
+      ),
+    ),
+  )
+
+  logisticsLog('reservation_ready', {
+    entityId: reservation.id,
+    entityType: 'mission',
+    missionId,
+    caseId,
+    centerId,
+    actorId: input.actorId,
+    payload: {
+      resolutionMode: input.resolutionMode,
+      notes: input.notes ?? null,
+      meta: input.meta ?? {},
+    },
+  })
+
+  return reservation
+}
+
 /** Marcar recursos preparados (coordinador). */
 export async function markReservationReady(reservationId: string, actorId?: string): Promise<InventoryReservation> {
   const reservation = await logisticsRepository.updateReservationStatus(reservationId, 'ready')
@@ -221,6 +373,33 @@ export async function markReservationDelivered(reservationId: string, actorId?: 
     actorId,
     payload: { resourceType: reservation.resourceType, quantity: reservation.quantity },
   })
+
+  try {
+    const { data: managers } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+      .eq('status', 'active')
+    await Promise.all(
+      (managers ?? []).map((m) =>
+        notifyUser(
+          String(m.id),
+          'Centro entregó recursos',
+          `Se entregaron ${reservation.quantity} × ${getResourceLabel(reservation.resourceType)} al voluntario.`,
+          'resources_delivered',
+          {
+            caseId: reservation.caseId,
+            reservationId: reservation.id,
+            missionId: reservation.missionId,
+          },
+          { priority: 'normal', actionUrl: 'tab:ops', icon: 'package' },
+        ),
+      ),
+    )
+  } catch {
+    // non-blocking
+  }
+
   return reservation
 }
 

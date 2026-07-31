@@ -6,6 +6,8 @@ import {
   useRejectCoordinatorCase,
   useResolveCoordinatorCase,
   useStartCoordinatorAttention,
+  useConfirmCenterCase,
+  useRequestVolunteerFromCenter,
 } from '@/hooks/useCoordinatorCases'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -25,14 +27,24 @@ function StageBadge({ stage }: { stage: string }) {
 function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [notes, setNotes] = useState('')
   const accept = useAcceptCoordinatorCase()
   const reject = useRejectCoordinatorCase()
   const resolve = useResolveCoordinatorCase()
   const start = useStartCoordinatorAttention()
+  const confirmCenter = useConfirmCenterCase()
+  const requestVolunteer = useRequestVolunteerFromCenter()
 
+  const isAwaitingConfirm =
+    caseItem.pipelineStage === PIPELINE_STAGES.AWAITING_CENTER_CONFIRMATION
   const isAssigned = caseItem.pipelineStage === PIPELINE_STAGES.ASSIGNED
   const isAccepted = caseItem.pipelineStage === PIPELINE_STAGES.ACCEPTED
   const isInAttention = caseItem.pipelineStage === PIPELINE_STAGES.IN_ATTENTION
+  const busy =
+    accept.isPending ||
+    reject.isPending ||
+    confirmCenter.isPending ||
+    requestVolunteer.isPending
 
   return (
     <GlassCard className="space-y-3 p-4">
@@ -50,6 +62,44 @@ function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
         <p className="text-xs text-ink-muted line-clamp-2">{caseItem.description}</p>
       )}
 
+      {isAwaitingConfirm && (
+        <div className="space-y-2 rounded-xl border border-warning/20 bg-warning/[0.06] p-3">
+          <p className="text-xs font-medium text-warning">¿Cómo resolverá esta solicitud?</p>
+          <textarea
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-ink placeholder:text-ink-faint resize-none"
+            rows={2}
+            placeholder="Observaciones (opcional)…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+          <div className="flex flex-wrap gap-2">
+            <EmergencyButton
+              variant="primary"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                confirmCenter.mutate({ caseId: caseItem.id, notes: notes.trim() || undefined })
+              }
+            >
+              Brigada / Delivery propio
+            </EmergencyButton>
+            <EmergencyButton
+              variant="glass"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                requestVolunteer.mutate({
+                  caseId: caseItem.id,
+                  notes: notes.trim() || 'El centro no posee brigada propia. Se requiere abrir Radar.',
+                })
+              }
+            >
+              Necesitamos voluntario
+            </EmergencyButton>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {isAssigned && (
           <>
@@ -57,7 +107,7 @@ function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
               variant="primary"
               size="sm"
               onClick={() => accept.mutate(caseItem.id)}
-              disabled={accept.isPending}
+              disabled={busy}
             >
               Aceptar caso
             </EmergencyButton>
@@ -65,7 +115,7 @@ function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
               variant="glass"
               size="sm"
               onClick={() => setRejecting(true)}
-              disabled={reject.isPending}
+              disabled={busy}
             >
               Rechazar
             </EmergencyButton>
@@ -76,7 +126,7 @@ function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
             variant="primary"
             size="sm"
             onClick={() => start.mutate(caseItem.id)}
-            disabled={start.isPending}
+            disabled={busy}
           >
             Iniciar atención
           </EmergencyButton>
@@ -86,7 +136,7 @@ function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
             variant="primary"
             size="sm"
             onClick={() => resolve.mutate(caseItem.id)}
-            disabled={resolve.isPending}
+            disabled={busy}
           >
             Resolver caso
           </EmergencyButton>
@@ -94,9 +144,9 @@ function CaseCard({ caseItem }: { caseItem: CaseDomain }) {
       </div>
 
       {rejecting && (
-        <div className="space-y-2 pt-2 border-t border-white/10">
+        <div className="space-y-2 border-t border-white/10 pt-2">
           <textarea
-            className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-ink placeholder:text-ink-faint resize-none"
+            className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-ink placeholder:text-ink-faint"
             rows={2}
             placeholder="Motivo del rechazo..."
             value={rejectReason}
@@ -131,9 +181,7 @@ export function CoordinatorCasePanel() {
 
   if (!assignment) {
     return (
-      <div className="p-4 text-center text-sm text-ink-muted">
-        No tienes un centro asignado
-      </div>
+      <div className="p-4 text-center text-sm text-ink-muted">No tienes un centro asignado</div>
     )
   }
 
@@ -155,6 +203,9 @@ export function CoordinatorCasePanel() {
     )
   }
 
+  const awaiting = (cases ?? []).filter(
+    (c) => c.pipelineStage === PIPELINE_STAGES.AWAITING_CENTER_CONFIRMATION,
+  )
   const assigned = (cases ?? []).filter((c) => c.pipelineStage === PIPELINE_STAGES.ASSIGNED)
   const active = (cases ?? []).filter(
     (c) =>
@@ -177,9 +228,22 @@ export function CoordinatorCasePanel() {
 
   return (
     <div className="space-y-6 p-4">
+      {awaiting.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-sm font-semibold text-ink">
+            Esperando respuesta del centro ({awaiting.length})
+          </h3>
+          <div className="space-y-3">
+            {awaiting.map((c) => (
+              <CaseCard key={c.id} caseItem={c} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {assigned.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-ink mb-3">
+          <h3 className="mb-3 text-sm font-semibold text-ink">
             Pendientes de aceptación ({assigned.length})
           </h3>
           <div className="space-y-3">
@@ -192,9 +256,7 @@ export function CoordinatorCasePanel() {
 
       {active.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-ink mb-3">
-            En atención ({active.length})
-          </h3>
+          <h3 className="mb-3 text-sm font-semibold text-ink">En atención ({active.length})</h3>
           <div className="space-y-3">
             {active.map((c) => (
               <CaseCard key={c.id} caseItem={c} />
@@ -205,16 +267,16 @@ export function CoordinatorCasePanel() {
 
       {resolved.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-ink-subtle mb-3">
+          <h3 className="mb-3 text-sm font-semibold text-ink-subtle">
             Resueltos ({resolved.length})
           </h3>
           <div className="space-y-3">
             {resolved.map((c) => (
               <GlassCard key={c.id} className="p-4 opacity-70">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm text-ink truncate">{c.title}</h4>
-                    <p className="text-xs text-ink-subtle mt-0.5">{timeAgo(c.createdAt)}</p>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="truncate text-sm text-ink">{c.title}</h4>
+                    <p className="mt-0.5 text-xs text-ink-subtle">{timeAgo(c.createdAt)}</p>
                   </div>
                   <StageBadge stage={c.pipelineStage} />
                 </div>

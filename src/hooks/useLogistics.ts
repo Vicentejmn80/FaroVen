@@ -7,7 +7,9 @@ import {
   markReservationReady,
   markReservationDelivered,
   requestInventoryFromCenter,
+  respondToInventoryRequest,
 } from '@/services/logistics-service'
+import type { CenterResolutionMode } from '@/domain/center-operations.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { humanizeSupabaseError } from '@/lib/supabase-errors'
 import { useToast } from '@/store/toast-context'
@@ -91,6 +93,44 @@ export function useMarkReservationReady() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
       showToast('Recursos marcados como preparados.', 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'warning'),
+  })
+}
+
+/** Coordinador: respuesta operativa (brigada / delivery / necesita voluntario). */
+export function useRespondToInventoryRequest() {
+  const qc = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (input: {
+      reservationId: string
+      resolutionMode: CenterResolutionMode
+      actorId: string
+      notes?: string
+      meta?: {
+        responsibleName?: string
+        etaMinutes?: number
+        driverName?: string
+        driverPhone?: string
+        vehicle?: string
+      }
+    }) => {
+      try {
+        return await respondToInventoryRequest(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      if (vars.resolutionMode === 'needs_volunteer') {
+        showToast('GC notificado: se requiere abrir Radar.', 'info')
+      } else {
+        showToast('Respuesta del centro registrada.', 'success')
+      }
     },
     onError: (err: Error) => showToast(err.message, 'warning'),
   })

@@ -38,6 +38,7 @@ import { usePublicNeeds } from '@/hooks/usePublicNeeds'
 import type { PublicNeed } from '@/domain/public-need.types'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
+import { useGeolocation } from '@/hooks/useGeolocation'
 
 interface SituationScreenProps {
   onOpenDetail?: (site: Site) => void
@@ -54,6 +55,7 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   const { user } = useAuth()
   const mapData = useMapData({ userRole: role, userId: user?.id ?? null, location: null })
   const { data: publicNeeds, isLoading: publicNeedsLoading } = usePublicNeeds()
+  const { position: volunteerPosition } = useGeolocation(isVolunteer ? user?.id : undefined)
 
   // Radar en vivo en el mapa: sin esto el voluntario solo ve cambios al refrescar.
   useRealtimeSync({
@@ -135,8 +137,14 @@ export function SituationScreen({ onOpenDetail, onRegisterSite }: SituationScree
   }, [listSites])
 
   const publicNeedMissions = useMemo(
-    () => buildMissionsFromPublicNeeds(publicNeeds ?? []),
-    [publicNeeds],
+    () =>
+      buildMissionsFromPublicNeeds(
+        publicNeeds ?? [],
+        volunteerPosition
+          ? { lat: volunteerPosition.lat, lng: volunteerPosition.lng }
+          : null,
+      ),
+    [publicNeeds, volunteerPosition?.lat, volunteerPosition?.lng],
   )
 
   const volunteerMissions = useMemo(() => {
@@ -404,23 +412,36 @@ function buildVolunteerMissions(sites: Site[], needs: Need[]): VolunteerMission[
   return results
 }
 
-function buildMissionsFromPublicNeeds(needs: PublicNeed[]): VolunteerMission[] {
+function buildMissionsFromPublicNeeds(
+  needs: PublicNeed[],
+  origin?: { lat: number; lng: number } | null,
+): VolunteerMission[] {
   const results: VolunteerMission[] = []
 
-  for (const [index, need] of needs.entries()) {
+  for (const need of needs) {
     if (need.visibilityStatus !== 'public') continue
     if (need.callStatus !== 'open') continue
     if (need.remainingQuantity <= 0) continue
     if (!['active', 'reserved', 'in_progress'].includes(need.status)) continue
+    if (!need.caseId) continue
 
     const location = resolveMissionCoordinates(need.locationPublic.lat, need.locationPublic.lng, {
       needId: need.id,
       missionId: need.id,
       title: need.title,
     })
-    if (!location) continue
+    if (!location) {
+      console.warn('[FARO_OPS]', {
+        action: 'radar_need_skipped_no_coords',
+        publicNeedId: need.id,
+        caseId: need.caseId,
+      })
+      continue
+    }
 
-    const distanceKm = (1.1 + (index % 5) * 0.7 + (need.id.charCodeAt(0) % 5) * 0.15).toFixed(1)
+    const distanceKm = origin
+      ? haversineKm(origin.lat, origin.lng, location.lat, location.lng).toFixed(1)
+      : '—'
     results.push({
       id: need.id,
       caseId: need.caseId,
@@ -441,7 +462,23 @@ function buildMissionsFromPublicNeeds(needs: PublicNeed[]): VolunteerMission[] {
     })
   }
 
+  console.info('[FARO_OPS]', {
+    action: 'radar_needs_mapped',
+    count: results.length,
+    ids: results.map((r) => r.id),
+  })
+
   return results
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (v: number) => (v * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 function normalizeVolunteerMissions(
@@ -517,15 +554,17 @@ function VolunteerMapScreen({
   loadError: string | null
 }) {
   const [selectedMission, setSelectedMission] = useState<VolunteerMission | null>(null)
-  const [distanceFilter, setDistanceFilter] = useState<'5' | '10' | '25'>('10')
+  const [distanceFilter, setDistanceFilter] = useState<'5' | '10' | '25' | 'all'>('all')
   const [showList, setShowList] = useState(false)
   /** Un solo MapContainer a la vez: dos mapas (móvil hidden + desktop) provocan flyTo en size 0 → NaN LatLng. */
   const isDesktop = useMediaQuery('(min-width: 1024px)')
 
   const visibleMissions = useMemo(() => {
+    if (distanceFilter === 'all') return missions
     const maxKm = Number.parseFloat(distanceFilter)
     return missions.filter((m) => {
       const km = Number.parseFloat(m.distanceKm)
+      // Sin GPS del voluntario (distanceKm = "—") no ocultar el punto del radar.
       return Number.isFinite(km) ? km <= maxKm : true
     })
   }, [missions, distanceFilter])
@@ -582,7 +621,7 @@ function VolunteerMapScreen({
             <div className="glass-strong min-w-0 flex-1 space-y-2 rounded-2xl px-3 py-2.5 shadow-glass-sm ring-1 ring-white/10">
               <p className="text-[11px] font-semibold text-ink">Necesidades cercanas</p>
               <div className="flex flex-wrap gap-1.5">
-                {(['5', '10', '25'] as const).map((radius) => (
+                {(['all', '5', '10', '25'] as const).map((radius) => (
                   <button
                     key={radius}
                     type="button"
@@ -593,7 +632,7 @@ function VolunteerMapScreen({
                         : 'rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] text-ink-muted'
                     }
                   >
-                    {radius} km
+                    {radius === 'all' ? 'Todas' : `${radius} km`}
                   </button>
                 ))}
               </div>
@@ -695,7 +734,7 @@ function VolunteerMapScreen({
                 Filtros rápidos
               </div>
               <div className="flex flex-wrap gap-2">
-                {(['5', '10', '25'] as const).map((radius) => (
+                {(['all', '5', '10', '25'] as const).map((radius) => (
                   <button
                     key={radius}
                     type="button"
@@ -706,12 +745,13 @@ function VolunteerMapScreen({
                         : 'rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-ink-muted'
                     }
                   >
-                    {radius} km
+                    {radius === 'all' ? 'Todas' : `${radius} km`}
                   </button>
                 ))}
               </div>
               <p className="text-xs text-ink-faint">
-                {visibleMissions.length} necesidad(es) · radio {distanceFilter} km
+                {visibleMissions.length} necesidad(es)
+                {distanceFilter === 'all' ? ' · sin filtro de radio' : ` · radio ${distanceFilter} km`}
               </p>
             </GlassCard>
           </section>

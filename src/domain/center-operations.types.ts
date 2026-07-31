@@ -125,6 +125,8 @@ export interface CenterResource {
 
 export type InventoryReservationStatus = 'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'
 
+export type CenterResolutionMode = 'brigade' | 'delivery' | 'needs_volunteer'
+
 export interface InventoryReservation {
   id: string
   missionId: string
@@ -134,6 +136,10 @@ export interface InventoryReservation {
   quantity: number
   status: InventoryReservationStatus
   volunteerId?: string
+  resolutionMode?: CenterResolutionMode | null
+  resolutionMeta?: Record<string, unknown>
+  coordinatorNotes?: string | null
+  respondedAt?: Date | null
   createdAt: Date
   updatedAt: Date
 }

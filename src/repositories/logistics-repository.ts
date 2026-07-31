@@ -30,6 +30,7 @@ interface CenterGeoRow {
 }
 
 function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
+  const mode = row.resolution_mode
   return {
     id: row.id,
     missionId: row.mission_id,
@@ -39,6 +40,11 @@ function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
     quantity: row.quantity,
     status: row.status,
     volunteerId: row.volunteer_id ?? undefined,
+    resolutionMode:
+      mode === 'brigade' || mode === 'delivery' || mode === 'needs_volunteer' ? mode : null,
+    resolutionMeta: (row.resolution_meta as Record<string, unknown> | null) ?? {},
+    coordinatorNotes: row.coordinator_notes ?? null,
+    respondedAt: row.responded_at ? new Date(row.responded_at) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   }
@@ -87,30 +93,34 @@ async function fetchCenterGeo(
   for (const { table, siteType } of tables) {
     let rows: CenterGeoRow[] = []
 
-    const withModeAndDispatch = await supabase
+    // Preferir columnas completas; degradar solo si PostgREST reporta columna ausente (42703).
+    const full = await supabase
       .from(table)
       .select('id, name, address, latitude, longitude, operational_mode, dispatch_mode')
       .in('id', uuidIds)
 
-    if (withModeAndDispatch.error) {
-      // Fallback si dispatch_mode/operational_mode no existen aún en prod
-      const withModeOnly = await supabase
-        .from(table)
-        .select('id, name, address, latitude, longitude, operational_mode')
-        .in('id', uuidIds)
+    if (!full.error) {
+      rows = (full.data ?? []) as CenterGeoRow[]
+    } else {
+      const code = (full.error as { code?: string }).code
+      const msg = full.error.message ?? ''
+      const missingCol = code === '42703' || /column .* does not exist/i.test(msg)
+      if (!missingCol) continue
 
-      if (withModeOnly.error) {
-        const fallback = await supabase
+      const withDispatch = await supabase
+        .from(table)
+        .select('id, name, address, latitude, longitude, dispatch_mode')
+        .in('id', uuidIds)
+      if (!withDispatch.error) {
+        rows = (withDispatch.data ?? []) as CenterGeoRow[]
+      } else {
+        const base = await supabase
           .from(table)
           .select('id, name, address, latitude, longitude')
           .in('id', uuidIds)
-        if (fallback.error) continue
-        rows = (fallback.data ?? []) as CenterGeoRow[]
-      } else {
-        rows = (withModeOnly.data ?? []) as CenterGeoRow[]
+        if (base.error) continue
+        rows = (base.data ?? []) as CenterGeoRow[]
       }
-    } else {
-      rows = (withModeAndDispatch.data ?? []) as CenterGeoRow[]
     }
 
     for (const row of rows) {
@@ -229,6 +239,32 @@ export class LogisticsRepository {
       .from('inventory_reservations')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapReservationRow(data as InventoryReservationRow)
+  }
+
+  async saveCoordinatorResolution(input: {
+    reservationId: string
+    resolutionMode: 'brigade' | 'delivery' | 'needs_volunteer'
+    resolutionMeta?: Record<string, unknown>
+    coordinatorNotes?: string
+    status?: InventoryReservationStatus
+  }): Promise<InventoryReservation> {
+    const patch: Record<string, unknown> = {
+      resolution_mode: input.resolutionMode,
+      resolution_meta: input.resolutionMeta ?? {},
+      coordinator_notes: input.coordinatorNotes ?? null,
+      responded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    if (input.status) patch.status = input.status
+
+    const { data, error } = await supabase
+      .from('inventory_reservations')
+      .update(patch)
+      .eq('id', input.reservationId)
       .select('*')
       .single()
     if (error) throw error

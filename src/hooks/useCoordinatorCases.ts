@@ -2,8 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FARO_QUERY_KEYS } from './query-keys'
 import { caseRepository } from '@/repositories/case-repository'
 import { caseService } from '@/services/case-service'
+import { assignmentService } from '@/services/assignment-service'
+import { notifyUser } from '@/lib/notify'
+import { operationalLog } from '@/lib/operational-log'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/store/auth-context'
 import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
+import { useToast } from '@/store/toast-context'
 
 export function useCoordinatorCases(centerId: string) {
   return useQuery({
@@ -72,6 +77,103 @@ export function useStartCoordinatorAttention() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coordinatorCases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents, caseId] })
+    },
+  })
+}
+
+/** Centro confirma asignación (brigada/delivery) desde awaiting_center_confirmation → assigned. */
+export function useConfirmCenterCase() {
+  const qc = useQueryClient()
+  const { user } = useAuth()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async ({ caseId, notes }: { caseId: string; notes?: string }) => {
+      if (!user) throw new Error('Usuario no autenticado')
+      const result = await assignmentService.confirmCenter(caseId, user.id)
+      operationalLog({
+        entityType: 'case',
+        entityId: caseId,
+        action: 'center_confirmed_assignment',
+        actorId: user.id,
+        actorRole: 'coordinator',
+        to: 'assigned',
+        source: 'ui',
+        payload: { notes: notes ?? null },
+      })
+      const caseData = await caseService.getById(caseId)
+      const { data: managers } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+        .eq('status', 'active')
+      await Promise.all(
+        (managers ?? []).map((m) =>
+          notifyUser(
+            String(m.id),
+            'Centro aceptó solicitud',
+            `El centro aceptó "${caseData?.title ?? caseId.slice(0, 8)}"${notes ? `: ${notes}` : '.'}`,
+            'center_accepted_request',
+            { caseId, notes: notes ?? null },
+            { priority: 'normal', actionUrl: 'tab:ops', icon: 'check' },
+          ),
+        ),
+      )
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coordinatorCases] })
+      showToast('Caso confirmado por el centro.', 'success')
+    },
+  })
+}
+
+/** Centro indica que necesita voluntario → notifica GC y devuelve a revisión para abrir radar. */
+export function useRequestVolunteerFromCenter() {
+  const qc = useQueryClient()
+  const { user } = useAuth()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async ({ caseId, notes }: { caseId: string; notes?: string }) => {
+      if (!user) throw new Error('Usuario no autenticado')
+      const reason =
+        notes?.trim() ||
+        'El centro no posee brigada propia. Se requiere abrir Radar.'
+      const result = await assignmentService.rejectCenter(caseId, user.id, reason)
+      operationalLog({
+        entityType: 'case',
+        entityId: caseId,
+        action: 'center_needs_volunteer',
+        actorId: user.id,
+        actorRole: 'coordinator',
+        to: 'pending_review',
+        source: 'ui',
+        payload: { notes: reason },
+      })
+      const caseData = await caseService.getById(caseId)
+      const { data: managers } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+        .eq('status', 'active')
+      await Promise.all(
+        (managers ?? []).map((m) =>
+          notifyUser(
+            String(m.id),
+            'El centro necesita voluntario',
+            `El centro no posee brigada propia para "${caseData?.title ?? caseId.slice(0, 8)}". Se requiere abrir Radar.`,
+            'center_needs_volunteer',
+            { caseId, notes: reason },
+            { priority: 'high', actionUrl: 'tab:ops', icon: 'users' },
+          ),
+        ),
+      )
+      return result
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coordinatorCases] })
+      showToast('GC notificado: se requiere abrir Radar.', 'info')
     },
   })
 }

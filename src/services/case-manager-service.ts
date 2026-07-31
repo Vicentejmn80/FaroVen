@@ -288,8 +288,25 @@ export const caseManagerService = {
     case: CaseDomain
     need: PublicNeed
   }> {
+    const { operationalLog, pipelineLog } = await import('@/lib/operational-log')
     const caseData = await caseService.getById(caseId)
     if (!caseData) throw new Error('Caso no encontrado')
+
+    operationalLog({
+      entityType: 'case',
+      entityId: caseId,
+      action: 'radar_open_requested',
+      actorId: actorId ?? null,
+      actorRole: 'case_manager',
+      from: caseData.pipelineStage,
+      source: 'service',
+      payload: {
+        reservationsMode: Boolean(options?.reservationsMode),
+        requiredQuantity: options?.requiredQuantity ?? null,
+        lat: caseData.location.lat,
+        lng: caseData.location.lng,
+      },
+    })
 
     const { assertCaseReadyForRadar } = await import('@/domain/case-publish-validation')
     assertCaseReadyForRadar(caseData, actorId)
@@ -301,7 +318,6 @@ export const caseManagerService = {
     }
 
     if (!options?.skipDecisionLog) {
-      const { pipelineLog } = await import('@/lib/operational-log')
       pipelineLog('gc_decision', {
         entityId: caseId,
         actorId,
@@ -322,9 +338,11 @@ export const caseManagerService = {
     }
 
     const existing = await publicNeedRepository.listByCaseId(caseId)
+    // Reusar solo necesidades que pueden volver a publicarse (no completed/archived/expired).
     let need =
-      existing.find((n) => n.status !== 'archived' && n.status !== 'expired' && n.status !== 'closed') ??
-      existing[0]
+      existing.find((n) =>
+        ['active', 'pending', 'reserved', 'in_progress'].includes(n.status),
+      ) ?? null
 
     if (!need) {
       need = await publicNeedRepository.createFromCase({
@@ -342,20 +360,47 @@ export const caseManagerService = {
         },
         actorId,
       })
+      operationalLog({
+        entityType: 'public_need',
+        entityId: need.id,
+        action: 'radar_need_created',
+        caseId,
+        actorId: actorId ?? null,
+        source: 'service',
+        payload: { lat: opened.location.lat, lng: opened.location.lng },
+      })
     }
 
-    if (need.callStatus !== 'open') {
-      need = await openNeedCall({
-        publicNeedId: need.id,
-        operatorId: actorId ?? 'system',
-      })
-    } else {
-      await caseApplicationService.notifyVolunteersAboutCase(opened)
-    }
+    // Siempre republicar: fuerza call_status=open, visibility=public, status=active + notificaciones.
+    need = await openNeedCall({
+      publicNeedId: need.id,
+      operatorId: actorId ?? 'system',
+    })
+    // Reforzar aviso canónico por caso (mapa + campana voluntario).
+    await caseApplicationService.notifyVolunteersAboutCase(opened)
 
     if (options?.reservationsMode && options.requiredQuantity != null && options.requiredQuantity > 1) {
       need = await publicNeedRepository.updateRequiredQuantity(need.id, options.requiredQuantity)
     }
+
+    operationalLog({
+      entityType: 'public_need',
+      entityId: need.id,
+      action: 'radar_opened',
+      caseId,
+      actorId: actorId ?? null,
+      actorRole: 'case_manager',
+      to: 'open_for_applications',
+      source: 'service',
+      payload: {
+        callStatus: need.callStatus,
+        visibilityStatus: need.visibilityStatus,
+        status: need.status,
+        remainingQuantity: need.remainingQuantity,
+        lat: need.locationPublic.lat,
+        lng: need.locationPublic.lng,
+      },
+    })
 
     missionLog('waiting_for_applications', {
       entityId: caseId,

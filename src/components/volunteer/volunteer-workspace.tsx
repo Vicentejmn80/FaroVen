@@ -18,7 +18,8 @@ import { cn } from '@/lib/utils'
 import { animate } from 'framer-motion'
 import { Flag } from 'lucide-react'
 import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
-import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { useApplyToCase } from '@/hooks/useCaseApplications'
 import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
 import { PickupCenterContactBlock } from '@/components/volunteer/pickup-center-contact-block'
 import {
@@ -73,16 +74,17 @@ function AnimatedMetric({ value, suffix = '' }: { value: number; suffix?: string
 }
 
 function AvailableMissions() {
+  const { user } = useAuth()
   const { data: publicNeeds, isLoading, error } = usePublicNeeds()
   const { isVolunteer } = usePermissions()
   const { data: profile } = useVolunteerProfile()
-  const reserveCoverage = useCreateCoverageReservation()
+  const applyToCase = useApplyToCase()
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
-  const [quantities, setQuantities] = useState<Record<string, number>>({})
   const needs = useMemo(
     () =>
       publicNeeds?.filter(
         (need) =>
+          Boolean(need.caseId) &&
           need.visibilityStatus === 'public' &&
           need.callStatus === 'open' &&
           ['active', 'in_progress', 'reserved'].includes(need.status) &&
@@ -93,6 +95,15 @@ function AvailableMissions() {
       ) ?? [],
     [publicNeeds],
   )
+
+  useEffect(() => {
+    if (needs.length === 0) return
+    console.info('[FARO_OPS]', {
+      action: 'radar_needs_visible',
+      count: needs.length,
+      ids: needs.map((n) => n.id),
+    })
+  }, [needs])
 
   if (isLoading) {
     return (
@@ -122,10 +133,9 @@ function AvailableMissions() {
     <div className="space-y-3">
       {needs.map((need) => {
         const alreadyApplied = appliedIds.has(need.id)
-        const canApply = isVolunteer && !!profile && !alreadyApplied && need.remainingQuantity > 0
+        const canApply =
+          isVolunteer && !!user?.id && !!need.caseId && !alreadyApplied && need.remainingQuantity > 0
         const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
-        const qty = quantities[need.id] ?? 1
-        const showQtyPicker = need.requiredQuantity > 1
 
         return (
           <GlassCard key={need.id} className="p-4">
@@ -144,27 +154,6 @@ function AvailableMissions() {
               <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
               <span>{label(PUBLIC_NEED_STATUS_LABELS, need.status, need.status)}</span>
             </div>
-            {showQtyPicker && (
-              <div className="mt-2 flex items-center gap-2">
-                <label className="text-[10px] text-ink-faint">Cantidad a cubrir</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={need.remainingQuantity}
-                  value={qty}
-                  onChange={(e) =>
-                    setQuantities((prev) => ({
-                      ...prev,
-                      [need.id]: Math.min(
-                        need.remainingQuantity,
-                        Math.max(1, Number(e.target.value) || 1),
-                      ),
-                    }))
-                  }
-                  className="w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-ink"
-                />
-              </div>
-            )}
             <div className="mt-3">
               <button
                 type="button"
@@ -174,25 +163,34 @@ function AvailableMissions() {
                     ? 'bg-info text-white hover:bg-info/90'
                     : 'cursor-not-allowed border border-white/10 text-ink-faint',
                 )}
-                disabled={!canApply || reserveCoverage.isPending}
+                disabled={!canApply || applyToCase.isPending}
                 onClick={() => {
-                  if (!profile) return
-                  reserveCoverage.mutate(
+                  if (!user?.id || !need.caseId) return
+                  applyToCase.mutate(
                     {
-                      publicNeedId: need.id,
-                      collaboratorType: 'volunteer',
-                      collaboratorName: profile.fullName,
-                      quantity: showQtyPicker ? qty : 1,
+                      caseId: need.caseId,
+                      applicantId: user.id,
+                      message: `Quiero ayudar: ${need.title}`,
+                      skills: profile?.skills ?? [],
                     },
                     {
                       onSuccess: () => {
                         setAppliedIds((prev) => new Set(prev).add(need.id))
+                        console.info('[FARO_OPS]', {
+                          action: 'volunteer_applied',
+                          caseId: need.caseId,
+                          publicNeedId: need.id,
+                        })
                       },
                     },
                   )
                 }}
               >
-                {alreadyApplied ? 'Postulación enviada' : reserveCoverage.isPending ? 'Enviando...' : 'Quiero ayudar'}
+                {alreadyApplied
+                  ? 'Postulación enviada'
+                  : applyToCase.isPending
+                    ? 'Enviando...'
+                    : 'Quiero ayudar'}
               </button>
             </div>
           </GlassCard>
