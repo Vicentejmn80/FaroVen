@@ -10,6 +10,7 @@ import { missionService } from '@/services/mission-service'
 import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { supabase } from '@/lib/supabase'
 import { notifyUser } from '@/lib/notify'
+import { OPS_ACTION_URLS, opsNotify } from '@/services/ops-notification-contract'
 import { operationalIntelligenceService } from '@/services/operational-intelligence-service'
 import { publicNeedRepository } from '@/repositories/public-need-repository'
 
@@ -85,6 +86,17 @@ export async function reserveNeedCoverage(input: {
   quantity: number
 }): Promise<CoverageReservation> {
   const reservation = await publicNeedRepository.createCoverageReservation(input)
+  const need = await publicNeedRepository.findById(input.publicNeedId)
+  const isPartial = (need?.requiredQuantity ?? 1) > 1
+  const title = isPartial ? 'Reserva parcial de cobertura' : 'Nueva postulación de cobertura'
+  const message = need
+    ? isPartial
+      ? `${input.collaboratorName ?? 'Un colaborador'} ofrece ${input.quantity} de ${need.requiredQuantity} para "${need.title}".`
+      : `${input.collaboratorName ?? 'Un colaborador'} quiere cubrir "${need.title}".`
+    : 'Hay un nuevo interesado para cubrir una necesidad pública.'
+  const actionUrl = need?.caseId
+    ? OPS_ACTION_URLS.gcCase(need.caseId)
+    : OPS_ACTION_URLS.gcBandeja()
 
   const { data: operators } = await supabase
     .from('profiles')
@@ -94,17 +106,25 @@ export async function reserveNeedCoverage(input: {
 
   await Promise.all(
     (operators ?? []).map((operator) =>
-      notifyUser(
-        String(operator.id),
-        'Nueva postulación de cobertura',
-        `Hay un nuevo interesado para cubrir una necesidad pública.`,
-        'coverage_interest_submitted',
-        {
+      opsNotify({
+        to: String(operator.id),
+        type: 'coverage_interest_submitted',
+        title,
+        message,
+        priority: 'high',
+        actionUrl,
+        metadata: {
           publicNeedId: input.publicNeedId,
           reservationId: reservation.id,
           collaboratorType: reservation.collaboratorType,
+          quantity: input.quantity,
+          requiredQuantity: need?.requiredQuantity ?? null,
+          caseId: need?.caseId ?? null,
         },
-      ),
+        entityType: 'public_need',
+        entityId: input.publicNeedId,
+        caseId: need?.caseId ?? null,
+      }),
     ),
   )
 
@@ -327,7 +347,11 @@ export async function openNeedCall(input: {
             lat: updated.locationPublic.lat,
             lng: updated.locationPublic.lng,
           },
-          { priority: updated.priority === 'critical' ? 'high' : 'normal', actionUrl: 'tab:map', icon: 'radar' },
+          {
+            priority: updated.priority === 'critical' ? 'high' : 'normal',
+            actionUrl: OPS_ACTION_URLS.volunteerAvailable(),
+            icon: 'radar',
+          },
         ),
       ),
     )
@@ -346,14 +370,22 @@ export async function openNeedCall(input: {
       (managers ?? [])
         .filter((m) => String(m.id) !== input.operatorId)
         .map((m) =>
-          notifyUser(
-            String(m.id),
-            'GC abrió Radar',
-            `Convocatoria abierta: "${updated.title}".`,
-            'radar_opened',
-            { publicNeedId: updated.id, caseId: updated.caseId, operatorId: input.operatorId },
-            { priority: 'low', actionUrl: 'tab:ops', icon: 'radar' },
-          ),
+          opsNotify({
+            to: String(m.id),
+            type: 'radar_opened',
+            title: 'GC abrió Radar',
+            message: `Convocatoria abierta: "${updated.title}".`,
+            priority: 'low',
+            actionUrl: updated.caseId
+              ? OPS_ACTION_URLS.gcCase(updated.caseId)
+              : OPS_ACTION_URLS.gcBandeja(),
+            icon: 'radar',
+            metadata: { publicNeedId: updated.id, caseId: updated.caseId, operatorId: input.operatorId },
+            entityType: 'public_need',
+            entityId: updated.id,
+            caseId: updated.caseId,
+            actorId: input.operatorId,
+          }),
         ),
     )
   } catch {

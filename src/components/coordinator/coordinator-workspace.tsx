@@ -9,6 +9,7 @@ import { CoordinatorLogisticsRequests } from '@/components/coordinator/coordinat
 import { CoordinatorLogisticsMissions } from '@/components/coordinator/coordinator-logistics-missions'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { useCoordinatorSite } from '@/hooks/useCoordinatorPanel'
+import { useCenterReservations } from '@/hooks/useLogistics'
 import type { CoordinatorModuleId } from '@/services/coordinator-service'
 import type { Site } from '@/lib/types'
 
@@ -55,8 +56,26 @@ export function CoordinatorWorkspace({
 }: CoordinatorWorkspaceProps) {
   const { assignment } = useCoordinatorAssignment()
   const site = useCoordinatorSite()
+  const { data: reservations = [] } = useCenterReservations(assignment?.siteId)
   const [internalModule, setInternalModule] = useState<(typeof LOGISTICS_MODULES)[number]['id']>('inventory')
   const module = normalizeModule(activeModule ?? internalModule)
+
+  const pendingRequestsCount = useMemo(
+    () => reservations.filter((r) => r.status === 'reserved' && !r.resolutionMode).length,
+    [reservations],
+  )
+  const readyMissionsCount = useMemo(
+    () => reservations.filter((r) => r.status === 'ready').length,
+    [reservations],
+  )
+  const moduleBadges = useMemo(
+    () =>
+      ({
+        needs: pendingRequestsCount,
+        missions: readyMissionsCount,
+      }) as Partial<Record<(typeof LOGISTICS_MODULES)[number]['id'], number>>,
+    [pendingRequestsCount, readyMissionsCount],
+  )
 
   useRealtimeSync({
     channelName: 'coordinator-logistics',
@@ -112,12 +131,13 @@ export function CoordinatorWorkspace({
             {LOGISTICS_MODULES.map((item) => {
               const Icon = item.icon
               const active = module === item.id
+              const badge = moduleBadges[item.id] ?? 0
               return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setModule(item.id)}
-                  className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-[11px] font-medium transition-colors ${
+                  className={`relative flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-[11px] font-medium transition-colors ${
                     active
                       ? 'border-info/40 bg-info/12 text-info'
                       : 'border-white/10 bg-white/[0.03] text-ink-subtle hover:bg-white/[0.06]'
@@ -125,6 +145,11 @@ export function CoordinatorWorkspace({
                 >
                   <Icon className="h-4 w-4" strokeWidth={active ? 2.25 : 1.75} />
                   {item.label}
+                  {badge > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[9px] font-semibold text-white">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
                 </button>
               )
             })}

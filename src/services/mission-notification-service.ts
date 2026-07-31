@@ -158,6 +158,11 @@ const OPERATOR_NOTICES: Partial<Record<MissionNoticeEvent, NoticeTemplate>> = {
     title: 'Caso listo para cerrar — validado',
     message: (t) => `"${t}" fue validada. El caso puede archivarse.`,
   },
+  mission_cancelled: {
+    title: 'Misión cancelada',
+    message: (t) => `La misión "${t}" fue cancelada. Revisa si necesitas reabrir apoyo.`,
+    priority: 'high',
+  },
   success_case_created: {
     title: 'Caso convertido en éxito',
     message: (t) => `"${t}" se sumó a la biblioteca de casos de éxito.`,
@@ -171,6 +176,7 @@ export interface MissionNotificationEvent {
   missionId: string
   missionTitle: string
   event: MissionNoticeEvent
+  caseId?: string | null
 }
 
 async function dispatch(
@@ -206,10 +212,33 @@ export async function notifyVolunteer(event: MissionNotificationEvent): Promise<
   const identity = await volunteerRepository.findIdentity(event.volunteerId)
   if (!identity) return
 
-  await dispatch(identity.userId, template, event.missionTitle, event.volunteerName, {
-    missionId: event.missionId,
-    event: event.event,
-  })
+  const actionUrl =
+    event.event === 'mission_cancelled'
+      ? 'tab:volunteer:available'
+      : `tab:map:mission-assigned:${event.missionId}`
+
+  await dispatch(
+    identity.userId,
+    template,
+    event.missionTitle,
+    event.volunteerName,
+    {
+      missionId: event.missionId,
+      caseId: event.caseId ?? null,
+      event: event.event,
+    },
+    actionUrl,
+  )
+}
+
+function operatorActionUrl(event: MissionNoticeEvent, caseId?: string | null): string {
+  if (caseId) {
+    if (event === 'mission_completed' || event === 'evidence_submitted' || event === 'mission_verified') {
+      return `tab:case-manager:case:${caseId}`
+    }
+    return `tab:case-manager:case:${caseId}`
+  }
+  return 'tab:case-manager'
 }
 
 /** Avisa a gestores y coordinadores del avance de la misión. */
@@ -219,10 +248,12 @@ export async function notifyMissionOperators(event: {
   volunteerName?: string
   event: MissionNoticeEvent
   excludeUserId?: string
+  caseId?: string | null
 }): Promise<void> {
   const template = OPERATOR_NOTICES[event.event]
   if (!template) return
 
+  const actionUrl = operatorActionUrl(event.event, event.caseId)
   const operators = await listOperationalUsers()
   for (const operatorId of operators) {
     if (operatorId === event.excludeUserId) continue
@@ -231,8 +262,8 @@ export async function notifyMissionOperators(event: {
       template,
       event.missionTitle,
       event.volunteerName,
-      { missionId: event.missionId, event: event.event },
-      'tab:case-manager',
+      { missionId: event.missionId, caseId: event.caseId ?? null, event: event.event },
+      actionUrl,
     )
   }
 }

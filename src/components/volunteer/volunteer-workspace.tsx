@@ -961,6 +961,26 @@ export function VolunteerWorkspace({
   initialTab?: VolunteerTab
 }) {
   const [tab, setTab] = useState<VolunteerTab>(initialTab)
+  const { data: profile } = useVolunteerProfile()
+  const { data: assignments = [] } = useVolunteerMissions(profile?.id ?? '')
+  const { data: publicNeeds = [] } = usePublicNeeds()
+
+  const openNeedsCount = useMemo(
+    () => publicNeeds.filter((n) => n.callStatus === 'open' && n.visibilityStatus === 'public').length,
+    [publicNeeds],
+  )
+  const awaitingAcceptCount = useMemo(
+    () => assignments.filter((a) => a.status === 'assigned').length,
+    [assignments],
+  )
+  const tabBadges = useMemo(
+    () =>
+      ({
+        available: openNeedsCount,
+        'my-missions': awaitingAcceptCount,
+      }) as Partial<Record<VolunteerTab, number>>,
+    [openNeedsCount, awaitingAcceptCount],
+  )
 
   useEffect(() => {
     setTab(initialTab)
@@ -1008,20 +1028,28 @@ export function VolunteerWorkspace({
 
       <div className="shrink-0 px-4 pb-2">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-                tab === t.id
-                  ? 'border-info/50 bg-info/15 text-ink'
-                  : 'border border-white/10 text-ink-subtle hover:bg-white/[0.04]',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TABS.map((t) => {
+            const badge = tabBadges[t.id] ?? 0
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  'relative shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+                  tab === t.id
+                    ? 'border-info/50 bg-info/15 text-ink'
+                    : 'border border-white/10 text-ink-subtle hover:bg-white/[0.04]',
+                )}
+              >
+                {t.label}
+                {badge > 0 && (
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[9px] font-semibold text-white">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 

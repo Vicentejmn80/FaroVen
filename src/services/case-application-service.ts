@@ -8,8 +8,8 @@ import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { caseService } from '@/services/case-service'
 import { missionService } from '@/services/mission-service'
 import { prepareMissionWithReservation } from '@/services/logistics-service'
-import { notifyUser } from '@/lib/notify'
 import { missionLog } from '@/lib/operational-log'
+import { OPS_ACTION_URLS, opsNotify } from '@/services/ops-notification-contract'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import type { Mission } from '@/domain/mission.types'
@@ -77,25 +77,26 @@ export const caseApplicationService = {
               : `a ${distanceKm.toFixed(1)} km`
             : null
         for (const m of managers) {
-          await notifyUser(
-            m.id,
-            'Nuevo postulante',
-            rangeLabel
+          await opsNotify({
+            to: m.id,
+            type: 'case_application',
+            title: 'Nuevo postulante',
+            message: rangeLabel
               ? `${applicantName} (${rangeLabel}) quiere ayudar en "${caseData.title}"`
               : `${applicantName} quiere ayudar en "${caseData.title}"`,
-            'case_application',
-            {
+            priority: 'high',
+            actionUrl: OPS_ACTION_URLS.gcApplication(caseId, app.id),
+            icon: 'users',
+            metadata: {
               caseId,
               applicationId: app.id,
               applicant_name: applicantName,
               distance_km: distanceKm ?? null,
             },
-            {
-              priority: 'high',
-              actionUrl: `tab:applications`,
-              icon: 'users',
-            },
-          )
+            entityType: 'application',
+            entityId: app.id,
+            caseId,
+          })
         }
       }
     } catch {
@@ -113,13 +114,22 @@ export const caseApplicationService = {
       for (const v of [...nearby, ...roster]) {
         if (!v.userId || seen.has(v.userId)) continue
         seen.add(v.userId)
-        await notifyUser(
-          v.userId,
-          'Nueva misión detectada',
-          `Se abrió "${caseData.title}" en ${caseData.zone} — ¿quieres postularte?`,
-          'case_open',
-          { caseId: caseData.id, lat: caseData.location.lat, lng: caseData.location.lng, zone: caseData.zone },
-        )
+        await opsNotify({
+          to: v.userId,
+          type: 'case_open',
+          title: 'Nueva misión detectada',
+          message: `Se abrió "${caseData.title}" en ${caseData.zone} — ¿quieres postularte?`,
+          actionUrl: OPS_ACTION_URLS.volunteerAvailable(),
+          metadata: {
+            caseId: caseData.id,
+            lat: caseData.location.lat,
+            lng: caseData.location.lng,
+            zone: caseData.zone,
+          },
+          entityType: 'case',
+          entityId: caseData.id,
+          caseId: caseData.id,
+        })
       }
     } catch {
       console.warn('[FARO_MISSION] Failed to notify volunteers about case')
@@ -222,18 +232,21 @@ export const caseApplicationService = {
     await closeRadarForCase(app.caseId)
 
     // 5) Notificar voluntario — abre modal de misión asignada
-    await notifyUser(
-      app.applicantId,
-      'Has sido seleccionado para esta misión',
-      `Fuiste seleccionado para "${caseData.title}". Abre FARO e inicia la misión.`,
-      'case_approved',
-      { caseId: app.caseId, missionId: mission.id },
-      {
-        priority: 'high',
-        actionUrl: `tab:map:mission-assigned:${mission.id}`,
-        icon: 'flag',
-      },
-    )
+    await opsNotify({
+      to: app.applicantId,
+      type: 'case_approved',
+      title: 'Has sido seleccionado para esta misión',
+      message: `Fuiste seleccionado para "${caseData.title}". Abre FARO e inicia la misión.`,
+      priority: 'high',
+      actionUrl: OPS_ACTION_URLS.volunteerMissionAssigned(mission.id),
+      icon: 'flag',
+      metadata: { caseId: app.caseId, missionId: mission.id },
+      entityType: 'mission',
+      entityId: mission.id,
+      caseId: app.caseId,
+      missionId: mission.id,
+      actorId,
+    })
 
     return { caseId: app.caseId, missionId: mission.id }
   },
@@ -249,13 +262,19 @@ export const caseApplicationService = {
 
     await caseApplicationRepository.updateStatus(applicationId, 'rejected')
 
-    await notifyUser(
-      app.applicantId,
-      'Postulación rechazada',
-      'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.',
-      'case_rejected',
-      { caseId: app.caseId, rejectedBy: actorId },
-    )
+    await opsNotify({
+      to: app.applicantId,
+      type: 'case_rejected',
+      title: 'Postulación rechazada',
+      message: 'Tu postulación fue rechazada. El caso sigue abierto a otros voluntarios.',
+      actionUrl: OPS_ACTION_URLS.volunteerAvailable(),
+      priority: 'normal',
+      metadata: { caseId: app.caseId, rejectedBy: actorId },
+      entityType: 'application',
+      entityId: applicationId,
+      caseId: app.caseId,
+      actorId,
+    })
   },
 }
 
@@ -284,10 +303,25 @@ async function closeRadarForCase(caseId: string) {
 async function rejectSiblingApplications(caseId: string, approvedId: string) {
   try {
     const apps = await caseApplicationRepository.listByCase(caseId)
+    const siblings = apps.filter(
+      (a) => a.id !== approvedId && (a.status === 'pending' || a.status === 'under_review'),
+    )
     await Promise.all(
-      apps
-        .filter((a) => a.id !== approvedId && (a.status === 'pending' || a.status === 'under_review'))
-        .map((a) => caseApplicationRepository.updateStatus(a.id, 'rejected')),
+      siblings.map(async (a) => {
+        await caseApplicationRepository.updateStatus(a.id, 'rejected')
+        await opsNotify({
+          to: a.applicantId,
+          type: 'case_rejected',
+          title: 'Otro voluntario fue seleccionado',
+          message: 'Se eligió a otro postulante para esta misión. Sigue atento al Radar.',
+          actionUrl: OPS_ACTION_URLS.volunteerAvailable(),
+          priority: 'normal',
+          metadata: { caseId, applicationId: a.id, reason: 'sibling_selected' },
+          entityType: 'application',
+          entityId: a.id,
+          caseId,
+        })
+      }),
     )
   } catch (err) {
     console.warn('[FARO_MISSION] No se pudieron rechazar postulaciones hermanas', err)

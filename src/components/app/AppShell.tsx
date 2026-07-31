@@ -46,9 +46,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { NotificationRow } from '@/domain/notification-models'
 import { PendingRoleBanner } from '@/components/auth/pending-role-banner'
 import { useReports } from '@/hooks/useReports'
+import { usePendingApplicationsQueue } from '@/hooks/useCaseApplications'
+import { usePublicNeeds } from '@/hooks/usePublicNeeds'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { CreateCaseHintSheet } from '@/components/case-manager/create-case-hint-sheet'
+import type { VolunteerWorkspaceTab } from '@/lib/notification-routing'
 
 type FlowId =
   | ActionId
@@ -168,6 +171,7 @@ export function AppShell() {
     caseId: string
     applicationId?: string
   } | null>(null)
+  const [volunteerInitialTab, setVolunteerInitialTab] = useState<VolunteerWorkspaceTab>('available')
   const notifications = useNotifications()
   const { markRead, markAllRead, remove } = useNotificationMutations()
   const pushNotif = usePushNotifications()
@@ -185,37 +189,60 @@ export function AppShell() {
       ? 'case-manager'
       : 'map'
   const { data: inboxReports = [] } = useReports()
+  const { data: pendingApplications = [] } = usePendingApplicationsQueue(isCaseManager)
+  const { data: publicNeeds = [] } = usePublicNeeds()
+
   const pendingReportCount = useMemo(
     () => (isCaseManager ? inboxReports.filter((r) => r.status === 'new').length : 0),
     [inboxReports, isCaseManager],
   )
+  const pendingApplicationCount = useMemo(
+    () => (isCaseManager ? pendingApplications.length : 0),
+    [isCaseManager, pendingApplications.length],
+  )
+  const gcInboxBadgeCount = pendingReportCount + pendingApplicationCount
+  const volunteerOpenNeedsCount = useMemo(
+    () =>
+      isVolunteer
+        ? publicNeeds.filter((n) => n.callStatus === 'open' && n.visibilityStatus === 'public').length
+        : 0,
+    [isVolunteer, publicNeeds],
+  )
 
   useRealtimeSync({
     channelName: 'shell-case-manager-inbox',
-    tables: isCaseManager ? ['reports', 'notifications'] : [],
+    tables: isCaseManager ? ['reports', 'notifications', 'case_applications'] : [],
     invalidateKeys: isCaseManager
-      ? [FARO_QUERY_KEYS.reports]
+      ? [FARO_QUERY_KEYS.reports, FARO_QUERY_KEYS.caseApplications]
       : [],
   })
 
   const tabsWithBadges = useMemo(
     () =>
-      tabs.map((tab) =>
-        tab.id === 'case-manager' && pendingReportCount > 0
-          ? { ...tab, badge: pendingReportCount }
-          : tab,
-      ),
-    [tabs, pendingReportCount],
+      tabs.map((tab) => {
+        if (tab.id === 'case-manager' && gcInboxBadgeCount > 0) {
+          return { ...tab, badge: gcInboxBadgeCount }
+        }
+        if (tab.id === 'needs' && volunteerOpenNeedsCount > 0) {
+          return { ...tab, badge: volunteerOpenNeedsCount }
+        }
+        return tab
+      }),
+    [tabs, gcInboxBadgeCount, volunteerOpenNeedsCount],
   )
 
   const mobileTabsWithBadges = useMemo(
     () =>
-      mobileTabs.map((tab) =>
-        tab.id === 'case-manager' && pendingReportCount > 0
-          ? { ...tab, badge: pendingReportCount }
-          : tab,
-      ),
-    [mobileTabs, pendingReportCount],
+      mobileTabs.map((tab) => {
+        if (tab.id === 'case-manager' && gcInboxBadgeCount > 0) {
+          return { ...tab, badge: gcInboxBadgeCount }
+        }
+        if (tab.id === 'needs' && volunteerOpenNeedsCount > 0) {
+          return { ...tab, badge: volunteerOpenNeedsCount }
+        }
+        return tab
+      }),
+    [mobileTabs, gcInboxBadgeCount, volunteerOpenNeedsCount],
   )
 
   const actionsMode = isCoordinatorOps
@@ -293,6 +320,10 @@ export function AppShell() {
 
   const applyNotificationNavigation = useCallback((target: NotificationNavigationTarget) => {
     if (target.tab) setActiveView(target.tab)
+    if (target.volunteerTab) {
+      setVolunteerInitialTab(target.volunteerTab)
+      if (!target.tab || target.tab === 'needs') setActiveView('needs')
+    }
     if (target.focusRequestId) setFocusRequestId(target.focusRequestId)
     if (target.focusReportId) {
       setFocusReportId(target.focusReportId)
@@ -309,6 +340,7 @@ export function AppShell() {
     }
     if (target.missionAssignedId) {
       setActiveView(isVolunteer ? 'map' : activeView)
+      if (isVolunteer) setVolunteerInitialTab('my-missions')
       window.dispatchEvent(
         new CustomEvent('faro:mission-assigned', {
           detail: { missionId: target.missionAssignedId },
@@ -475,7 +507,11 @@ export function AppShell() {
       return
     }
     // Fallback por tipo cuando no hay action_url (notificaciones antiguas)
-    if (notification.type === 'case_application' || notification.type === 'volunteer_interest') {
+    if (
+      notification.type === 'case_application' ||
+      notification.type === 'volunteer_interest' ||
+      notification.type === 'coverage_interest_submitted'
+    ) {
       const meta = notification.metadata ?? {}
       const caseId = typeof meta.caseId === 'string' ? meta.caseId : null
       const applicationId = typeof meta.applicationId === 'string' ? meta.applicationId : undefined
@@ -489,14 +525,40 @@ export function AppShell() {
       setHubOpen(false)
       return
     }
-    if (notification.type === 'case_approved') {
+    if (notification.type === 'case_approved' || notification.type === 'resources_ready') {
       const meta = notification.metadata ?? {}
       const missionId = typeof meta.missionId === 'string' ? meta.missionId : undefined
-      setActiveView('map')
+      setActiveView(isVolunteer ? 'map' : 'case-manager')
+      if (isVolunteer) setVolunteerInitialTab('my-missions')
       setHubOpen(false)
-      window.dispatchEvent(
-        new CustomEvent('faro:mission-assigned', { detail: { missionId } }),
-      )
+      if (missionId) {
+        window.dispatchEvent(
+          new CustomEvent('faro:mission-assigned', { detail: { missionId } }),
+        )
+      }
+      return
+    }
+    if (notification.type === 'need_call_opened' || notification.type === 'case_open') {
+      applyNotificationNavigation({ tab: 'needs', volunteerTab: 'available' })
+      return
+    }
+    if (notification.type === 'logistics_preparation') {
+      applyNotificationNavigation({ tab: 'ops', coordinatorModule: 'needs' })
+      return
+    }
+    if (
+      notification.type === 'center_needs_volunteer' ||
+      notification.type === 'center_accepted_request' ||
+      notification.type === 'resources_delivered'
+    ) {
+      const meta = notification.metadata ?? {}
+      const caseId = typeof meta.caseId === 'string' ? meta.caseId : null
+      if (caseId) {
+        applyNotificationNavigation({ tab: 'case-manager', focusCaseId: caseId })
+        return
+      }
+      setActiveView('case-manager')
+      setHubOpen(false)
       return
     }
     if (notification.type === 'user_signup') {
@@ -595,6 +657,7 @@ export function AppShell() {
                       profileSubview={profileSubview}
                       canAccessAdminPanel={canAccessAdminPanel}
                       coordinatorModule={coordinatorModule}
+                      volunteerInitialTab={volunteerInitialTab}
                       focusReportId={focusReportId}
                       focusRequestId={focusRequestId}
                       onModuleChange={setCoordinatorModule}
@@ -819,6 +882,7 @@ function ShellActiveView({
   profileSubview,
   canAccessAdminPanel,
   coordinatorModule,
+  volunteerInitialTab,
   focusReportId,
   focusRequestId,
   onModuleChange,
@@ -844,6 +908,7 @@ function ShellActiveView({
   profileSubview: ProfileSubview
   canAccessAdminPanel: boolean
   coordinatorModule: CoordinatorModuleId
+  volunteerInitialTab: VolunteerWorkspaceTab
   focusReportId: string | null
   focusRequestId: string | null
   onModuleChange: (module: CoordinatorModuleId) => void
@@ -889,7 +954,7 @@ function ShellActiveView({
       )
 
     case 'needs':
-      return <VolunteerWorkspace initialTab="available" />
+      return <VolunteerWorkspace initialTab={volunteerInitialTab} />
 
     case 'collaborations':
       return <VolunteerWorkspace initialTab="history" />

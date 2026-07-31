@@ -1,6 +1,8 @@
 import { normalizeTabId, type TabId } from '@/components/faro/app-navigation'
 import type { CoordinatorModuleId } from '@/services/coordinator-service'
 
+export type VolunteerWorkspaceTab = 'available' | 'my-missions' | 'history' | 'profile'
+
 export interface NotificationNavigationTarget {
   tab?: TabId
   flow?: 'coordinator-request'
@@ -10,6 +12,7 @@ export interface NotificationNavigationTarget {
   focusApplicationId?: string
   missionAssignedId?: string
   coordinatorModule?: CoordinatorModuleId
+  volunteerTab?: VolunteerWorkspaceTab
 }
 
 /** Parsea action_url generado por triggers SQL / notifyUser (ej. tab:admin:request:UUID). */
@@ -17,6 +20,18 @@ export function parseNotificationActionUrl(actionUrl: string | null | undefined)
   if (!actionUrl) return null
   const parts = actionUrl.split(':')
   if (parts[0] !== 'tab') return null
+
+  // Voluntario: tab:volunteer:available | tab:volunteer:my-missions
+  if (parts[1] === 'volunteer') {
+    const sub = parts[2]
+    if (sub === 'available') {
+      return { tab: 'needs', volunteerTab: 'available' }
+    }
+    if (sub === 'my-missions' || sub === 'activas') {
+      return { tab: 'needs', volunteerTab: 'my-missions' }
+    }
+    return { tab: 'needs', volunteerTab: 'available' }
+  }
 
   const tab = normalizeTabId(parts[1]) ?? (parts[1] as TabId)
   const target: NotificationNavigationTarget = { tab }
@@ -30,11 +45,18 @@ export function parseNotificationActionUrl(actionUrl: string | null | undefined)
       target.focusReportId = parts[3]
     } else if (parts[2] === 'needs') {
       target.coordinatorModule = 'needs'
+    } else if (parts[2] === 'missions') {
+      target.coordinatorModule = 'missions'
     } else if (parts[2] === 'preparations') {
-      target.coordinatorModule = 'preparations'
+      target.coordinatorModule = 'needs'
+    } else if (parts[2] === 'history') {
+      target.coordinatorModule = 'history'
     } else {
       target.coordinatorModule = 'dashboard'
     }
+  }
+  if (tab === 'needs') {
+    target.volunteerTab = parts[2] === 'my-missions' ? 'my-missions' : 'available'
   }
   if (tab === 'profile' && parts[2] === 'coordinator-request') {
     target.flow = 'coordinator-request'
@@ -44,6 +66,11 @@ export function parseNotificationActionUrl(actionUrl: string | null | undefined)
     target.tab = 'case-manager'
     target.focusCaseId = parts[3]
     if (parts[4]) target.focusApplicationId = parts[4]
+  }
+  // GC: deep-link a caso (sin application específica)
+  if ((tab === 'case-manager' || parts[1] === 'case-manager') && parts[2] === 'case' && parts[3]) {
+    target.tab = 'case-manager'
+    target.focusCaseId = parts[3]
   }
   // Voluntario: misión asignada → abrir modal inmersivo
   if (parts[2] === 'mission-assigned' && parts[3]) {
@@ -59,16 +86,22 @@ export function getNotificationActionLabel(actionUrl: string | null | undefined,
   if (target?.missionAssignedId) return 'Abrir misión'
   if (target?.focusRequestId) return 'Abrir solicitud'
   if (target?.focusReportId) return 'Ver reporte'
-  if (target?.coordinatorModule === 'needs') return 'Ver necesidades'
+  if (target?.coordinatorModule === 'needs') return 'Ver solicitudes'
+  if (target?.coordinatorModule === 'missions') return 'Ver misiones'
   if (target?.coordinatorModule === 'preparations') return 'Ver preparaciones'
+  if (target?.volunteerTab === 'available') return 'Ver disponibles'
+  if (target?.volunteerTab === 'my-missions') return 'Ver mis misiones'
   if (target?.tab === 'ops') return 'Ir a Mi Centro'
   if (target?.tab === 'system') return 'Ir a usuarios'
   if (target?.tab === 'admin') return 'Ir a administración'
   if (target?.tab === 'case-manager') return 'Ir a bandeja'
+  if (target?.tab === 'needs') return 'Ir a misiones'
   if (target?.flow === 'coordinator-request') return 'Responder'
-  if (type === 'case_application' || type === 'volunteer_interest') return 'Revisar postulación'
-  if (type === 'case_approved') return 'Abrir misión'
-  if (type === 'logistics_preparation') return 'Ver preparaciones'
+  if (type === 'case_application' || type === 'volunteer_interest' || type === 'coverage_interest_submitted') {
+    return 'Revisar postulación'
+  }
+  if (type === 'case_approved' || type === 'resources_ready') return 'Abrir misión'
+  if (type === 'logistics_preparation') return 'Ver solicitudes'
   if (type?.includes('approved')) return 'Ir a Mi Centro'
   if (type?.includes('rejected') || type?.includes('info_request')) return 'Ver solicitud'
   return 'Abrir'

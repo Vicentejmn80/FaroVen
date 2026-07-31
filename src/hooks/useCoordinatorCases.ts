@@ -3,7 +3,7 @@ import { FARO_QUERY_KEYS } from './query-keys'
 import { caseRepository } from '@/repositories/case-repository'
 import { caseService } from '@/services/case-service'
 import { assignmentService } from '@/services/assignment-service'
-import { notifyUser } from '@/lib/notify'
+import { OPS_ACTION_URLS, opsNotify } from '@/services/ops-notification-contract'
 import { operationalLog } from '@/lib/operational-log'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/store/auth-context'
@@ -108,14 +108,20 @@ export function useConfirmCenterCase() {
         .eq('status', 'active')
       await Promise.all(
         (managers ?? []).map((m) =>
-          notifyUser(
-            String(m.id),
-            'Centro aceptó solicitud',
-            `El centro aceptó "${caseData?.title ?? caseId.slice(0, 8)}"${notes ? `: ${notes}` : '.'}`,
-            'center_accepted_request',
-            { caseId, notes: notes ?? null },
-            { priority: 'normal', actionUrl: 'tab:ops', icon: 'check' },
-          ),
+          opsNotify({
+            to: String(m.id),
+            type: 'center_accepted_request',
+            title: 'Centro aceptó solicitud',
+            message: `El centro aceptó "${caseData?.title ?? caseId.slice(0, 8)}"${notes ? `: ${notes}` : '.'}`,
+            priority: 'normal',
+            actionUrl: OPS_ACTION_URLS.gcCase(caseId),
+            icon: 'check',
+            metadata: { caseId, notes: notes ?? null },
+            entityType: 'case',
+            entityId: caseId,
+            caseId,
+            actorId: user.id,
+          }),
         ),
       )
       return result
@@ -158,14 +164,20 @@ export function useRequestVolunteerFromCenter() {
         .eq('status', 'active')
       await Promise.all(
         (managers ?? []).map((m) =>
-          notifyUser(
-            String(m.id),
-            'El centro necesita voluntario',
-            `El centro no posee brigada propia para "${caseData?.title ?? caseId.slice(0, 8)}". Se requiere abrir Radar.`,
-            'center_needs_volunteer',
-            { caseId, notes: reason },
-            { priority: 'high', actionUrl: 'tab:ops', icon: 'users' },
-          ),
+          opsNotify({
+            to: String(m.id),
+            type: 'center_needs_volunteer',
+            title: 'El centro necesita voluntario',
+            message: `El centro no posee brigada propia para "${caseData?.title ?? caseId.slice(0, 8)}". Se requiere abrir Radar.`,
+            priority: 'high',
+            actionUrl: OPS_ACTION_URLS.gcCase(caseId),
+            icon: 'users',
+            metadata: { caseId, notes: reason },
+            entityType: 'case',
+            entityId: caseId,
+            caseId,
+            actorId: user.id,
+          }),
         ),
       )
       return result

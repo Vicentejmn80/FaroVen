@@ -2,8 +2,9 @@ import { supabase } from '@/lib/supabase'
 import { logisticsRepository, type CenterRecommendation } from '@/repositories/logistics-repository'
 import { missionRepository } from '@/repositories/mission-repository'
 import { centerOpsRepository } from '@/repositories/center-operations-repository'
-import { notifyUser } from '@/lib/notify'
 import { logisticsLog } from '@/lib/operational-log'
+import { OPS_ACTION_URLS, opsNotify } from '@/services/ops-notification-contract'
+import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { getResourceLabel } from '@/lib/resource-catalog'
 import type { InventoryReservation } from '@/domain/center-operations.types'
 import type { Mission } from '@/domain/mission.types'
@@ -229,19 +230,26 @@ export async function respondToInventoryRequest(input: {
 
     await Promise.all(
       (managers ?? []).map((m) =>
-        notifyUser(
-          String(m.id),
-          'El centro necesita voluntario',
-          `El centro no posee brigada propia para "${title}". Se requiere abrir Radar.`,
-          'center_needs_volunteer',
-          {
+        opsNotify({
+          to: String(m.id),
+          type: 'center_needs_volunteer',
+          title: 'El centro necesita voluntario',
+          message: `El centro no posee brigada propia para "${title}". Se requiere abrir Radar.`,
+          priority: 'high',
+          actionUrl: OPS_ACTION_URLS.gcCase(caseId),
+          icon: 'users',
+          metadata: {
             caseId,
             centerId,
             reservationId: reservation.id,
             notes: input.notes ?? null,
           },
-          { priority: 'high', actionUrl: 'tab:ops', icon: 'users' },
-        ),
+          entityType: 'case',
+          entityId: caseId,
+          caseId,
+          missionId,
+          actorId: input.actorId,
+        }),
       ),
     )
 
@@ -279,20 +287,27 @@ export async function respondToInventoryRequest(input: {
   const modeLabel = input.resolutionMode === 'brigade' ? 'brigada propia' : 'delivery propio'
   await Promise.all(
     (managers ?? []).map((m) =>
-      notifyUser(
-        String(m.id),
-        'Centro aceptó solicitud',
-        `El centro resolverá "${title}" con ${modeLabel}.`,
-        'center_accepted_request',
-        {
+      opsNotify({
+        to: String(m.id),
+        type: 'center_accepted_request',
+        title: 'Centro aceptó solicitud',
+        message: `El centro resolverá "${title}" con ${modeLabel}.`,
+        priority: 'normal',
+        actionUrl: OPS_ACTION_URLS.gcCase(caseId),
+        icon: 'package',
+        metadata: {
           caseId,
           centerId,
           reservationId: reservation.id,
           resolutionMode: input.resolutionMode,
           notes: input.notes ?? null,
         },
-        { priority: 'normal', actionUrl: 'tab:ops', icon: 'package' },
-      ),
+        entityType: 'case',
+        entityId: caseId,
+        caseId,
+        missionId,
+        actorId: input.actorId,
+      }),
     ),
   )
 
@@ -324,6 +339,47 @@ export async function markReservationReady(reservationId: string, actorId?: stri
     actorId,
     payload: { resourceType: reservation.resourceType, quantity: reservation.quantity },
   })
+
+  // Gap crítico Camino B: avisar al voluntario que los recursos están listos
+  try {
+    let volunteerRowId = reservation.volunteerId
+    if (!volunteerRowId && reservation.missionId) {
+      const assignments = await missionRepository.listAssignments(reservation.missionId)
+      const active = assignments.find((a) =>
+        ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress'].includes(a.status),
+      )
+      volunteerRowId = active?.volunteerId
+    }
+    if (volunteerRowId) {
+      const identity = await volunteerRepository.findIdentity(volunteerRowId)
+      if (identity) {
+        const resourceLabel = getResourceLabel(reservation.resourceType)
+        await opsNotify({
+          to: identity.userId,
+          type: 'resources_ready',
+          title: 'Recursos listos en el centro',
+          message: `${reservation.quantity} × ${resourceLabel} están preparados. Puedes pasar a retirarlos.`,
+          priority: 'high',
+          actionUrl: OPS_ACTION_URLS.volunteerMissionAssigned(reservation.missionId),
+          icon: 'package',
+          metadata: {
+            reservationId,
+            missionId: reservation.missionId,
+            caseId: reservation.caseId,
+            centerId: reservation.centerId,
+          },
+          entityType: 'mission',
+          entityId: reservation.missionId,
+          caseId: reservation.caseId,
+          missionId: reservation.missionId,
+          actorId,
+        })
+      }
+    }
+  } catch {
+    console.warn('[FARO_LOGISTICS] No se pudo notificar resources_ready al voluntario')
+  }
+
   return reservation
 }
 
@@ -382,18 +438,27 @@ export async function markReservationDelivered(reservationId: string, actorId?: 
       .eq('status', 'active')
     await Promise.all(
       (managers ?? []).map((m) =>
-        notifyUser(
-          String(m.id),
-          'Centro entregó recursos',
-          `Se entregaron ${reservation.quantity} × ${getResourceLabel(reservation.resourceType)} al voluntario.`,
-          'resources_delivered',
-          {
+        opsNotify({
+          to: String(m.id),
+          type: 'resources_delivered',
+          title: 'Centro entregó recursos',
+          message: `Se entregaron ${reservation.quantity} × ${getResourceLabel(reservation.resourceType)} al voluntario.`,
+          priority: 'normal',
+          actionUrl: reservation.caseId
+            ? OPS_ACTION_URLS.gcCase(reservation.caseId)
+            : OPS_ACTION_URLS.gcBandeja(),
+          icon: 'package',
+          metadata: {
             caseId: reservation.caseId,
             reservationId: reservation.id,
             missionId: reservation.missionId,
           },
-          { priority: 'normal', actionUrl: 'tab:ops', icon: 'package' },
-        ),
+          entityType: 'mission',
+          entityId: reservation.missionId,
+          caseId: reservation.caseId,
+          missionId: reservation.missionId,
+          actorId,
+        }),
       ),
     )
   } catch {
@@ -446,12 +511,15 @@ async function notifyCenterCoordinatorOfReservation(reservation: InventoryReserv
       : `El Gestor solicita preparar ${reservation.quantity} × ${resourceLabel} para "${missionTitle}".`
 
     for (const userId of coordinators) {
-      await notifyUser(
-        userId,
-        'Solicitud de recursos del Gestor',
-        body,
-        'logistics_preparation',
-        {
+      await opsNotify({
+        to: userId,
+        type: 'logistics_preparation',
+        title: 'Solicitud de recursos del Gestor',
+        message: body,
+        priority: 'high',
+        actionUrl: OPS_ACTION_URLS.coordinatorNeeds(),
+        icon: 'package',
+        metadata: {
           reservationId: reservation.id,
           missionId: reservation.missionId,
           caseId: reservation.caseId,
@@ -459,12 +527,11 @@ async function notifyCenterCoordinatorOfReservation(reservation: InventoryReserv
           quantity: reservation.quantity,
           volunteerName,
         },
-        {
-          priority: 'high',
-          actionUrl: `tab:ops:needs`,
-          icon: 'package',
-        },
-      )
+        entityType: 'mission',
+        entityId: reservation.missionId,
+        caseId: reservation.caseId,
+        missionId: reservation.missionId,
+      })
     }
   } catch {
     console.warn('[FARO_LOGISTICS] No se pudo notificar al coordinador del centro')

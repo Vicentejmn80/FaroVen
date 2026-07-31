@@ -16,6 +16,7 @@ import {
 } from '@/services/mission-notification-service'
 import { missionLog, operationalLog } from '@/lib/operational-log'
 import { notifyUser } from '@/lib/notify'
+import { OPS_ACTION_URLS } from '@/services/ops-notification-contract'
 
 async function emitAssignmentStatus(
   assignment: MissionAssignment,
@@ -49,6 +50,10 @@ const CENTER_NOTICE: Partial<
     title: 'Voluntario entregó recursos',
     body: (name, t) => `${name} marcó entregada la misión "${t}".`,
   },
+  mission_cancelled: {
+    title: 'Misión cancelada',
+    body: (_name, t) => `La misión "${t}" fue cancelada. Puedes liberar la preparación.`,
+  },
 }
 
 async function notifyPickupCenterCoordinators(
@@ -75,7 +80,14 @@ async function notifyPickupCenterCoordinators(
         template.body(name, mission.title),
         'mission_center_update',
         { missionId: mission.id, caseId: mission.caseId, event, centerId: mission.pickupCenterId },
-        { priority: event === 'volunteer_on_site' ? 'high' : 'normal', actionUrl: 'tab:ops:needs', icon: 'truck' },
+        {
+          priority: event === 'volunteer_on_site' ? 'high' : 'normal',
+          actionUrl:
+            event === 'mission_in_progress' || event === 'volunteer_on_site'
+              ? OPS_ACTION_URLS.coordinatorMissions()
+              : OPS_ACTION_URLS.coordinatorNeeds(),
+          icon: 'truck',
+        },
       ),
     ),
   )
@@ -117,6 +129,7 @@ async function announce(
         missionId: mission.id,
         missionTitle: mission.title,
         event,
+        caseId: mission.caseId,
       })
     }
     if (audience.operators) {
@@ -126,6 +139,7 @@ async function announce(
         volunteerName: identity?.fullName,
         event,
         excludeUserId: identity?.userId,
+        caseId: mission.caseId,
       })
     }
     if (audience.center !== false) {
@@ -284,13 +298,32 @@ export const missionService = {
       description: comment,
     })
 
-    // Mision logistica cancelada: liberar reserva de inventario
+    // Mision logistica cancelada: liberar reserva de inventario + avisar
     if (toStage === MISSION_STAGES.CANCELLED) {
       try {
         const { releaseReservationByMission } = await import('@/services/logistics-service')
         await releaseReservationByMission(missionId, actorId)
       } catch {
         console.warn('[FARO_LOGISTICS] No se pudo liberar la reserva al cancelar la misión')
+      }
+      try {
+        const assignments = await missionRepository.listAssignments(missionId)
+        const active =
+          assignments.find((a) =>
+            ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress'].includes(a.status),
+          ) ?? assignments[0]
+        if (active) {
+          await announce(active, 'mission_cancelled', { volunteer: true, operators: true, center: true })
+        } else {
+          await notifyMissionOperators({
+            missionId,
+            missionTitle: mission.title,
+            event: 'mission_cancelled',
+            caseId: mission.caseId,
+          })
+        }
+      } catch {
+        console.warn('[MISSION_ENGINE] No se pudo notificar la cancelación de misión')
       }
     }
 
