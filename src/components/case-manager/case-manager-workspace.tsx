@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases, useArchiveCase } from '@/hooks/useCases'
@@ -307,6 +308,11 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
   const rejectCenter = useRejectCenterAssignment()
   const confirmTransfer = useConfirmTransferDecision()
   const [esperandoCasoId, setEsperandoCasoId] = useState<string | null>(null)
+  const radarCaseSnapshotRef = useRef<CaseDomain | null>(null)
+  const openRadarForCase = useCallback((c: CaseDomain) => {
+    radarCaseSnapshotRef.current = c
+    setEsperandoCasoId(c.id)
+  }, [])
   const [asignandoCasoId, setAsignandoCasoId] = useState<string | null>(null)
   const [applicationCaseId, setApplicationCaseId] = useState<string | undefined>(undefined)
   const { data: applications = [] } = useCaseApplications(applicationCaseId)
@@ -601,7 +607,7 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
                         <GcDecisionPanel
                           caseData={c}
                           busy={confirmTransfer.isPending}
-                          onOpenRadar={() => setEsperandoCasoId(c.id)}
+                          onOpenRadar={() => openRadarForCase(c)}
                           onAssignInstitution={() => setAsignandoCasoId(c.id)}
                           onTransfer={({ executor, originCenterId, resourceType }) => {
                             if (!user?.id) return
@@ -618,7 +624,7 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
                                   if (result.next === 'assign_institution') {
                                     setAsignandoCasoId(c.id)
                                   } else if (result.next === 'radar') {
-                                    setEsperandoCasoId(c.id)
+                                    openRadarForCase(c)
                                   }
                                 },
                                 onError: (err) => {
@@ -958,14 +964,20 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
       </div>
 
       {esperandoCasoId && (() => {
+        // Preferir snapshot vivo; si la query parpadea vacía, no desmontar el radar.
         const found = allCases?.find((c) => c.id === esperandoCasoId)
-        if (!found) return null
+        const fallback = radarCaseSnapshotRef.current
+        const caseData = found ?? (fallback?.id === esperandoCasoId ? fallback : null)
+        if (!caseData) return null
+        if (found) radarCaseSnapshotRef.current = found
         return (
           <EsperarPostulanteModal
-            caseData={found}
-            open={true}
-            onClose={() => setEsperandoCasoId(null)}
-            onTimeUp={() => setEsperandoCasoId(null)}
+            caseData={caseData}
+            open
+            onClose={() => {
+              radarCaseSnapshotRef.current = null
+              setEsperandoCasoId(null)
+            }}
             actorId={user?.id}
           />
         )

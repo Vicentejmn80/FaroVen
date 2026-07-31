@@ -37,7 +37,8 @@ export function OperationsHub() {
   const { data: operationalNeeds = [] } = useOperationalPublicNeeds()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [radarOpen, setRadarOpen] = useState(false)
+  /** Snapshot estable: el radar NO depende de que el caso siga en la lista tras refetch. */
+  const [radarCase, setRadarCase] = useState<CaseDomain | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const transitionMutation = useTransitionCase()
   const assignMutation = useAssignCase()
@@ -225,7 +226,7 @@ export function OperationsHub() {
 
   const handleOpenRadar = useCallback(() => {
     if (!selectedCase) return
-    setRadarOpen(true)
+    setRadarCase(selectedCase)
   }, [selectedCase])
 
   const handleApproveApplication = useCallback(
@@ -345,12 +346,11 @@ export function OperationsHub() {
           isVerifying={verifyMutation.isPending}
         />
 
-        {radarOpen && selectedCase && (
+        {radarCase && (
           <EsperarPostulanteModal
-            caseData={selectedCase}
-            open={radarOpen}
-            onClose={() => setRadarOpen(false)}
-            onTimeUp={() => undefined}
+            caseData={radarCase}
+            open
+            onClose={() => setRadarCase(null)}
             actorId={user?.id}
           />
         )}

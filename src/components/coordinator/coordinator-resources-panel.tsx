@@ -145,7 +145,7 @@ export function CoordinatorInventoryPanel() {
     <div className="space-y-3">
       <SectionHeader
         title="Inventario"
-        subtitle="Selecciona del catálogo. Sin nombres libres."
+        subtitle="Disponible · reservado · libre. Actualiza cantidades del catálogo."
         icon={Package}
         action={
           <EmergencyButton
@@ -244,19 +244,32 @@ export function CoordinatorInventoryPanel() {
       ) : (
         resources.map((r) => {
           const min = r.minLevel || getResourceMinRecommended(r.resourceType)
-          const tone = stockTone(r.currentLevel, min)
+          const reserved = r.reservedLevel ?? 0
+          const free = Math.max(r.currentLevel - reserved, 0)
+          const tone = stockTone(free, min)
+          const unit = r.unit || getResourceUnit(r.resourceType)
           const isEditing = editingKey === r.resourceType
           return (
             <GlassCard key={r.id} className="space-y-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">{getResourceLabel(r.resourceType)}</p>
-                  <p className={cn('text-xs font-medium tabular-nums', TONE_TEXT[tone])}>
-                    {r.currentLevel} {r.unit || getResourceUnit(r.resourceType)}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-ink-faint">
-                    Actualizado {timeAgo(r.updatedAt)}
-                    {r.category ? ` · ${RESOURCE_CATEGORY_LABELS[r.category as ResourceCategory] ?? r.category}` : ''}
+                  <div className="mt-1.5 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-ink-faint">Disponible</p>
+                      <p className="text-sm font-semibold tabular-nums text-ink">{r.currentLevel}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-ink-faint">Reservado</p>
+                      <p className="text-sm font-semibold tabular-nums text-warning">{reserved}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-ink-faint">Libre</p>
+                      <p className={cn('text-sm font-semibold tabular-nums', TONE_TEXT[tone])}>{free}</p>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[11px] text-ink-faint">
+                    {unit} · Actualizado {timeAgo(r.updatedAt)}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-1.5">

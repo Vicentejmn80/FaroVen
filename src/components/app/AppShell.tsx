@@ -64,8 +64,8 @@ type FlowId =
   | 'legal-contact'
   | 'legal-about'
 
-const SituationScreen = lazyWithRetry(() =>
-  import('@/screens/situation-screen').then((m) => ({ default: m.SituationScreen })),
+const LogisticsMapScreen = lazyWithRetry(() =>
+  import('@/screens/logistics-map-screen').then((m) => ({ default: m.LogisticsMapScreen })),
 )
 const OperationsHub = lazyWithRetry(() =>
   import('@/components/operations-hub/operations-hub').then((m) => ({ default: m.OperationsHub })),
@@ -162,7 +162,7 @@ export function AppShell() {
   const [hubOpen, setHubOpen] = useState(false)
   const [profileSubview, setProfileSubview] = useState<ProfileSubview>('main')
   const [focusRequestId, setFocusRequestId] = useState<string | null>(null)
-  const [coordinatorModule, setCoordinatorModule] = useState<CoordinatorModuleId>('dashboard')
+  const [coordinatorModule, setCoordinatorModule] = useState<CoordinatorModuleId>('inventory')
   const [focusReportId, setFocusReportId] = useState<string | null>(null)
   const [reviewApplication, setReviewApplication] = useState<{
     caseId: string
@@ -833,7 +833,7 @@ function ShellActiveView({
   onRequestCoordinatorAccess,
   onRequestRoleAccess,
   onBackFromDetail,
-  onRegisterSite,
+  onRegisterSite: _onRegisterSite,
   onOpenNotificationPreferences,
   onBackFromNotificationPrefs,
   onNavigate,
@@ -885,7 +885,7 @@ function ShellActiveView({
           }}
         />
       ) : (
-        <SituationScreen onOpenDetail={onOpenDetail} onRegisterSite={onRegisterSite} />
+        <LogisticsMapScreen onOpenDetail={onOpenDetail} />
       )
 
     case 'needs':

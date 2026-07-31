@@ -167,8 +167,12 @@ export async function releaseReservationByMission(missionId: string, actorId?: s
   })
 }
 
-export async function listReservationsByCenter(centerId: string): Promise<InventoryReservation[]> {
-  return logisticsRepository.listByCenter(centerId, ['reserved', 'ready'])
+export async function listReservationsByCenter(
+  centerId: string,
+  statuses?: Array<'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'>,
+): Promise<InventoryReservation[]> {
+  // Sin filtro: historial completo del centro (Solicitudes / Misiones / Historial filtran en UI).
+  return logisticsRepository.listByCenter(centerId, statuses)
 }
 
 export async function listReservationsByCase(caseId: string): Promise<InventoryReservation[]> {
