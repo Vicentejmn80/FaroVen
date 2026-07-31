@@ -92,11 +92,19 @@ export interface CenterOperationalProfile {
   centerId: string
   siteType: string
   operationalMode: OperationalMode
+  /** Motor FARO: cómo despacha el centro. */
+  dispatchMode: 'brigade' | 'needs_volunteers' | 'mixed'
   resources: CenterResource[]
   occupancyPct: number
   resourceCoveragePct: number
   activeCaseCount: number
   recentEvents: CenterEvent[]
+}
+
+export const DISPATCH_MODE_LABELS: Record<CenterOperationalProfile['dispatchMode'], string> = {
+  mixed: 'Mixto',
+  brigade: 'Brigada propia',
+  needs_volunteers: 'Necesita voluntarios',
 }
 
 export interface CenterResource {

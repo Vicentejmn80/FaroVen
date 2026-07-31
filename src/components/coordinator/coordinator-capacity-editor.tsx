@@ -1,16 +1,19 @@
-import { useState } from 'react'
-import { useUpdateCenterCapacity, useCenterProfile } from '@/hooks/useCenterOperations'
+import { useEffect, useState } from 'react'
+import { useUpdateCenterCapacity, useCenterProfile, useUpdateCenterDispatchMode } from '@/hooks/useCenterOperations'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
-import { OPERATIONAL_MODE_LABELS } from '@/domain/center-operations.types'
+import { DISPATCH_MODE_LABELS, OPERATIONAL_MODE_LABELS } from '@/domain/center-operations.types'
 import type { RegisterSiteType } from '@/repositories/types'
+import { useAuth } from '@/store/auth-context'
 
 export function CoordinatorCapacityEditor() {
   const { assignment } = useCoordinatorAssignment()
   const siteType = (assignment?.siteType ?? 'hospital') as RegisterSiteType
   const { data: profile, isLoading } = useCenterProfile(assignment?.siteId ?? '', siteType)
   const updateCapacity = useUpdateCenterCapacity()
+  const updateDispatchMode = useUpdateCenterDispatchMode()
+  const { user, profile: actorProfile } = useAuth()
 
   const [current, setCurrent] = useState(0)
   const [total, setTotal] = useState(0)
@@ -19,6 +22,11 @@ export function CoordinatorCapacityEditor() {
   const [elderly, setElderly] = useState(0)
   const [disabled, setDisabled] = useState(0)
   const [editing, setEditing] = useState(false)
+  const [dispatchMode, setDispatchMode] = useState<'brigade' | 'needs_volunteers' | 'mixed'>('mixed')
+
+  useEffect(() => {
+    if (profile?.dispatchMode) setDispatchMode(profile.dispatchMode)
+  }, [profile?.dispatchMode])
 
   if (!assignment) {
     return (
@@ -44,6 +52,17 @@ export function CoordinatorCapacityEditor() {
     setElderly(0)
     setDisabled(0)
     setEditing(true)
+  }
+
+  const handleDispatchSave = () => {
+    if (!assignment) return
+    updateDispatchMode.mutate({
+      centerId: assignment.siteId,
+      siteType,
+      dispatchMode,
+      actorId: user?.id,
+      actorName: actorProfile?.full_name ?? user?.email ?? undefined,
+    })
   }
 
   const handleSave = () => {
@@ -103,6 +122,12 @@ export function CoordinatorCapacityEditor() {
                 </p>
               </div>
               <div className="bg-white/5 rounded-lg p-2">
+                <span className="text-ink-faint">Despacho</span>
+                <p className="text-ink font-medium">
+                  {DISPATCH_MODE_LABELS[profile.dispatchMode] ?? profile.dispatchMode}
+                </p>
+              </div>
+              <div className="bg-white/5 rounded-lg p-2">
                 <span className="text-ink-faint">Casos activos</span>
                 <p className="text-ink font-medium">{profile.activeCaseCount}</p>
               </div>
@@ -110,6 +135,37 @@ export function CoordinatorCapacityEditor() {
                 <span className="text-ink-faint">Cobertura de recursos</span>
                 <p className="text-ink font-medium">{profile.resourceCoveragePct}%</p>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+                Modo de despacho
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {(['mixed', 'brigade', 'needs_volunteers'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setDispatchMode(m)}
+                    className={`rounded-xl border px-2 py-2 text-[11px] font-medium transition-colors ${
+                      dispatchMode === m
+                        ? 'border-info/40 bg-info/12 text-info'
+                        : 'border-white/10 bg-white/[0.02] text-ink-subtle hover:bg-white/[0.05]'
+                    }`}
+                  >
+                    {DISPATCH_MODE_LABELS[m]}
+                  </button>
+                ))}
+              </div>
+              <EmergencyButton
+                variant="primary"
+                size="sm"
+                className="w-full"
+                onClick={handleDispatchSave}
+                disabled={updateDispatchMode.isPending}
+              >
+                {updateDispatchMode.isPending ? 'Guardando…' : 'Guardar modo de despacho'}
+              </EmergencyButton>
             </div>
           </div>
         )}

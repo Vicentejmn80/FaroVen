@@ -279,25 +279,25 @@ export class PublicNeedRepository {
     collaboratorType?: CoverageReservation['collaboratorType']
     quantity: number
   }): Promise<CoverageReservation> {
-    const need = await this.findById(input.publicNeedId)
-    if (!need || need.callStatus !== 'open' || need.remainingQuantity <= 0) {
-      throw new Error('La convocatoria está cerrada o completa')
-    }
+    const { data, error } = await supabase.rpc('reserve_coverage', {
+      p_public_need_id: input.publicNeedId,
+      p_quantity: input.quantity,
+      p_collaborator_name: input.collaboratorName ?? null,
+      p_collaborator_type: input.collaboratorType ?? 'citizen',
+    })
+    if (error) throw error
+    return toCoverageReservation(data as AnyRow)
+  }
 
-    const { data: userData } = await supabase.auth.getUser()
+  async updateRequiredQuantity(publicNeedId: string, requiredQuantity: number): Promise<PublicNeed> {
     const { data, error } = await supabase
-      .from('coverage_reservations')
-      .insert({
-        public_need_id: input.publicNeedId,
-        collaborator_user_id: userData.user?.id ?? null,
-        collaborator_name: input.collaboratorName ?? null,
-        collaborator_type: input.collaboratorType ?? 'citizen',
-        quantity: input.quantity,
-      })
+      .from('public_needs')
+      .update({ required_quantity: requiredQuantity })
+      .eq('id', publicNeedId)
       .select('*')
       .single()
     if (error) throw error
-    return toCoverageReservation(data as AnyRow)
+    return toPublicNeed(data as AnyRow)
   }
 
   async closeAllByCaseId(caseId: string): Promise<void> {

@@ -20,6 +20,7 @@ import { Flag } from 'lucide-react'
 import { ASSIGNMENT_STATUS_LABELS, label, PRIORITY_LABELS, PUBLIC_NEED_STATUS_LABELS } from '@/lib/labels'
 import { useCreateCoverageReservation, usePublicNeeds } from '@/hooks/usePublicNeeds'
 import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
+import { PickupCenterContactBlock } from '@/components/volunteer/pickup-center-contact-block'
 import {
   dismissMissionForUser,
   loadDismissedMissionIds,
@@ -77,6 +78,7 @@ function AvailableMissions() {
   const { data: profile } = useVolunteerProfile()
   const reserveCoverage = useCreateCoverageReservation()
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
   const needs = useMemo(
     () =>
       publicNeeds?.filter(
@@ -122,6 +124,8 @@ function AvailableMissions() {
         const alreadyApplied = appliedIds.has(need.id)
         const canApply = isVolunteer && !!profile && !alreadyApplied && need.remainingQuantity > 0
         const hoursLeft = Math.max(0, Math.round((need.expiresAt.getTime() - Date.now()) / 3600000))
+        const qty = quantities[need.id] ?? 1
+        const showQtyPicker = need.requiredQuantity > 1
 
         return (
           <GlassCard key={need.id} className="p-4">
@@ -140,6 +144,27 @@ function AvailableMissions() {
               <span>{hoursLeft > 0 ? `${hoursLeft}h restantes` : 'Vencida'}</span>
               <span>{label(PUBLIC_NEED_STATUS_LABELS, need.status, need.status)}</span>
             </div>
+            {showQtyPicker && (
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-[10px] text-ink-faint">Cantidad a cubrir</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={need.remainingQuantity}
+                  value={qty}
+                  onChange={(e) =>
+                    setQuantities((prev) => ({
+                      ...prev,
+                      [need.id]: Math.min(
+                        need.remainingQuantity,
+                        Math.max(1, Number(e.target.value) || 1),
+                      ),
+                    }))
+                  }
+                  className="w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-ink"
+                />
+              </div>
+            )}
             <div className="mt-3">
               <button
                 type="button"
@@ -157,7 +182,7 @@ function AvailableMissions() {
                       publicNeedId: need.id,
                       collaboratorType: 'volunteer',
                       collaboratorName: profile.fullName,
-                      quantity: 1,
+                      quantity: showQtyPicker ? qty : 1,
                     },
                     {
                       onSuccess: () => {
@@ -225,19 +250,19 @@ function SelectedMissionModal({
         </div>
 
         {isResourceMission && mission && (
-          <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
-              Recursos a recoger
-            </p>
-            <p className="text-sm font-medium text-ink">
-              {mission.resourceQty ?? '—'} × {getResourceLabel(mission.resourceType ?? '')}
-            </p>
-            <p className="text-xs text-ink-muted">
-              Centro: {mission.pickupAddress ?? mission.pickupCenterId?.slice(0, 8)}
-            </p>
-            <p className="text-xs text-ink-muted">
-              Destino: {mission.deliveryAddress ?? mission.location.zone}
-            </p>
+          <div className="space-y-2">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+                Recursos a recoger
+              </p>
+              <p className="text-sm font-medium text-ink">
+                {mission.resourceQty ?? '—'} × {getResourceLabel(mission.resourceType ?? '')}
+              </p>
+              <p className="text-xs text-ink-muted">
+                Destino: {mission.deliveryAddress ?? mission.location.zone}
+              </p>
+            </div>
+            <PickupCenterContactBlock centerId={mission.pickupCenterId} fallbackAddress={mission.pickupAddress} />
           </div>
         )}
 

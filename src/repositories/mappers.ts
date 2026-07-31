@@ -75,6 +75,7 @@ function baseCenter(input: {
   schedule?: string | null
   notes?: string | null
   status?: string | null
+  dispatchMode?: string | null
   updatedAt?: string | null
 }): Center {
   const total = input.capacity ?? 100
@@ -108,6 +109,12 @@ function baseCenter(input: {
     phone: input.phone ?? undefined,
     schedule: input.schedule ?? undefined,
     observations: input.notes ?? undefined,
+    dispatchMode:
+      input.dispatchMode === 'brigade' ||
+      input.dispatchMode === 'needs_volunteers' ||
+      input.dispatchMode === 'mixed'
+        ? input.dispatchMode
+        : 'mixed',
   }
 }
 
@@ -127,6 +134,7 @@ export function hospitalRowToCenter(row: HospitalRow): Center {
     currentOcc: row.current_occ,
     notes: row.notes,
     status: row.status,
+    dispatchMode: (row as { dispatch_mode?: string | null }).dispatch_mode ?? null,
     updatedAt: row.updated_at,
   })
 }
@@ -147,6 +155,7 @@ export function shelterRowToCenter(row: ShelterRow): Center {
     currentOcc: row.current_occ,
     notes: row.notes,
     status: row.status,
+    dispatchMode: (row as { dispatch_mode?: string | null }).dispatch_mode ?? null,
     updatedAt: row.updated_at,
   })
 }
@@ -168,6 +177,7 @@ export function supplyCenterRowToCenter(row: SupplyCenterRow): Center {
     schedule: row.schedule,
     notes: row.notes,
     status: row.status,
+    dispatchMode: (row as { dispatch_mode?: string | null }).dispatch_mode ?? null,
     updatedAt: row.updated_at,
   })
 }

@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
 import { useOperationalPublicNeeds, useNeedInterests } from '@/hooks/usePublicNeeds'
-import { useTransitionCase, useAssignCase, useStartCaseReview } from '@/hooks/useCaseMutations'
+import { useTransitionCase, useStartCaseReview } from '@/hooks/useCaseMutations'
+import { assignCaseWithDispatchRules, canOpenRadarForCase, resolveCenterDispatchMode } from '@/services/faro-assignment-service'
+import { humanizeSupabaseError } from '@/lib/supabase-errors'
 import { useRequestInventoryFromCenter } from '@/hooks/useLogistics'
 import { resolveCatalogKey } from '@/lib/resource-catalog'
+import { useToast } from '@/store/toast-context'
+import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import {
   useCaseApplications,
   useApproveCaseApplication,
@@ -20,7 +24,6 @@ import { computeCaseSummary, sortCasesByUrgency, suggestCentersForCase } from '@
 import { operationalRecommendationService } from '@/services/operational-recommendation-service'
 import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { isCoverageStage, isProgressStage, isReviewStage } from '@/domain/ops-pipeline'
-import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { EsperarPostulanteModal } from '@/components/case-manager/esperar-postulante-modal'
 import { CommandKpiBar } from './command-kpi-bar'
@@ -35,6 +38,8 @@ type WorkspaceMode = 'pipeline' | 'map'
 export function OperationsHub() {
   const { state } = useFaro()
   const { user } = useAuth()
+  const { showToast } = useToast()
+  const queryClient = useQueryClient()
   const { data: opsCases = [] } = useCases()
   const { data: operationalNeeds = [] } = useOperationalPublicNeeds()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -43,7 +48,30 @@ export function OperationsHub() {
   const [radarCase, setRadarCase] = useState<CaseDomain | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const transitionMutation = useTransitionCase()
-  const assignMutation = useAssignCase()
+  const assignMutation = useMutation({
+    mutationFn: async ({
+      caseData,
+      centerId,
+      actorId,
+      inventoryTip,
+    }: {
+      caseData: CaseDomain
+      centerId: string
+      actorId: string
+      inventoryTip?: { available: number; resourceType: string; quantity: number }
+    }) => {
+      try {
+        return await assignCaseWithDispatchRules({ caseData, centerId, actorId, inventoryTip })
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      queryClient.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+      showToast('Centro propuesto — esperando confirmación.', 'success')
+    },
+  })
   const requestInventory = useRequestInventoryFromCenter()
   const startReviewMutation = useStartCaseReview()
   const verifyMutation = useVerifyAssignment()
@@ -205,28 +233,30 @@ export function OperationsHub() {
       if (!selectedCase || !user?.id) return
       const tip = inventoryTips.find((t) => t.centerId === centerId)
 
-      // Si hay stock recomendado para ese centro → solicitud logística real al Coordinador.
       if (tip) {
-        requestInventory.mutate({
+        assignMutation.mutate({
           caseData: selectedCase,
           centerId,
-          resourceType: resolveCatalogKey(selectedCase.category) ?? 'agua',
-          quantity: Math.max(
-            1,
-            Math.min(tip.available, reco?.minQty ?? selectedCase.affectedCount ?? 1),
-          ),
           actorId: user.id,
+          inventoryTip: {
+            available: tip.available,
+            resourceType: resolveCatalogKey(selectedCase.category) ?? 'agua',
+            quantity: Math.max(
+              1,
+              Math.min(tip.available, reco?.minQty ?? selectedCase.affectedCount ?? 1),
+            ),
+          },
         })
         return
       }
 
       assignMutation.mutate({
-        caseId: selectedCase.id,
+        caseData: selectedCase,
         centerId,
-        assignedBy: user.id,
+        actorId: user.id,
       })
     },
-    [selectedCase, assignMutation, requestInventory, user?.id, inventoryTips, reco?.minQty, reco?.resourceLabel],
+    [selectedCase, assignMutation, user?.id, inventoryTips, reco?.minQty],
   )
 
   const handleUseInventory = useCallback(() => {
@@ -259,10 +289,29 @@ export function OperationsHub() {
     [verifyMutation, user?.id],
   )
 
+  const { data: assignedDispatchMode } = useQuery({
+    queryKey: [FARO_QUERY_KEYS.coverage, 'dispatch-mode', selectedCase?.assignedCenterId],
+    queryFn: () => resolveCenterDispatchMode(selectedCase!.assignedCenterId!),
+    enabled: Boolean(selectedCase?.assignedCenterId),
+    staleTime: 30_000,
+  })
+
+  const radarGate = useMemo(
+    () =>
+      selectedCase
+        ? canOpenRadarForCase(selectedCase, assignedDispatchMode ?? null)
+        : { allowed: true as const },
+    [selectedCase, assignedDispatchMode],
+  )
+
   const handleOpenRadar = useCallback(() => {
     if (!selectedCase) return
+    if (!radarGate.allowed) {
+      showToast(radarGate.reason ?? 'Radar no disponible para este caso.', 'info')
+      return
+    }
     setRadarCase(selectedCase)
-  }, [selectedCase])
+  }, [selectedCase, radarGate, showToast])
 
   const handleApproveApplication = useCallback(
     (applicationId: string, pickupCenterId?: string) => {
@@ -376,6 +425,8 @@ export function OperationsHub() {
           onStartReview={handleStartReview}
           onVerifyAssignment={handleVerify}
           onOpenRadar={handleOpenRadar}
+          canOpenRadar={radarGate.allowed}
+          radarBlockedReason={radarGate.reason}
           onApproveApplication={handleApproveApplication}
           onRejectApplication={handleRejectApplication}
           isTransitioning={transitionMutation.isPending || startReviewMutation.isPending}

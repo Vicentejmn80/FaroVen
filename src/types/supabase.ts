@@ -12,6 +12,8 @@ export interface HospitalRow {
   current_occ: number | null
   notes: string | null
   status: string | null
+  operational_mode?: string | null
+  dispatch_mode?: string | null
   updated_at: string | null
 }
 
@@ -29,6 +31,8 @@ export interface ShelterRow {
   current_occ: number | null
   notes: string | null
   status: string | null
+  operational_mode?: string | null
+  dispatch_mode?: string | null
   updated_at: string | null
 }
 
@@ -45,6 +49,8 @@ export interface SupplyCenterRow {
   schedule: string | null
   notes: string | null
   status: string | null
+  operational_mode?: string | null
+  dispatch_mode?: string | null
   updated_at: string | null
 }
 

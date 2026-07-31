@@ -28,6 +28,8 @@ interface CaseDetailDrawerProps {
   onStartReview?: (caseId: string) => void
   onVerifyAssignment?: (assignmentId: string) => void
   onOpenRadar?: () => void
+  canOpenRadar?: boolean
+  radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
   inventoryTips?: Array<{
@@ -60,6 +62,8 @@ export function CaseDetailDrawer({
   onStartReview,
   onVerifyAssignment,
   onOpenRadar,
+  canOpenRadar = true,
+  radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
   inventoryTips,
@@ -121,7 +125,9 @@ export function CaseDetailDrawer({
                 onUseInventory={onUseInventory}
                 onStartReview={onStartReview}
                 onVerifyAssignment={onVerifyAssignment}
-                onOpenRadar={onOpenRadar}
+                onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
+                canOpenRadar={canOpenRadar}
+                radarBlockedReason={radarBlockedReason}
                 onApproveApplication={onApproveApplication}
                 onRejectApplication={onRejectApplication}
                 inventoryTips={inventoryTips}

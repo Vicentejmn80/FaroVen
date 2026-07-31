@@ -10,6 +10,7 @@ interface OperationalRecoPanelProps {
   caseData: CaseDomain
   onUseInventory?: () => void
   onOpenCoverage?: () => void
+  radarBlockedReason?: string
 }
 
 /** Recomendación corta: una idea + acciones, sin ruido. */
@@ -17,6 +18,7 @@ export function OperationalRecoPanel({
   caseData,
   onUseInventory,
   onOpenCoverage,
+  radarBlockedReason,
 }: OperationalRecoPanelProps) {
   const enabled = isReviewStage(caseData.pipelineStage) || isCoverageStage(caseData.pipelineStage)
   const { data, isLoading } = useQuery({
@@ -64,6 +66,9 @@ export function OperationalRecoPanel({
               >
                 Abrir radar
               </EmergencyButton>
+            )}
+            {radarBlockedReason && !onOpenCoverage && (
+              <p className="text-[10px] text-ink-faint">{radarBlockedReason}</p>
             )}
           </div>
         </>

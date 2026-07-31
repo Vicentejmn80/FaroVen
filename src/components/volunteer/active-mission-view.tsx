@@ -18,7 +18,8 @@ import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/op
 import { MapZoomControls, MapLocateControl, MapGoogleLinkButton } from '@/components/faro/map-controls'
 import { useGeolocation, haversineDistance, formatDistance, estimateTravelTime } from '@/hooks/useGeolocation'
 import { getResourceLabel } from '@/lib/resource-catalog'
-import { supabase } from '@/lib/supabase'
+import { usePickupCenterInfo } from '@/hooks/usePickupCenterInfo'
+import { PickupCenterContactBlock } from '@/components/volunteer/pickup-center-contact-block'
 import { cn } from '@/lib/utils'
 import { label, PRIORITY_LABELS } from '@/lib/labels'
 import { useUpdateMissionAssignment, useSubmitEvidence, useReportEtaDelay } from '@/hooks/useMissionMutations'
@@ -122,29 +123,11 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
   const locked = LOCKED_STATUSES.has(assignment.status)
   const isResourceMission = Boolean(mission.pickupCenterId)
   const missionCenter: [number, number] = [mission.location.lat, mission.location.lng]
-
-  // Centro de recogida (mision logistica)
-  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | null>(null)
-  useEffect(() => {
-    if (!mission.pickupCenterId) return
-    let cancelled = false
-    ;(async () => {
-      for (const table of ['hospitals', 'shelters', 'supply_centers'] as const) {
-        const { data } = await supabase
-          .from(table)
-          .select('latitude, longitude')
-          .eq('id', mission.pickupCenterId)
-          .maybeSingle()
-        if (!cancelled && data?.latitude != null && data?.longitude != null) {
-          setPickupCoords({ lat: data.latitude as number, lng: data.longitude as number })
-          return
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [mission.pickupCenterId])
+  const { data: pickupCenter } = usePickupCenterInfo(mission.pickupCenterId)
+  const pickupCoords =
+    pickupCenter?.lat != null && pickupCenter?.lng != null
+      ? { lat: pickupCenter.lat, lng: pickupCenter.lng }
+      : null
 
   const distance = position
     ? haversineDistance(position.lat, position.lng, mission.location.lat, mission.location.lng)
@@ -506,9 +489,11 @@ export function ActiveMissionView({ mission, assignment, volunteerId, onClose }:
             <p className="text-sm font-medium text-ink">
               {mission.resourceQty ?? '—'} × {getResourceLabel(mission.resourceType ?? '')}
             </p>
-            <p className="text-xs text-ink-muted">
-              Centro: {mission.pickupAddress ?? mission.pickupCenterId?.slice(0, 8)}
-            </p>
+            <PickupCenterContactBlock
+              centerId={mission.pickupCenterId}
+              fallbackAddress={mission.pickupAddress}
+              className="!border-0 !bg-transparent !p-0"
+            />
             <p className="text-xs text-ink-muted">
               Destino: {mission.deliveryAddress ?? mission.location.zone}
             </p>

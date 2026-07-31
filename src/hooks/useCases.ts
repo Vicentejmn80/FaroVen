@@ -61,11 +61,19 @@ export function useOpenCaseForApplications() {
     mutationFn: ({
       caseId,
       actorId,
+      requiredQuantity,
+      reservationsMode,
     }: {
       caseId: string
       actorId?: string
       comment?: string
-    }) => caseManagerService.openVolunteerCall(caseId, actorId),
+      requiredQuantity?: number
+      reservationsMode?: boolean
+    }) =>
+      caseManagerService.openVolunteerCall(caseId, actorId, {
+        requiredQuantity,
+        reservationsMode,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })

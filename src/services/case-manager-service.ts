@@ -283,7 +283,7 @@ export const caseManagerService = {
   async openVolunteerCall(
     caseId: string,
     actorId?: string,
-    options?: { skipDecisionLog?: boolean },
+    options?: { skipDecisionLog?: boolean; requiredQuantity?: number; reservationsMode?: boolean },
   ): Promise<{
     case: CaseDomain
     need: PublicNeed
@@ -351,6 +351,10 @@ export const caseManagerService = {
       })
     } else {
       await caseApplicationService.notifyVolunteersAboutCase(opened)
+    }
+
+    if (options?.reservationsMode && options.requiredQuantity != null && options.requiredQuantity > 1) {
+      need = await publicNeedRepository.updateRequiredQuantity(need.id, options.requiredQuantity)
     }
 
     missionLog('waiting_for_applications', {

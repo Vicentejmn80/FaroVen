@@ -68,6 +68,10 @@ export function EsperarPostulanteModal({
 
   const [step, setStep] = useState<RadarUiStep>(restored?.step ?? 'select-time')
   const [selectedTime, setSelectedTime] = useState<number>(restored?.selectedSeconds ?? 300)
+  const [reservationsMode, setReservationsMode] = useState(false)
+  const [requiredQuantity, setRequiredQuantity] = useState(() =>
+    Math.max(1, caseData.affectedCount ?? 1),
+  )
   const [timeLeft, setTimeLeft] = useState<number>(() =>
     restored?.step === 'waiting'
       ? computeRemainingSeconds(restored.deadlineAt)
@@ -190,7 +194,12 @@ export function EsperarPostulanteModal({
 
     // Primero abrir convocatoria; el timer SOLO arranca si tiene éxito.
     openForApps.mutate(
-      { caseId: caseData.id, actorId, comment: 'Convocatoria abierta — solicitando apoyo voluntario' },
+      {
+        caseId: caseData.id,
+        actorId,
+        requiredQuantity: reservationsMode ? requiredQuantity : undefined,
+        reservationsMode,
+      },
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
@@ -292,6 +301,29 @@ export function EsperarPostulanteModal({
                   </button>
                 ))}
               </div>
+              <label className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reservationsMode}
+                  onChange={(e) => setReservationsMode(e.target.checked)}
+                  className="rounded border-white/20"
+                />
+                <span className="text-xs text-ink-muted">Modo reservas parciales (varios voluntarios)</span>
+              </label>
+              {reservationsMode && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                    Cantidad requerida
+                  </label>
+                  <input
+                    type="number"
+                    min={2}
+                    value={requiredQuantity}
+                    onChange={(e) => setRequiredQuantity(Math.max(2, Number(e.target.value) || 2))}
+                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-ink"
+                  />
+                </div>
+              )}
               {apiError && (
                 <p className="text-xs text-critical bg-critical/10 rounded-lg px-3 py-2">{apiError}</p>
               )}

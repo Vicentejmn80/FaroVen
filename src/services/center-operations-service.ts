@@ -30,9 +30,10 @@ export async function getCenterProfile(
   centerId: string,
   siteType: RegisterSiteType,
 ): Promise<CenterOperationalProfile> {
-  const [resources, mode, events, activeCaseCount, occupancyPct] = await Promise.all([
+  const [resources, mode, dispatchMode, events, activeCaseCount, occupancyPct] = await Promise.all([
     centerOpsRepository.getResources(centerId),
     centerOpsRepository.getOperationalMode(centerId, siteType),
+    centerOpsRepository.getDispatchMode(centerId, siteType),
     centerOpsRepository.getEvents(centerId),
     caseRepository.countActiveByCenter(centerId),
     centerOpsRepository.getOccupancyPct(centerId, siteType),
@@ -44,12 +45,34 @@ export async function getCenterProfile(
     centerId,
     siteType,
     operationalMode: mode,
+    dispatchMode,
     resources,
     occupancyPct,
     resourceCoveragePct: coveragePct,
     activeCaseCount,
     recentEvents: events.slice(0, 10),
   }
+}
+
+export async function updateCenterDispatchMode(
+  centerId: string,
+  siteType: RegisterSiteType,
+  dispatchMode: CenterOperationalProfile['dispatchMode'],
+  actorId?: string,
+  actorName?: string,
+): Promise<void> {
+  const previous = await centerOpsRepository.getDispatchMode(centerId, siteType)
+  if (previous === dispatchMode) return
+  await centerOpsRepository.updateDispatchMode(centerId, siteType, dispatchMode)
+  await centerOpsRepository.createEvent({
+    centerId,
+    eventType: 'dispatch_mode_changed',
+    previousValue: previous,
+    newValue: dispatchMode,
+    actorId,
+    actorName,
+    description: `Modo de despacho cambiado: ${previous} → ${dispatchMode}`,
+  })
 }
 
 export async function refreshOperationalMode(

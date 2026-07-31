@@ -26,6 +26,9 @@ export function EditCenterSheet({ site, center, onClose }: EditCenterSheetProps)
   const [state, setState] = useState(center?.state ?? '')
   const [contactName, setContactName] = useState(center?.responsible.name ?? '')
   const [phone, setPhone] = useState(center?.phone ?? '')
+  const [dispatchMode, setDispatchMode] = useState<
+    'brigade' | 'needs_volunteers' | 'mixed'
+  >(center?.dispatchMode ?? 'mixed')
   const [capacity, setCapacity] = useState(String(center?.capacity.total ?? 100))
   const [currentOcc, setCurrentOcc] = useState(String(center?.capacity.current ?? 0))
   const [schedule, setSchedule] = useState(center?.schedule ?? '')
@@ -78,6 +81,7 @@ export function EditCenterSheet({ site, center, onClose }: EditCenterSheetProps)
         contactPhone: phone.trim() || undefined,
         schedule: schedule.trim() || undefined,
         observations: observations.trim() || undefined,
+        dispatchMode,
       })
       onClose()
     } catch (err) {
@@ -134,6 +138,19 @@ export function EditCenterSheet({ site, center, onClose }: EditCenterSheetProps)
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-ink-muted">Teléfono</span>
           <input className={fieldClassName} value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-ink-muted">Modo de despacho</span>
+          <select
+            className={fieldClassName}
+            value={dispatchMode}
+            onChange={(e) => setDispatchMode(e.target.value as typeof dispatchMode)}
+          >
+            <option value="mixed">Mixto</option>
+            <option value="brigade">Brigada propia</option>
+            <option value="needs_volunteers">Necesita voluntarios</option>
+          </select>
         </label>
 
         {hasCapacity && (

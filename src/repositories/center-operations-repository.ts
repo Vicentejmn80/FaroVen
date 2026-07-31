@@ -320,6 +320,19 @@ export class CenterOperationsRepository {
     return (data as { operational_mode: string }).operational_mode as OperationalMode
   }
 
+  async getDispatchMode(centerId: string, siteType: RegisterSiteType): Promise<'brigade' | 'needs_volunteers' | 'mixed'> {
+    const table = centerTable(siteType)
+    const { data, error } = await supabase
+      .from(table)
+      .select('dispatch_mode')
+      .eq('id', centerId)
+      .maybeSingle()
+    if (error || !data) return 'mixed'
+    const raw = (data as { dispatch_mode?: string | null }).dispatch_mode
+    if (raw === 'brigade' || raw === 'needs_volunteers' || raw === 'mixed') return raw
+    return 'mixed'
+  }
+
   async getOccupancyPct(centerId: string, siteType: RegisterSiteType): Promise<number> {
     const table = centerTable(siteType)
     const { data, error } = await supabase
@@ -338,6 +351,19 @@ export class CenterOperationsRepository {
     const { error } = await supabase
       .from(table)
       .update({ operational_mode: mode, updated_at: new Date().toISOString() })
+      .eq('id', centerId)
+    if (error) throw error
+  }
+
+  async updateDispatchMode(
+    centerId: string,
+    siteType: RegisterSiteType,
+    dispatchMode: 'brigade' | 'needs_volunteers' | 'mixed',
+  ): Promise<void> {
+    const table = centerTable(siteType)
+    const { error } = await supabase
+      .from(table)
+      .update({ dispatch_mode: dispatchMode, updated_at: new Date().toISOString() })
       .eq('id', centerId)
     if (error) throw error
   }

@@ -8,6 +8,7 @@ import {
   getInventoryMovements,
   updateCenterCapacity,
   updateCenterResource,
+  updateCenterDispatchMode,
   setCatalogInventoryItem,
   removeCatalogInventoryItem,
   createSupportRequest,
@@ -95,6 +96,29 @@ export function useUpdateCenterCapacity() {
       actorId?: string
       actorName?: string
     }) => updateCenterCapacity(centerId, siteType, update, actorId, actorName),
+    onSuccess: (_, { centerId }) => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerProfile, centerId] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerEvents, centerId] })
+    },
+  })
+}
+
+export function useUpdateCenterDispatchMode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      centerId,
+      siteType,
+      dispatchMode,
+      actorId,
+      actorName,
+    }: {
+      centerId: string
+      siteType: RegisterSiteType
+      dispatchMode: 'brigade' | 'needs_volunteers' | 'mixed'
+      actorId?: string
+      actorName?: string
+    }) => updateCenterDispatchMode(centerId, siteType, dispatchMode, actorId, actorName),
     onSuccess: (_, { centerId }) => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerProfile, centerId] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerEvents, centerId] })

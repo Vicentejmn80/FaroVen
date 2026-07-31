@@ -1,32 +1,26 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { History } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
-import { useCenterReservations } from '@/hooks/useLogistics'
-import { useMissions } from '@/hooks/useMissions'
-import { getResourceLabel } from '@/lib/resource-catalog'
+import { buildCenterLogisticsHistory } from '@/services/logistics-history-service'
 import { cn } from '@/lib/utils'
 
 /**
- * Historial logístico: solo cierres de preparación (fecha, caso, recurso, cantidad, estado).
+ * Historial logístico automático: reservas, misiones y cierres del centro.
  */
 export function CoordinatorHistoryModule() {
   const { assignment } = useCoordinatorAssignment()
-  const { data: reservations = [], isLoading } = useCenterReservations(assignment?.siteId)
-  const { data: missions = [] } = useMissions()
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ['logistics-history', assignment?.siteId],
+    queryFn: () => buildCenterLogisticsHistory(assignment!.siteId),
+    enabled: Boolean(assignment?.siteId),
+    staleTime: 30_000,
+  })
 
-  const missionById = useMemo(() => {
-    const map = new Map<string, (typeof missions)[number]>()
-    for (const m of missions) map.set(m.id, m)
-    return map
-  }, [missions])
-
-  const rows = useMemo(
-    () =>
-      reservations
-        .filter((r) => r.status === 'delivered' || r.status === 'released' || r.status === 'cancelled')
-        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()),
-    [reservations],
+  const delivered = useMemo(
+    () => rows.filter((r) => r.status === 'delivered' || r.status === 'completed' || r.status === 'released'),
+    [rows],
   )
 
   if (!assignment?.siteId) return null
@@ -38,58 +32,45 @@ export function CoordinatorHistoryModule() {
           <History className="h-4 w-4 text-ink-muted" />
           Historial
         </h2>
-        <p className="text-xs text-ink-subtle">Entregas y cierres de solicitudes del GC</p>
+        <p className="text-xs text-ink-subtle">Entregas, misiones y movimientos del centro</p>
       </div>
 
       {isLoading ? (
         <GlassCard className="h-24 animate-pulse" />
-      ) : rows.length === 0 ? (
+      ) : delivered.length === 0 ? (
         <GlassCard className="p-6 text-center">
           <p className="text-sm text-ink-muted">Sin historial todavía</p>
         </GlassCard>
       ) : (
         <div className="space-y-2">
-          {rows.map((r) => {
-            const mission = missionById.get(r.missionId)
-            const statusLabel =
-              r.status === 'delivered'
-                ? 'Finalizado'
-                : r.status === 'released'
-                  ? 'Liberado'
-                  : 'Cancelado'
-            return (
-              <GlassCard key={r.id} className="!p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs text-ink-faint">
-                      {r.updatedAt.toLocaleString('es-VE', {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                    <p className="mt-0.5 truncate text-sm font-medium text-ink">
-                      {mission?.title ?? `Caso ${r.caseId.slice(0, 8)}`}
-                    </p>
-                    <p className="text-xs text-ink-muted">
-                      {r.quantity} × {getResourceLabel(r.resourceType)}
-                    </p>
-                  </div>
-                  <span
-                    className={cn(
-                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                      r.status === 'delivered'
-                        ? 'bg-operational/15 text-operational'
-                        : 'bg-white/[0.06] text-ink-muted',
-                    )}
-                  >
-                    {statusLabel}
-                  </span>
+          {delivered.slice(0, 30).map((r) => (
+            <GlassCard key={r.id} className="!p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-ink-faint">
+                    {r.at.toLocaleString('es-VE', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-medium text-ink">{r.title}</p>
+                  <p className="text-xs text-ink-muted">{r.subtitle}</p>
                 </div>
-              </GlassCard>
-            )
-          })}
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                    r.status === 'delivered' || r.status === 'completed'
+                      ? 'bg-success/15 text-success'
+                      : 'bg-white/[0.06] text-ink-muted',
+                  )}
+                >
+                  {r.statusLabel}
+                </span>
+              </div>
+            </GlassCard>
+          ))}
         </div>
       )}
     </div>

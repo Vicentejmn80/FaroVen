@@ -13,6 +13,7 @@ import type { MissionAssignment } from '@/domain/mission.types'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CoverageInterest } from '@/domain/public-need.types'
 import { OperationalRecoPanel } from '@/components/operations-hub/operational-reco-panel'
+import { FaroRecommendationPanel } from '@/components/operations-hub/faro-recommendation-panel'
 
 interface CoverageBundle {
   applications: CaseApplicationWithApplicant[]
@@ -34,6 +35,8 @@ interface CaseDetailPanelProps {
   onStartReview?: (caseId: string) => void
   onVerifyAssignment?: (assignmentId: string) => void
   onOpenRadar?: () => void
+  canOpenRadar?: boolean
+  radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
   inventoryTips?: Array<{
@@ -61,6 +64,8 @@ export function CaseDetailPanel({
   onStartReview,
   onVerifyAssignment,
   onOpenRadar,
+  canOpenRadar = true,
+  radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
   isTransitioning,
@@ -144,8 +149,18 @@ export function CaseDetailPanel({
           {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
             <OperationalRecoPanel
               caseData={caseItem}
-              onOpenCoverage={onOpenRadar}
+              onOpenCoverage={canOpenRadar ? onOpenRadar : undefined}
               onUseInventory={onUseInventory ?? (inventoryTips[0] ? () => onAssign?.(inventoryTips[0].centerId) : undefined)}
+              radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
+            />
+          )}
+
+          {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
+            <FaroRecommendationPanel
+              caseData={caseItem}
+              onAssignCenter={onAssign}
+              onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
+              radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
             />
           )}
 
@@ -157,7 +172,8 @@ export function CaseDetailPanel({
               inventoryTips={inventoryTips}
               onAssign={onAssign}
               assignedCenterId={caseItem.assignedCenterId}
-              onOpenRadar={onOpenRadar}
+              onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
+              radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
               onApproveApplication={onApproveApplication}
               onRejectApplication={onRejectApplication}
               bestPickupCenterId={inventoryTips[0]?.centerId}
@@ -210,6 +226,7 @@ function CoverageSection({
   inventoryTips,
   onAssign,
   onOpenRadar,
+  radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
   bestPickupCenterId,
@@ -227,6 +244,7 @@ function CoverageSection({
   onAssign?: (centerId: string) => void
   assignedCenterId?: string
   onOpenRadar?: () => void
+  radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
   bestPickupCenterId?: string
@@ -242,6 +260,9 @@ function CoverageSection({
           <EmergencyButton variant="glass" size="sm" onClick={onOpenRadar}>
             Radar
           </EmergencyButton>
+        )}
+        {radarBlockedReason && !onOpenRadar && (
+          <span className="text-[10px] text-ink-faint">{radarBlockedReason}</span>
         )}
       </div>
 

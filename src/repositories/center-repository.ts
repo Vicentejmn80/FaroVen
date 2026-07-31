@@ -43,6 +43,7 @@ export class CenterRepository {
       p_current_occ: input.currentOcc ?? 0,
       p_schedule: input.schedule?.trim() || null,
       p_notes: input.observations?.trim() || null,
+      p_dispatch_mode: input.dispatchMode ?? 'mixed',
     })
     if (error) throw error
     if (!data || typeof data !== 'object') {
@@ -85,6 +86,7 @@ export class CenterRepository {
       longitude: input.longitude ?? null,
       contact_name: input.contactName?.trim() || null,
       notes: input.observations?.trim() || null,
+      dispatch_mode: input.dispatchMode ?? 'mixed',
       updated_at: new Date().toISOString(),
     }
 

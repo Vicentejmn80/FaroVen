@@ -15,6 +15,7 @@ export interface CenterRecommendation {
   available: number
   unit: string
   operationalMode: string
+  dispatchMode?: string
   updatedAt: Date
 }
 
@@ -25,6 +26,7 @@ interface CenterGeoRow {
   latitude: number | null
   longitude: number | null
   operational_mode?: string | null
+  dispatch_mode?: string | null
 }
 
 function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
@@ -44,8 +46,34 @@ function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-async function fetchCenterGeo(centerIds: string[]): Promise<Map<string, { name: string; address?: string; lat: number; lng: number; siteType: RegisterSiteType; operationalMode: string }>> {
-  const map = new Map<string, { name: string; address?: string; lat: number; lng: number; siteType: RegisterSiteType; operationalMode: string }>()
+async function fetchCenterGeo(
+  centerIds: string[],
+): Promise<
+  Map<
+    string,
+    {
+      name: string
+      address?: string
+      lat: number
+      lng: number
+      siteType: RegisterSiteType
+      operationalMode: string
+      dispatchMode: string
+    }
+  >
+> {
+  const map = new Map<
+    string,
+    {
+      name: string
+      address?: string
+      lat: number
+      lng: number
+      siteType: RegisterSiteType
+      operationalMode: string
+      dispatchMode: string
+    }
+  >()
   // Solo UUIDs válidos: ids no-UUID / enteros legacy provocan 400 en PostgREST.
   const uuidIds = [...new Set(centerIds.filter((id) => UUID_RE.test(id)))]
   if (uuidIds.length === 0) return map
@@ -59,21 +87,30 @@ async function fetchCenterGeo(centerIds: string[]): Promise<Map<string, { name: 
   for (const { table, siteType } of tables) {
     let rows: CenterGeoRow[] = []
 
-    const withMode = await supabase
+    const withModeAndDispatch = await supabase
       .from(table)
-      .select('id, name, address, latitude, longitude, operational_mode')
+      .select('id, name, address, latitude, longitude, operational_mode, dispatch_mode')
       .in('id', uuidIds)
 
-    if (withMode.error) {
-      // Fallback si operational_mode no existe aún en prod
-      const fallback = await supabase
+    if (withModeAndDispatch.error) {
+      // Fallback si dispatch_mode/operational_mode no existen aún en prod
+      const withModeOnly = await supabase
         .from(table)
-        .select('id, name, address, latitude, longitude')
+        .select('id, name, address, latitude, longitude, operational_mode')
         .in('id', uuidIds)
-      if (fallback.error) continue
-      rows = (fallback.data ?? []) as CenterGeoRow[]
+
+      if (withModeOnly.error) {
+        const fallback = await supabase
+          .from(table)
+          .select('id, name, address, latitude, longitude')
+          .in('id', uuidIds)
+        if (fallback.error) continue
+        rows = (fallback.data ?? []) as CenterGeoRow[]
+      } else {
+        rows = (withModeOnly.data ?? []) as CenterGeoRow[]
+      }
     } else {
-      rows = (withMode.data ?? []) as CenterGeoRow[]
+      rows = (withModeAndDispatch.data ?? []) as CenterGeoRow[]
     }
 
     for (const row of rows) {
@@ -85,6 +122,7 @@ async function fetchCenterGeo(centerIds: string[]): Promise<Map<string, { name: 
         lng: Number(row.longitude),
         siteType,
         operationalMode: row.operational_mode ?? 'active',
+        dispatchMode: row.dispatch_mode ?? 'mixed',
       })
     }
   }
@@ -143,6 +181,7 @@ export class LogisticsRepository {
         available: row.available,
         unit: row.unit,
         operationalMode: center.operationalMode,
+        dispatchMode: center.dispatchMode,
         updatedAt: row.updatedAt,
       })
     }

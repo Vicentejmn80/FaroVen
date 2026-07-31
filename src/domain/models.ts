@@ -141,6 +141,8 @@ export interface Center {
   phone?: string
   schedule?: string
   observations?: string
+  /** Modo logístico de despacho (Motor FARO). */
+  dispatchMode?: 'brigade' | 'needs_volunteers' | 'mixed'
 }
 
 export interface GuideProtocol {

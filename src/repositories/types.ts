@@ -15,6 +15,7 @@ export interface UpdateCenterInput {
   contactPhone?: string
   schedule?: string
   observations?: string
+  dispatchMode?: 'brigade' | 'needs_volunteers' | 'mixed'
 }
 
 export interface RegisterSiteInput {
@@ -31,6 +32,7 @@ export interface RegisterSiteInput {
   contactPhone?: string
   schedule?: string
   observations?: string
+  dispatchMode?: 'brigade' | 'needs_volunteers' | 'mixed'
 }
 
 export interface RegisterNeedInput {
