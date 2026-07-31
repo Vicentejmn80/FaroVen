@@ -28,7 +28,7 @@ interface RegisterNeedFlowProps {
  */
 export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProps) {
   const { sites } = useFaro()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { assignment } = useCoordinatorAssignment()
   const createCase = useCreateCase()
   const defaultSiteId = presetSiteId ?? assignment?.siteId ?? sites[0]?.id ?? ''
@@ -122,9 +122,10 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
       Number.isFinite(lng) &&
       !(lat === 0 && lng === 0)
     try {
+      const coordinatorName = profile?.full_name?.trim() || 'Coordinador'
       await createCase.mutateAsync({
         title: `Solicitud: ${itemName}`,
-        description: `El nodo logístico solicita ${qtyRequired} de ${itemName} (${NEED_CATEGORIES.find((c) => c.key === categoryKey)?.label ?? categoryKey}).`,
+        description: `Coordinador de ${zone} solicita ${qtyRequired} de ${itemName} (${NEED_CATEGORIES.find((c) => c.key === categoryKey)?.label ?? categoryKey}).`,
         priority,
         zone,
         category: itemName,
@@ -139,6 +140,11 @@ export function RegisterNeedFlow({ onClose, presetSiteId }: RegisterNeedFlowProp
         operationType: 'resource_request',
         responsibleId: user?.id,
         destination: zone,
+        reporterInfo: {
+          name: coordinatorName,
+          phone: profile?.phone ?? undefined,
+          relationship: `Centro: ${zone}`,
+        },
       })
       setSavedItemName(itemName)
       setDone(true)

@@ -34,6 +34,74 @@ export async function recommendCenters(input: {
 }
 
 /**
+ * GC → Coordinador: usar inventario de un centro.
+ * Crea asignación + misión logística + reserva `reserved` visible en Solicitudes.
+ */
+export async function requestInventoryFromCenter(input: {
+  caseData: import('@/domain/case-lifecycle.types').CaseDomain
+  centerId: string
+  resourceType: string
+  quantity: number
+  actorId: string
+}): Promise<{ reservation: InventoryReservation; missionId: string }> {
+  const { assignmentService } = await import('@/services/assignment-service')
+  const { missionService } = await import('@/services/mission-service')
+
+  await assignmentService.assign(
+    input.caseData.id,
+    input.centerId,
+    input.actorId,
+    undefined,
+    `Solicitud de inventario: ${input.quantity} × ${getResourceLabel(input.resourceType)}`,
+  )
+
+  const existingMissions = await missionService.listByCaseId(input.caseData.id)
+  let mission = existingMissions[0]
+  if (!mission) {
+    const created = await missionService.create({
+      centerId: input.centerId,
+      title: input.caseData.title,
+      description: input.caseData.description,
+      priority: input.caseData.priority,
+      requiredSkills: [],
+      requiredPeople: 1,
+      location: {
+        lat: input.caseData.location.lat,
+        lng: input.caseData.location.lng,
+        address: input.caseData.location.address,
+        zone: input.caseData.zone,
+      },
+      caseId: input.caseData.id,
+      createdBy: input.actorId,
+      pickupCenterId: input.centerId,
+      resourceType: input.resourceType,
+      resourceQty: input.quantity,
+      deliveryAddress: input.caseData.location.address ?? input.caseData.zone,
+    })
+    mission = created.mission
+  }
+
+  const existingReservation = await logisticsRepository.findByMissionId(mission.id)
+  if (
+    existingReservation &&
+    (existingReservation.status === 'reserved' || existingReservation.status === 'ready')
+  ) {
+    return { reservation: existingReservation, missionId: mission.id }
+  }
+
+  const reservation = await prepareMissionWithReservation({
+    mission,
+    caseId: input.caseData.id,
+    centerId: input.centerId,
+    resourceType: input.resourceType,
+    quantity: Math.max(1, input.quantity),
+    actorId: input.actorId,
+  })
+
+  return { reservation, missionId: mission.id }
+}
+
+/**
  * Crea la reserva de inventario y actualiza la mision con centro de recogida.
  * Debe llamarse DESPUES de crear la mision (missionId requerido).
  */
@@ -189,26 +257,32 @@ async function notifyCenterCoordinatorOfReservation(reservation: InventoryReserv
     const coordinators = await getCenterCoordinatorUserIds(reservation.centerId)
     if (coordinators.length === 0) return
 
-    const volunteerName = await getVolunteerDisplayName(reservation.volunteerId)
+    const volunteerName = reservation.volunteerId
+      ? await getVolunteerDisplayName(reservation.volunteerId)
+      : null
     const resourceLabel = getResourceLabel(reservation.resourceType)
     const missionTitle = mission.title
+    const body = volunteerName
+      ? `${volunteerName} recogerá ${reservation.quantity} ${resourceLabel} para "${missionTitle}".`
+      : `El Gestor solicita preparar ${reservation.quantity} × ${resourceLabel} para "${missionTitle}".`
 
     for (const userId of coordinators) {
       await notifyUser(
         userId,
-        'Nueva preparación de recursos',
-        `${volunteerName} recogerá ${reservation.quantity} ${resourceLabel} para la misión "${missionTitle}".`,
+        'Solicitud de recursos del Gestor',
+        body,
         'logistics_preparation',
         {
           reservationId: reservation.id,
           missionId: reservation.missionId,
+          caseId: reservation.caseId,
           resourceType: reservation.resourceType,
           quantity: reservation.quantity,
           volunteerName,
         },
         {
           priority: 'high',
-          actionUrl: `tab:ops:preparations:${reservation.id}`,
+          actionUrl: `tab:ops:needs`,
           icon: 'package',
         },
       )

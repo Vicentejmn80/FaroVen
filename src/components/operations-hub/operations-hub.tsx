@@ -4,6 +4,8 @@ import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { useCases, useCaseTimeline } from '@/hooks/useCases'
 import { useOperationalPublicNeeds, useNeedInterests } from '@/hooks/usePublicNeeds'
 import { useTransitionCase, useAssignCase, useStartCaseReview } from '@/hooks/useCaseMutations'
+import { useRequestInventoryFromCenter } from '@/hooks/useLogistics'
+import { resolveCatalogKey } from '@/lib/resource-catalog'
 import {
   useCaseApplications,
   useApproveCaseApplication,
@@ -42,6 +44,7 @@ export function OperationsHub() {
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const transitionMutation = useTransitionCase()
   const assignMutation = useAssignCase()
+  const requestInventory = useRequestInventoryFromCenter()
   const startReviewMutation = useStartCaseReview()
   const verifyMutation = useVerifyAssignment()
   const approveApp = useApproveCaseApplication()
@@ -199,15 +202,47 @@ export function OperationsHub() {
 
   const handleAssign = useCallback(
     (centerId: string) => {
-      if (!selectedCase) return
+      if (!selectedCase || !user?.id) return
+      const tip = inventoryTips.find((t) => t.centerId === centerId)
+
+      // Si hay stock recomendado para ese centro → solicitud logística real al Coordinador.
+      if (tip) {
+        requestInventory.mutate({
+          caseData: selectedCase,
+          centerId,
+          resourceType: resolveCatalogKey(selectedCase.category) ?? 'agua',
+          quantity: Math.max(
+            1,
+            Math.min(tip.available, reco?.minQty ?? selectedCase.affectedCount ?? 1),
+          ),
+          actorId: user.id,
+        })
+        return
+      }
+
       assignMutation.mutate({
         caseId: selectedCase.id,
         centerId,
-        assignedBy: user?.id ?? 'case-manager',
+        assignedBy: user.id,
       })
     },
-    [selectedCase, assignMutation, user?.id],
+    [selectedCase, assignMutation, requestInventory, user?.id, inventoryTips, reco?.minQty, reco?.resourceLabel],
   )
+
+  const handleUseInventory = useCallback(() => {
+    const tip = inventoryTips[0]
+    if (!selectedCase || !user?.id || !tip) return
+    requestInventory.mutate({
+      caseData: selectedCase,
+      centerId: tip.centerId,
+      resourceType: resolveCatalogKey(selectedCase.category) ?? 'agua',
+      quantity: Math.max(
+        1,
+        Math.min(tip.available, reco?.minQty ?? selectedCase.affectedCount ?? 1),
+      ),
+      actorId: user.id,
+    })
+  }, [selectedCase, user?.id, inventoryTips, requestInventory, reco?.minQty])
 
   const handleStartReview = useCallback(
     (caseId: string) => {
@@ -337,6 +372,7 @@ export function OperationsHub() {
           onClose={handleCloseDrawer}
           onTransition={handleTransition}
           onAssign={handleAssign}
+          onUseInventory={handleUseInventory}
           onStartReview={handleStartReview}
           onVerifyAssignment={handleVerify}
           onOpenRadar={handleOpenRadar}

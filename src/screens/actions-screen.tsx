@@ -9,8 +9,6 @@ import {
   PlusCircle,
   Settings2,
   Shield,
-  Truck,
-  TruckIcon,
   UserPlus,
 } from 'lucide-react'
 import { QuickAction } from '@/components/faro/quick-action'
@@ -46,8 +44,6 @@ const COORDINATOR_ACTIONS: ActionDef[] = [
   { id: 'navigate', icon: Building2, label: 'Mi Centro', hint: 'Panel operativo del sitio', accent: 'operational', tab: 'ops' },
   { id: 'register-need', icon: PackagePlus, label: 'Solicitar recurso', hint: 'Enviar solicitud al Gestor de Casos', accent: 'warning' },
   { id: 'update-saturation', icon: Activity, label: 'Actualizar saturación', hint: 'Necesidades prioritarias', accent: 'critical' },
-  { id: 'register-arrival', icon: Truck, label: 'Registrar llegada', hint: 'Donaciones recibidas', accent: 'operational' },
-  { id: 'register-dispatch', icon: TruckIcon, label: 'Registrar salida', hint: 'Recursos distribuidos', accent: 'info' },
 ]
 
 const CITIZEN_ACTIONS: ActionDef[] = [

@@ -10,15 +10,13 @@ interface OperationalRecoPanelProps {
   caseData: CaseDomain
   onUseInventory?: () => void
   onOpenCoverage?: () => void
-  onEscalateInstitution?: () => void
 }
 
-/** IA Operacional V1 — ayuda a decidir sin obligar. */
+/** Recomendación corta: una idea + acciones, sin ruido. */
 export function OperationalRecoPanel({
   caseData,
   onUseInventory,
   onOpenCoverage,
-  onEscalateInstitution,
 }: OperationalRecoPanelProps) {
   const enabled = isReviewStage(caseData.pipelineStage) || isCoverageStage(caseData.pipelineStage)
   const { data, isLoading } = useQuery({
@@ -30,68 +28,41 @@ export function OperationalRecoPanel({
 
   if (!enabled) return null
 
-  return (
-    <GlassCard className="!rounded-xl !border-info/25 !bg-info/[0.06] !p-3 !shadow-none space-y-2.5">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-info">
-          IA Operacional
-        </p>
-        <p className="mt-0.5 text-xs text-ink-muted">
-          Esta necesidad puede resolverse de varias maneras.
-        </p>
-      </div>
+  const tip = data?.inventory[0]
+  const showInventory = Boolean((data?.primary === 'inventory' || tip) && onUseInventory)
 
+  return (
+    <GlassCard className="!rounded-xl !border-info/20 !bg-info/[0.05] !p-3 !shadow-none space-y-2">
       {isLoading || !data ? (
-        <p className="text-[11px] text-ink-faint">Analizando inventario y cobertura…</p>
+        <p className="text-[11px] text-ink-faint">Buscando opciones…</p>
       ) : (
         <>
-          <ul className="space-y-1.5">
-            {data.paths.map((p) => (
-              <li key={p.id} className="flex gap-2 text-xs text-ink">
-                <span className={p.id === data.primary ? 'text-operational' : 'text-ink-faint'}>
-                  {p.id === data.primary ? '✓' : '·'}
-                </span>
-                <span>
-                  <span className="font-medium">{p.title}</span>
-                  <span className="block text-[10px] text-ink-faint">{p.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-2">
-            <p className="text-[10px] uppercase tracking-wide text-ink-faint">Recomendación principal</p>
+          <div>
             <p className="text-sm font-semibold text-ink">{data.headline}</p>
-            <p className="mt-0.5 text-[11px] text-ink-muted">
-              Tiempo estimado · {data.estimatedMinutes} min · {data.resourceLabel} (≥{data.minQty})
-            </p>
+            {tip ? (
+              <p className="mt-0.5 text-[11px] text-ink-muted">
+                {tip.centerName}: {tip.available} {tip.unit} · {tip.distanceKm.toFixed(1)} km
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[11px] text-ink-muted">
+                ~{data.estimatedMinutes} min · {data.resourceLabel}
+              </p>
+            )}
           </div>
 
-          {data.inventory[0] && (
-            <p className="text-[11px] text-operational">
-              {data.inventory[0].centerName}: {data.inventory[0].available} {data.inventory[0].unit} a{' '}
-              {data.inventory[0].distanceKm.toFixed(1)} km — ¿recoger allí?
-            </p>
-          )}
-
           <div className="flex flex-wrap gap-1.5">
-            {(data.primary === 'inventory' || data.inventory[0]) && onUseInventory && (
+            {showInventory && (
               <EmergencyButton variant="primary" size="sm" onClick={onUseInventory}>
                 Usar inventario
               </EmergencyButton>
             )}
             {onOpenCoverage && (
               <EmergencyButton
-                variant={data.primary === 'volunteers' ? 'primary' : 'glass'}
+                variant={data.primary === 'volunteers' || !showInventory ? 'primary' : 'glass'}
                 size="sm"
                 onClick={onOpenCoverage}
               >
                 Abrir radar
-              </EmergencyButton>
-            )}
-            {onEscalateInstitution && (
-              <EmergencyButton variant="ghost" size="sm" onClick={onEscalateInstitution}>
-                Escalar institución
               </EmergencyButton>
             )}
           </div>

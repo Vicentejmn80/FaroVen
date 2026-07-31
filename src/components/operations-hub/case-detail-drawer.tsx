@@ -24,6 +24,7 @@ interface CaseDetailDrawerProps {
   onClose: () => void
   onTransition?: (caseId: string, toStage: PipelineStage, comment?: string) => void
   onAssign?: (centerId: string) => void
+  onUseInventory?: () => void
   onStartReview?: (caseId: string) => void
   onVerifyAssignment?: (assignmentId: string) => void
   onOpenRadar?: () => void
@@ -55,6 +56,7 @@ export function CaseDetailDrawer({
   onClose,
   onTransition,
   onAssign,
+  onUseInventory,
   onStartReview,
   onVerifyAssignment,
   onOpenRadar,
@@ -116,6 +118,7 @@ export function CaseDetailDrawer({
                 suggestions={suggestions}
                 onTransition={onTransition}
                 onAssign={onAssign}
+                onUseInventory={onUseInventory}
                 onStartReview={onStartReview}
                 onVerifyAssignment={onVerifyAssignment}
                 onOpenRadar={onOpenRadar}

@@ -96,8 +96,16 @@ describe('isValidTransition', () => {
     expect(isValidTransition(N.AWAITING_CENTER_CONFIRMATION, N.ASSIGNED)).toBe(true)
   })
 
+  it('permite awaiting_center_confirmation → open_for_applications (abrir radar)', () => {
+    expect(isValidTransition(N.AWAITING_CENTER_CONFIRMATION, N.OPEN_FOR_APPLICATIONS)).toBe(true)
+  })
+
   it('permite open_for_applications → assigned', () => {
     expect(isValidTransition(N.OPEN_FOR_APPLICATIONS, N.ASSIGNED)).toBe(true)
+  })
+
+  it('permite open_for_applications → awaiting_center_confirmation (usar inventario)', () => {
+    expect(isValidTransition(N.OPEN_FOR_APPLICATIONS, N.AWAITING_CENTER_CONFIRMATION)).toBe(true)
   })
 
   it('permite assigned → accepted', () => {
@@ -184,6 +192,12 @@ describe('getTransitionEvent', () => {
   it('pending_review → awaiting_center_confirmation emite CASE_AWAITING_CENTER', () => {
     expect(getTransitionEvent(N.PENDING_REVIEW, N.AWAITING_CENTER_CONFIRMATION)).toBe(
       CASE_EVENT_TYPES.CASE_AWAITING_CENTER,
+    )
+  })
+
+  it('awaiting_center_confirmation → open_for_applications emite CASE_OPENED_FOR_APPLICATIONS', () => {
+    expect(getTransitionEvent(N.AWAITING_CENTER_CONFIRMATION, N.OPEN_FOR_APPLICATIONS)).toBe(
+      CASE_EVENT_TYPES.CASE_OPENED_FOR_APPLICATIONS,
     )
   })
 

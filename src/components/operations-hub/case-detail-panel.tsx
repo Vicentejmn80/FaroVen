@@ -1,23 +1,17 @@
-import { Calendar, Clock, MapPin, Phone, User } from 'lucide-react'
+import { MapPin, Phone } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CaseDomain, CaseDomainEvent, PipelineStage } from '@/domain/case-lifecycle.types'
-import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
+import { PIPELINE_STAGES, REQUEST_SOURCE_LABELS } from '@/domain/case-lifecycle.types'
 import { isCoverageStage, isReviewStage } from '@/domain/ops-pipeline'
-import { slaService } from '@/services/sla-service'
 import type { AssignmentSuggestion } from '@/types/operations-hub.types'
 import { CaseStatusBadge } from './case-status-badge'
-import { INCIDENT_TYPE_LABELS, label } from '@/lib/labels'
 import type { MissionEvent } from '@/domain/mission.types'
 import type { MissionAssignment } from '@/domain/mission.types'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CoverageInterest } from '@/domain/public-need.types'
-import {
-  buildAuditTimeline,
-  LiveMissionAuditTimeline,
-} from '@/components/dispatch/live-mission-audit-timeline'
 import { OperationalRecoPanel } from '@/components/operations-hub/operational-reco-panel'
 
 interface CoverageBundle {
@@ -36,6 +30,7 @@ interface CaseDetailPanelProps {
   suggestions?: AssignmentSuggestion[]
   onTransition?: (caseId: string, toStage: PipelineStage, comment?: string) => void
   onAssign?: (centerId: string) => void
+  onUseInventory?: () => void
   onStartReview?: (caseId: string) => void
   onVerifyAssignment?: (assignmentId: string) => void
   onOpenRadar?: () => void
@@ -56,14 +51,13 @@ interface CaseDetailPanelProps {
 
 export function CaseDetailPanel({
   caseItem,
-  timeline = [],
-  missionTimeline = [],
   missionAssignments = [],
   coverage,
   suggestions = [],
   inventoryTips = [],
   onTransition,
   onAssign,
+  onUseInventory,
   onStartReview,
   onVerifyAssignment,
   onOpenRadar,
@@ -84,129 +78,76 @@ export function CaseDetailPanel({
     )
   }
 
-  const slaInfo = slaService.getSlaInfo(caseItem)
   const showCoverage = isCoverageStage(caseItem.pipelineStage) || isReviewStage(caseItem.pipelineStage)
   const pendingValidation = missionAssignments.filter((a) => a.status === 'completed')
-  const auditItems = buildAuditTimeline({
-    caseEvents: timeline,
-    missionEvents: missionTimeline,
-  })
+  const sourceLabel = REQUEST_SOURCE_LABELS[caseItem.requestSource] ?? 'Solicitud'
+  const requesterName =
+    caseItem.reporterInfo.name ||
+    (caseItem.requestSource === 'coordinator' ? 'Coordinador' : null) ||
+    (caseItem.requestSource === 'manual' ? 'Gestor' : null) ||
+    'Reportante'
+  const zone = caseItem.location.address ?? caseItem.location.zone ?? caseItem.zone
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
       <ScrollArea className={cn('flex-1', dense ? 'px-3 py-3' : 'px-4 py-4')}>
         <div className={cn(dense ? 'space-y-3' : 'space-y-4')}>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-muted">
-                {caseItem.id.slice(0, 8)}
-              </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+                {sourceLabel}
+              </span>
               <CaseStatusBadge stage={caseItem.pipelineStage} />
             </div>
             <h2 className={cn('font-semibold leading-tight text-ink', dense ? 'text-base' : 'text-lg')}>
               {caseItem.title}
             </h2>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />{' '}
-                {caseItem.location.address ?? caseItem.location.zone ?? caseItem.zone}
-              </span>
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3" /> {caseItem.reporterInfo.name ?? 'Ciudadano'}
-              </span>
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" /> {timeAgo(caseItem.createdAt)}
-              </span>
-            </div>
+            <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{zone}</span>
+              <span className="text-ink-faint">· {timeAgo(caseItem.createdAt)}</span>
+            </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <PriorityBar priority={caseItem.priority} />
-            {caseItem.slaDeadline && (
-              <SlaIndicator
-                deadline={caseItem.slaDeadline}
-                progress={slaInfo.progress}
-                state={slaInfo.state}
-              />
+          {caseItem.description && (
+            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-sm leading-relaxed text-ink">
+              {caseItem.description}
+            </p>
+          )}
+
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{sourceLabel}</p>
+            <p className="mt-0.5 text-sm font-medium text-ink">{requesterName}</p>
+            {caseItem.reporterInfo.phone && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
+                <Phone className="h-3 w-3" />
+                {caseItem.reporterInfo.phone}
+              </p>
+            )}
+            {caseItem.reporterInfo.relationship && (
+              <p className="mt-0.5 text-[11px] text-ink-faint">{caseItem.reporterInfo.relationship}</p>
             )}
           </div>
 
           {caseItem.pipelineStage === PIPELINE_STAGES.NUEVO && onStartReview && (
-            <GlassCard className="!rounded-xl !border-info/25 !bg-info/[0.06] !p-3 !shadow-none">
-              <p className="text-xs text-ink-muted">
-                Reporte recién recibido. Ábrelo para clasificar, contactar y decidir cobertura.
-              </p>
-              <EmergencyButton
-                className="mt-2"
-                variant="primary"
-                size="sm"
-                disabled={isTransitioning}
-                onClick={() => onStartReview(caseItem.id)}
-              >
-                Iniciar revisión
-              </EmergencyButton>
-            </GlassCard>
-          )}
-
-          {caseItem.pipelineStage === PIPELINE_STAGES.AWAITING_INFO && (
-            <GlassCard className="!rounded-xl !border-warning/30 !bg-warning/[0.06] !p-3 !shadow-none">
-              <p className="text-xs font-medium text-warning">Falta información</p>
-              <p className="mt-0.5 text-[11px] text-ink-muted">
-                Estado interno dentro de En revisión — contacta al reportante antes de publicar.
-              </p>
-            </GlassCard>
+            <EmergencyButton
+              variant="primary"
+              size="sm"
+              className="w-full"
+              disabled={isTransitioning}
+              onClick={() => onStartReview(caseItem.id)}
+            >
+              Iniciar revisión
+            </EmergencyButton>
           )}
 
           {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
             <OperationalRecoPanel
               caseData={caseItem}
               onOpenCoverage={onOpenRadar}
-              onUseInventory={
-                inventoryTips[0]
-                  ? () => onAssign?.(inventoryTips[0].centerId)
-                  : undefined
-              }
+              onUseInventory={onUseInventory ?? (inventoryTips[0] ? () => onAssign?.(inventoryTips[0].centerId) : undefined)}
             />
           )}
-
-          <GlassCard className="!rounded-xl !border-white/[0.08] !p-3 !shadow-none !bg-white/[0.03]">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Ciudadano
-            </p>
-            <p className="mt-1 text-sm font-medium text-ink">
-              {caseItem.reporterInfo.name ?? 'Sin nombre registrado'}
-            </p>
-            {caseItem.reporterInfo.phone && (
-              <p className="mt-1 flex items-center gap-2 text-sm text-ink-muted">
-                <Phone className="h-3.5 w-3.5" />
-                {caseItem.reporterInfo.phone}
-              </p>
-            )}
-            {caseItem.reporterInfo.relationship && (
-              <p className="mt-0.5 text-xs text-ink-muted">{caseItem.reporterInfo.relationship}</p>
-            )}
-          </GlassCard>
-
-          {caseItem.description && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-ink-muted">Necesidades / descripción</p>
-              <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-sm leading-relaxed text-ink">
-                {caseItem.description}
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <InfoChip label="Afectados" value={String(caseItem.affectedCount)} />
-            {caseItem.category && (
-              <InfoChip
-                label="Categoría"
-                value={label(INCIDENT_TYPE_LABELS, caseItem.category, caseItem.category)}
-              />
-            )}
-            {caseItem.zone && <InfoChip label="Zona" value={caseItem.zone} />}
-            <InfoChip label="ID" value={caseItem.id.slice(0, 8)} />
-          </div>
 
           {showCoverage && (
             <CoverageSection
@@ -223,71 +164,35 @@ export function CaseDetailPanel({
             />
           )}
 
-          <LiveMissionAuditTimeline items={auditItems} dense={dense} />
-
           {pendingValidation.length > 0 && onVerifyAssignment && (
-            <GlassCard className="!rounded-xl !border-warning/30 !bg-warning/[0.06] !p-3 !shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-wide text-warning">
-                Panel de validación
-              </p>
-              <p className="mt-1 text-[11px] text-ink-muted">
-                El voluntario finalizó y subió evidencia. Solo al aprobar el caso pasa a Resuelto.
-              </p>
-              <div className="mt-2 space-y-2">
-                {pendingValidation.map((a) => (
-                  <div key={a.id} className="space-y-1.5">
-                    {a.evidenceUrls && a.evidenceUrls.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {a.evidenceUrls.map((url, i) => (
-                          <a
-                            key={i}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-info underline"
-                          >
-                            Evidencia {i + 1}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                    {a.feedback && (
-                      <p className="text-[11px] text-ink-muted">{a.feedback}</p>
-                    )}
-                    <EmergencyButton
-                      variant="primary"
-                      size="sm"
-                      disabled={isVerifying}
-                      onClick={() => onVerifyAssignment(a.id)}
-                    >
-                      Aprobar y resolver
-                    </EmergencyButton>
-                  </div>
-                ))}
-              </div>
+            <GlassCard className="!rounded-xl !border-warning/30 !bg-warning/[0.06] !p-3 !shadow-none space-y-2">
+              <p className="text-xs font-medium text-warning">Validar evidencia</p>
+              {pendingValidation.map((a) => (
+                <EmergencyButton
+                  key={a.id}
+                  variant="primary"
+                  size="sm"
+                  className="w-full"
+                  disabled={isVerifying}
+                  onClick={() => onVerifyAssignment(a.id)}
+                >
+                  Aprobar y resolver
+                </EmergencyButton>
+              ))}
             </GlassCard>
           )}
 
           {onTransition && caseItem.pipelineStage === PIPELINE_STAGES.RESOLVED && (
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-ink-muted">Cierre</p>
-              <div className="flex flex-wrap gap-1.5">
-                <EmergencyButton
-                  variant="glass"
-                  size="sm"
-                  onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar caso exitoso')}
-                  disabled={isTransitioning}
-                >
-                  Archivar
-                </EmergencyButton>
-              </div>
-              <p className="text-[10px] text-ink-faint">
-                Solo tras validación. Al archivar el caso queda en el historial de éxito.
-              </p>
-            </div>
+            <EmergencyButton
+              variant="glass"
+              size="sm"
+              className="w-full"
+              onClick={() => onTransition(caseItem.id, PIPELINE_STAGES.ARCHIVED, 'Archivar caso exitoso')}
+              disabled={isTransitioning}
+            >
+              Archivar en historial de éxito
+            </EmergencyButton>
           )}
-
-          {/* Timeline unificado arriba — no duplicar auditoría técnica */}
         </div>
       </ScrollArea>
     </div>
@@ -302,11 +207,8 @@ function formatRangeToReport(km?: number | null): string {
 
 function CoverageSection({
   applications,
-  interests,
-  centers,
   inventoryTips,
   onAssign,
-  assignedCenterId,
   onOpenRadar,
   onApproveApplication,
   onRejectApplication,
@@ -330,241 +232,71 @@ function CoverageSection({
   bestPickupCenterId?: string
 }) {
   const pendingApps = applications.filter((a) => a.status === 'pending' || a.status === 'under_review')
-  const pendingInterests = interests.filter(
-    (i) => i.status === 'reserved' || i.status === 'confirmed',
-  )
+  const tip = inventoryTips[0]
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium text-ink-muted">Cobertura unificada</p>
-          <p className="text-[10px] text-ink-faint">
-            Inventario · voluntarios · instituciones
-          </p>
-        </div>
+        <p className="text-xs font-medium text-ink-muted">Cobertura</p>
         {onOpenRadar && (
-          <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
-            Abrir radar
+          <EmergencyButton variant="glass" size="sm" onClick={onOpenRadar}>
+            Radar
           </EmergencyButton>
         )}
       </div>
 
-      {inventoryTips.length > 0 && (
-        <GlassCard className="!rounded-xl !border-operational/25 !bg-operational/[0.06] !p-3 !shadow-none">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-operational">
-            Inventario cercano
-          </p>
-          <ul className="mt-1.5 space-y-1.5">
-            {inventoryTips.slice(0, 3).map((tip) => (
-              <li key={tip.centerId} className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-ink">{tip.centerName}</p>
-                  <p className="text-[10px] text-ink-muted">
-                    {tip.available} {tip.unit} · {tip.distanceKm.toFixed(1)} km
-                  </p>
-                </div>
-                <EmergencyButton
-                  variant="glass"
-                  size="sm"
-                  onClick={() => onAssign?.(tip.centerId)}
-                >
-                  Asignar
-                </EmergencyButton>
-              </li>
-            ))}
-          </ul>
-        </GlassCard>
-      )}
-
-      <GlassCard className="!rounded-xl !border-white/[0.06] !p-3 !shadow-none !bg-white/[0.02]">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-          Voluntarios postulados ({pendingApps.length})
-        </p>
-        {pendingApps.length === 0 ? (
-          <div className="mt-1.5 space-y-2">
-            <p className="text-[11px] text-ink-muted">Sin postulaciones pendientes</p>
-            {onOpenRadar && (
-              <p className="text-[10px] text-ink-faint">
-                Abre el radar para que voluntarios cercanos puedan postularse.
-              </p>
-            )}
+      {tip && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-operational/20 bg-operational/[0.05] px-3 py-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-ink">{tip.centerName}</p>
+            <p className="text-[10px] text-ink-muted">
+              {tip.available} {tip.unit} · {tip.distanceKm.toFixed(1)} km
+            </p>
           </div>
-        ) : (
-          <ul className="mt-1.5 space-y-2">
-            {pendingApps.slice(0, 6).map((a) => (
-              <li
-                key={a.id}
-                className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">
-                    {a.applicantName || 'Voluntario'}
-                  </p>
-                  <p className="text-[11px] text-info">
-                    {formatRangeToReport(a.distanceKm)}
-                  </p>
-                  {bestPickupCenterId && inventoryTips[0] && (
-                    <p className="mt-0.5 text-[10px] text-operational">
-                      Tip: {inventoryTips[0].centerName} tiene stock — puede recoger ahí
-                    </p>
-                  )}
-                </div>
-                {(onApproveApplication || onRejectApplication) && (
-                  <div className="mt-2 flex gap-1.5">
-                    {onApproveApplication && (
-                      <EmergencyButton
-                        variant="primary"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() =>
-                          onApproveApplication(a.id, bestPickupCenterId)
-                        }
-                      >
-                        Aceptar
-                      </EmergencyButton>
-                    )}
-                    {onRejectApplication && (
-                      <EmergencyButton
-                        variant="glass"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => onRejectApplication(a.id)}
-                      >
-                        Rechazar
-                      </EmergencyButton>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </GlassCard>
-
-      <GlassCard className="!rounded-xl !border-white/[0.06] !p-3 !shadow-none !bg-white/[0.02]">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-          Instituciones interesadas ({pendingInterests.length})
-        </p>
-        {pendingInterests.length === 0 ? (
-          <p className="mt-1 text-[11px] text-ink-muted">Sin intereses institucionales</p>
-        ) : (
-          <ul className="mt-1.5 space-y-1">
-            {pendingInterests.slice(0, 5).map((i) => (
-              <li key={i.id} className="text-xs text-ink">
-                {i.collaboratorName ?? i.collaboratorUserId?.slice(0, 8) ?? i.id.slice(0, 8)}
-                <span className="text-ink-muted"> · {i.collaboratorType}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </GlassCard>
-
-      {centers.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-            Centros sugeridos
-          </p>
-          <div className="space-y-1">
-            {centers.slice(0, 3).map((s) => (
-              <SuggestedCenterCard
-                key={s.centerId}
-                suggestion={s}
-                assigned={assignedCenterId === s.centerId}
-                onAssign={() => onAssign?.(s.centerId)}
-              />
-            ))}
-          </div>
+          <EmergencyButton variant="glass" size="sm" onClick={() => onAssign?.(tip.centerId)}>
+            Pedir
+          </EmergencyButton>
         </div>
       )}
-    </div>
-  )
-}
 
-function PriorityBar({ priority }: { priority: string }) {
-  const color =
-    priority === 'critical' || priority === 'high'
-      ? 'bg-critical'
-      : priority === 'medium'
-        ? 'bg-warning'
-        : 'bg-white/[0.12]'
-  const labelText =
-    priority === 'critical' ? 'Crítica'
-      : priority === 'high' ? 'Alta prioridad'
-        : priority === 'medium' ? 'Prioridad media'
-          : 'Prioridad baja'
-  return (
-    <div className="flex items-center gap-2">
-      <div className={cn('h-2 w-2 rounded-full', color)} />
-      <span className="text-xs font-medium text-ink-muted">{labelText}</span>
-    </div>
-  )
-}
-
-function SlaIndicator({
-  state,
-}: {
-  deadline: Date
-  progress: number
-  state: string
-}) {
-  const color =
-    state === 'breached' ? 'text-critical bg-critical/10'
-      : state === 'warning' ? 'text-warning bg-warning/10'
-        : 'text-operational bg-operational/10'
-  const labelText =
-    state === 'breached' ? 'SLA incumplido'
-      : state === 'warning' ? 'SLA por vencer'
-        : 'SLA en curso'
-  return (
-    <div className={cn('flex items-center gap-2 rounded-lg px-2 py-1', color)}>
-      <Clock className="h-3 w-3" />
-      <span className="text-[11px] font-medium">{labelText}</span>
-    </div>
-  )
-}
-
-function InfoChip({ label: chipLabel, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-      <p className="text-[10px] text-ink-muted">{chipLabel}</p>
-      <p className="text-sm font-medium text-ink">{value}</p>
-    </div>
-  )
-}
-
-function SuggestedCenterCard({
-  suggestion,
-  assigned,
-  onAssign,
-}: {
-  suggestion: AssignmentSuggestion
-  assigned: boolean
-  onAssign: () => void
-}) {
-  const satColor =
-    suggestion.saturation === 'critical'
-      ? 'text-critical'
-      : suggestion.saturation === 'high'
-        ? 'text-warning'
-        : 'text-operational'
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-between rounded-xl border px-3 py-2',
-        assigned ? 'border-info/30 bg-info/[0.04]' : 'border-white/[0.06] bg-white/[0.02]',
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-ink">{suggestion.centerName}</p>
-        <p className="text-[11px] text-ink-muted">
-          {suggestion.distance} · <span className={satColor}>{suggestion.saturation}</span>
-        </p>
-      </div>
-      {!assigned && (
-        <EmergencyButton variant="glass" size="sm" onClick={onAssign}>
-          Asignar
-        </EmergencyButton>
+      {pendingApps.length > 0 ? (
+        <ul className="space-y-2">
+          {pendingApps.slice(0, 4).map((a) => (
+            <li
+              key={a.id}
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+            >
+              <p className="text-sm font-medium text-ink">{a.applicantName || 'Voluntario'}</p>
+              <p className="text-[11px] text-ink-muted">{formatRangeToReport(a.distanceKm)}</p>
+              {(onApproveApplication || onRejectApplication) && (
+                <div className="mt-2 flex gap-1.5">
+                  {onApproveApplication && (
+                    <EmergencyButton
+                      variant="primary"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => onApproveApplication(a.id, bestPickupCenterId)}
+                    >
+                      Aceptar
+                    </EmergencyButton>
+                  )}
+                  {onRejectApplication && (
+                    <EmergencyButton
+                      variant="glass"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => onRejectApplication(a.id)}
+                    >
+                      Rechazar
+                    </EmergencyButton>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[11px] text-ink-faint">Sin postulaciones aún.</p>
       )}
     </div>
   )

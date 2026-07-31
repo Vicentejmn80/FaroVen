@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { BarChart3, CheckCircle2, PackagePlus, Truck, TruckIcon } from 'lucide-react'
+import { BarChart3, CheckCircle2, PackagePlus } from 'lucide-react'
 import { ScreenScaffold } from '@/components/faro/screen-scaffold'
 import { ActionCard } from '@/components/ui/action-card'
 import { GlassCard } from '@/components/ui/glass-card'
@@ -22,8 +22,6 @@ export function CoordinatorHubScreen({
   onOpenDetail,
   onRegisterNeed,
   onUpdateSaturation,
-  onRegisterArrival,
-  onRegisterDispatch,
 }: CoordinatorHubScreenProps) {
   const { sites, latestActivity, state } = useFaro()
   const [siteId, setSiteId] = useState(sites[0]?.id ?? '')
@@ -84,18 +82,6 @@ export function CoordinatorHubScreen({
             label="Actualizar saturación"
             hint="Capacidad actual"
             onClick={() => onUpdateSaturation?.(site?.id)}
-          />
-          <ActionCard
-            icon={Truck}
-            label="Registrar llegada"
-            hint="Donaciones entrantes"
-            onClick={() => onRegisterArrival?.(site?.id)}
-          />
-          <ActionCard
-            icon={TruckIcon}
-            label="Registrar salida"
-            hint="Recursos distribuidos"
-            onClick={() => onRegisterDispatch?.(site?.id)}
           />
         </div>
 

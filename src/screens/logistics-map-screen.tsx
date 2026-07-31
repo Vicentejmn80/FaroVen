@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { MapGoogleLinkButton, MapLocateControl, MapZoomControls } from '@/components/faro/map-controls'
 import { MapResizeNotifier } from '@/components/faro/map-resize-notifier'
 import { MapSectionErrorBoundary } from '@/components/faro/map-section-error-boundary'
-import { createMissionMarkerIcon } from '@/components/faro/map-marker'
+import { createMissionMarkerIcon, createSiteMarkerIcon } from '@/components/faro/map-marker'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { useMapData } from '@/hooks/useMapData'
@@ -82,27 +82,35 @@ export function LogisticsMapScreen({ onOpenDetail }: LogisticsMapScreenProps) {
           <MapContainer
             center={center}
             zoom={12}
-            className="h-full w-full !bg-[#0a1220]"
+            className="faro-map h-full w-full"
             zoomControl={false}
             attributionControl={false}
+            scrollWheelZoom
+            touchZoom
+            doubleClickZoom
+            dragging
+            preferCanvas
           >
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              className="faro-map-tiles"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution="&copy; OpenStreetMap"
             />
             <MapResizeNotifier />
             <MapZoomControls />
             <MapLocateControl />
-            <MapGoogleLinkButton />
             <FitSites sites={mapData.sites} />
 
             {mapData.sites.map((site) => {
               const pos = safeMarkerPosition(site.lat, site.lng)
               if (!pos) return null
+              const active = selected?.kind === 'site' && selected.site.id === site.id
               return (
                 <Marker
                   key={site.id}
                   position={pos}
+                  icon={createSiteMarkerIcon(site, active, !!selected && !active)}
+                  zIndexOffset={active ? 1200 : 0}
                   eventHandlers={{
                     click: () => setSelected({ kind: 'site', site }),
                   }}
@@ -131,6 +139,15 @@ export function LogisticsMapScreen({ onOpenDetail }: LogisticsMapScreenProps) {
               )
             })}
           </MapContainer>
+
+          {selected?.kind === 'site' && (
+            <MapGoogleLinkButton
+              lat={selected.site.lat}
+              lng={selected.site.lng}
+              label={selected.site.name}
+              className="bottom-[calc(max(1rem,env(safe-area-inset-bottom))+7.5rem)]"
+            />
+          )}
 
           {selected && (
             <div className="absolute inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[500] mx-auto max-w-md">

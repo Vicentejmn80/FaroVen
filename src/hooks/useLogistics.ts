@@ -6,7 +6,9 @@ import {
   listReservationsByCase,
   markReservationReady,
   markReservationDelivered,
+  requestInventoryFromCenter,
 } from '@/services/logistics-service'
+import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { humanizeSupabaseError } from '@/lib/supabase-errors'
 import { useToast } from '@/store/toast-context'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
@@ -91,6 +93,35 @@ export function useMarkReservationReady() {
       showToast('Recursos marcados como preparados.', 'success')
     },
     onError: (err: Error) => showToast(err.message, 'warning'),
+  })
+}
+
+/** GC: solicitar inventario de un centro → aparece en Solicitudes del Coordinador. */
+export function useRequestInventoryFromCenter() {
+  const qc = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (input: {
+      caseData: CaseDomain
+      centerId: string
+      resourceType: string
+      quantity: number
+      actorId: string
+    }) => {
+      try {
+        return await requestInventoryFromCenter(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerResources] })
+      showToast('Solicitud enviada al centro — esperando preparación.', 'success')
+    },
+    onError: (err: Error) => showToast(err.message || 'No se pudo solicitar el inventario.', 'warning'),
   })
 }
 

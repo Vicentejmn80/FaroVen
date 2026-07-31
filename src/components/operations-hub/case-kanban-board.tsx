@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, Clock, Search, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
+import { REQUEST_SOURCE_LABELS } from '@/domain/case-lifecycle.types'
 import { OPS_BOARD_COLUMNS, type OpsBoardColumnId } from '@/domain/ops-pipeline'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PublicNeed } from '@/domain/public-need.types'
@@ -248,12 +249,19 @@ function KanbanCard({
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-1 text-[10px] text-ink-muted">
         <span className="inline-flex items-center gap-1">
           <User className="h-2.5 w-2.5" />
-          {caseItem.reporterInfo.name ?? 'Ciudadano'}
+          {caseItem.reporterInfo.name
+            ?? REQUEST_SOURCE_LABELS[caseItem.requestSource]
+            ?? 'Reportante'}
         </span>
         <span className="inline-flex items-center gap-1">
           <Clock className="h-2.5 w-2.5" />
           {formatShortTime(caseItem.createdAt)}
         </span>
+        {caseItem.requestSource === 'coordinator' && (
+          <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-medium text-warning">
+            Coordinador
+          </span>
+        )}
       </div>
 
       {awaitingInfo && (
