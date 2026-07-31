@@ -5,6 +5,7 @@ import { EmergencyButton } from '@/components/ui/emergency-button'
 import { LocationPickerMap } from '@/components/faro/location-picker-map'
 import { useReportAnalysis } from '@/hooks/useCaseManager'
 import { useCreateOperationalCaseFromWizard } from '@/hooks/useOperationalWizard'
+import { useAuth } from '@/store/auth-context'
 import { cn, isValidCoord } from '@/lib/utils'
 import type { ResolvedPlace } from '@/lib/osm-geocoding'
 import { getResourceLabel, getResourceMinRecommended, getResourceUnit, resolveCatalogKey } from '@/lib/resource-catalog'
@@ -76,6 +77,8 @@ export function OperationalCaseWizardModal({
 }) {
   const { data: analysis, isLoading } = useReportAnalysis(open ? reportId : null)
   const createCase = useCreateOperationalCaseFromWizard()
+  const { isSimulating } = useAuth()
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const report = analysis?.report
   const reportHasGps = Boolean(
@@ -253,6 +256,14 @@ export function OperationalCaseWizardModal({
     if (!reportId) return
     if (!report) return
     if (!hasGps) return
+    setSubmitError(null)
+
+    if (isSimulating) {
+      setSubmitError(
+        'Estás en modo simulación de rol. Sal del laboratorio o usa tu cuenta real de Gestor de Casos para crear casos operativos.',
+      )
+      return
+    }
 
     const finalNeedCategoryLabel = NEED_CATEGORIES.find((c) => c.id === needCategory)?.label
     const locationOverride =
@@ -285,21 +296,24 @@ export function OperationalCaseWizardModal({
       },
     })
 
-    const result = await createCase.mutateAsync({
-      reportId,
-      actorId,
-      operationKind: opKind,
-      priority,
-      needKeyOrText,
-      needCategoryLabel: finalNeedCategoryLabel,
-      peopleAffected,
-      requiredQuantity: Math.max(1, requiredQuantity),
-      durationHours: opKind === 'citizen_coverage' ? coverageDuration : undefined,
-      locationOverride,
-      strategy,
-    })
-
-    onDone({ caseId: result.case.id })
+    try {
+      const result = await createCase.mutateAsync({
+        reportId,
+        actorId,
+        operationKind: opKind,
+        priority,
+        needKeyOrText,
+        needCategoryLabel: finalNeedCategoryLabel,
+        peopleAffected,
+        requiredQuantity: Math.max(1, requiredQuantity),
+        durationHours: opKind === 'citizen_coverage' ? coverageDuration : undefined,
+        locationOverride,
+        strategy,
+      })
+      onDone({ caseId: result.case.id })
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'No se pudo crear el caso operativo')
+    }
   }
 
   if (!open) return null
@@ -718,9 +732,12 @@ export function OperationalCaseWizardModal({
                       />
                     </div>
 
-                    {createCase.error && (
+                    {(createCase.error || submitError) && (
                       <p className="rounded-2xl border border-critical/25 bg-critical/[0.08] px-3 py-2 text-xs text-critical">
-                        {createCase.error instanceof Error ? createCase.error.message : 'No se pudo crear el caso'}
+                        {submitError ??
+                          (createCase.error instanceof Error
+                            ? createCase.error.message
+                            : 'No se pudo crear el caso')}
                       </p>
                     )}
                   </GlassCard>

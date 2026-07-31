@@ -1,5 +1,6 @@
 import { reportRepository } from '@/repositories/report-repository'
 import { publicNeedRepository } from '@/repositories/public-need-repository'
+import { caseRepository } from '@/repositories/case-repository'
 import { caseService } from '@/services/case-service'
 import { caseManagerService } from '@/services/case-manager-service'
 import { requestInventoryFromCenter } from '@/services/logistics-service'
@@ -141,62 +142,56 @@ export const operationalWizardService = {
       report.description +
       `\n\n[FARO Wizard] Tipo: ${input.operationKind} · Necesidad: ${needLabel} · Requerido: ${input.requiredQuantity} ${unit} · Personas afectadas: ${input.peopleAffected}`
 
-    const create = await caseService.create({
-      title,
-      description,
-      priority: input.priority,
-      zone: input.locationOverride?.zone ?? report.location.zone ?? 'Zona por confirmar',
-      category: resolvedResourceType,
-      affectedCount: Math.max(1, input.requiredQuantity),
-      location: {
-        lat,
-        lng,
-        address: input.locationOverride?.address ?? report.location.address,
-      },
-      reporterInfo: parseContactInfo(report.contactInfo),
-      actorId: input.actorId,
-      reportId: report.id,
-      requestSource: 'citizen',
-      requestType: 'report',
-      operationType: operationTypeFromKind(input.operationKind),
-    })
-
-    // Persistir metadatos del wizard (no rompe schema: metadata jsonb)
-    const { error: metaError } = await supabase
-      .from('cases')
-      .update({
-        metadata: {
-          ...(create.case.metadata ?? {}),
-          wizard: {
-            v: 1,
-            operationKind: input.operationKind,
-            needCategoryLabel: input.needCategoryLabel ?? null,
-            needKeyOrText: input.needKeyOrText,
-            resolvedResourceType,
-            peopleAffected: input.peopleAffected,
-            requiredQuantity: input.requiredQuantity,
-            durationHours: input.durationHours ?? null,
-            strategy: input.strategy,
-          },
-        },
-      })
-      .eq('id', create.case.id)
-    if (metaError) {
-      opsChannelLog('CASE', {
-        entityType: 'case',
-        entityId: create.case.id,
-        action: 'wizard_metadata_update_failed',
-        actorId: input.actorId ?? null,
-        actorRole: 'case_manager',
-        source: 'service',
-        error: metaError.message,
-      })
+    const wizardMetadata = {
+      v: 1,
+      operationKind: input.operationKind,
+      needCategoryLabel: input.needCategoryLabel ?? null,
+      needKeyOrText: input.needKeyOrText,
+      resolvedResourceType,
+      peopleAffected: input.peopleAffected,
+      requiredQuantity: input.requiredQuantity,
+      durationHours: input.durationHours ?? null,
+      strategy: input.strategy,
     }
 
-    await reportRepository.markConverted({ id: report.id, caseId: create.case.id })
+    let createdCase: CaseDomain
+    try {
+      createdCase = await caseRepository.createFromReportRpc({
+        reportId: report.id,
+        title,
+        description,
+        priority: input.priority,
+        zone: input.locationOverride?.zone ?? report.location.zone ?? 'Zona por confirmar',
+        category: resolvedResourceType,
+        affectedCount: Math.max(1, input.requiredQuantity),
+        location: {
+          lat,
+          lng,
+          address: input.locationOverride?.address ?? report.location.address,
+        },
+        reporterInfo: parseContactInfo(report.contactInfo),
+        requestSource: 'citizen',
+        requestType: 'report',
+        operationType: operationTypeFromKind(input.operationKind),
+        wizardMetadata,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('not_authenticated')) {
+        throw new Error('Sesión expirada. Vuelve a iniciar sesión e intenta de nuevo.')
+      }
+      if (message.includes('not_authorized') || message.includes('42501')) {
+        throw new Error(
+          'Tu usuario no tiene permisos de operador (Gestor de Casos) en FARO. Verifica tu rol en Perfil o contacta al administrador.',
+        )
+      }
+      throw err
+    }
+
+    await reportRepository.markConverted({ id: report.id, caseId: createdCase.id })
 
     // El wizard ya es “revisión”: abrir el caso inmediatamente
-    const reviewed = await caseService.startReview(create.case.id, input.actorId)
+    const reviewed = await caseService.startReview(createdCase.id, input.actorId)
 
     // Siempre garantizar una necesidad (borrador) ligada al caso.
     const existingNeeds = await publicNeedRepository.listByCaseId(reviewed.case.id)

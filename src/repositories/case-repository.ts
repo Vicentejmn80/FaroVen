@@ -129,6 +129,45 @@ export class CaseRepository {
     return caseRowToDomain(data as CaseRow)
   }
 
+  /** Creación/enriquecimiento atómico desde reporte (SECURITY DEFINER, evita RLS 42501). */
+  async createFromReportRpc(input: {
+    reportId: string
+    title: string
+    description: string
+    priority: CaseDomain['priority']
+    zone: string
+    location: { lat: number; lng: number; address?: string }
+    category: string
+    affectedCount: number
+    reporterInfo?: CaseDomain['reporterInfo']
+    requestSource?: string
+    requestType?: string
+    operationType?: string
+    wizardMetadata?: Record<string, unknown>
+  }): Promise<CaseDomain> {
+    const { data, error } = await supabase.rpc('create_operational_case_from_report', {
+      p_report_id: input.reportId,
+      p_title: input.title,
+      p_description: input.description,
+      p_priority: input.priority,
+      p_zone: input.zone,
+      p_latitude: input.location.lat,
+      p_longitude: input.location.lng,
+      p_address: input.location.address ?? null,
+      p_category: input.category,
+      p_affected_count: input.affectedCount,
+      p_reporter_name: input.reporterInfo?.name ?? null,
+      p_reporter_phone: input.reporterInfo?.phone ?? null,
+      p_reporter_email: input.reporterInfo?.email ?? null,
+      p_request_source: input.requestSource ?? 'citizen',
+      p_request_type: input.requestType ?? 'report',
+      p_operation_type: input.operationType ?? 'incident',
+      p_wizard_metadata: input.wizardMetadata ?? null,
+    })
+    if (error) throw error
+    return caseRowToDomain(data as CaseRow)
+  }
+
   async update(id: string, input: Partial<CaseDomain>): Promise<CaseDomain> {
     const row = caseDomainToRow(input)
     const { data, error } = await supabase.from('cases').update(row).eq('id', id).select('*').single()
