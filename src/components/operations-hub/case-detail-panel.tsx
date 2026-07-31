@@ -12,8 +12,8 @@ import type { MissionEvent } from '@/domain/mission.types'
 import type { MissionAssignment } from '@/domain/mission.types'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CoverageInterest } from '@/domain/public-need.types'
-import { OperationalRecoPanel } from '@/components/operations-hub/operational-reco-panel'
 import { FaroRecommendationPanel } from '@/components/operations-hub/faro-recommendation-panel'
+import { CoverageLivePanel } from '@/components/operations-hub/coverage-live-panel'
 
 interface CoverageBundle {
   applications: CaseApplicationWithApplicant[]
@@ -62,7 +62,7 @@ export function CaseDetailPanel({
   inventoryTips = [],
   onTransition,
   onAssign,
-  onUseInventory,
+  onUseInventory: _onUseInventory,
   onStartReview,
   onVerifyAssignment,
   onOpenRadar,
@@ -151,21 +151,20 @@ export function CaseDetailPanel({
           )}
 
           {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
-            <OperationalRecoPanel
-              caseData={caseItem}
-              onOpenCoverage={canOpenRadar ? onOpenRadar : undefined}
-              onUseInventory={onUseInventory ?? (inventoryTips[0] ? () => onAssign?.(inventoryTips[0].centerId) : undefined)}
-              radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
-            />
-          )}
-
-          {(isReviewStage(caseItem.pipelineStage) || isCoverageStage(caseItem.pipelineStage)) && (
             <FaroRecommendationPanel
               caseData={caseItem}
               onAssignCenter={onAssign}
               onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
               radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
+              centerFirst={isReviewStage(caseItem.pipelineStage)}
             />
+          )}
+
+          {(isCoverageStage(caseItem.pipelineStage) ||
+            caseItem.pipelineStage === PIPELINE_STAGES.ASSIGNED ||
+            caseItem.pipelineStage === PIPELINE_STAGES.ACCEPTED ||
+            caseItem.pipelineStage === PIPELINE_STAGES.IN_ATTENTION) && (
+            <CoverageLivePanel caseData={caseItem} />
           )}
 
           {showCoverage && (
@@ -176,13 +175,16 @@ export function CaseDetailPanel({
               inventoryTips={inventoryTips}
               onAssign={onAssign}
               assignedCenterId={caseItem.assignedCenterId}
-              onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
+              onOpenRadar={
+                canOpenRadar && isCoverageStage(caseItem.pipelineStage) ? onOpenRadar : undefined
+              }
               radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
               onApproveApplication={onApproveApplication}
               onRejectApplication={onRejectApplication}
               onApproveInterest={onApproveInterest}
               onRejectInterest={onRejectInterest}
               bestPickupCenterId={inventoryTips[0]?.centerId}
+              hideInventoryTip={isReviewStage(caseItem.pipelineStage)}
             />
           )}
 
@@ -239,6 +241,7 @@ function CoverageSection({
   onApproveInterest,
   onRejectInterest,
   bestPickupCenterId,
+  hideInventoryTip = false,
 }: {
   applications: CaseApplicationWithApplicant[]
   interests: CoverageInterest[]
@@ -259,10 +262,11 @@ function CoverageSection({
   onApproveInterest?: (reservationId: string) => void
   onRejectInterest?: (reservationId: string) => void
   bestPickupCenterId?: string
+  hideInventoryTip?: boolean
 }) {
   const pendingApps = applications.filter((a) => a.status === 'pending' || a.status === 'under_review')
   const pendingInterests = interests.filter((i) => i.status === 'reserved')
-  const tip = inventoryTips[0]
+  const tip = hideInventoryTip ? null : inventoryTips[0]
   const empty = pendingApps.length === 0 && pendingInterests.length === 0
 
   return (

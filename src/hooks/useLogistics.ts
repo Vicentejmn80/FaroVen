@@ -8,6 +8,9 @@ import {
   markReservationDelivered,
   requestInventoryFromCenter,
   respondToInventoryRequest,
+  reserveInventoryByVolunteer,
+  acceptVolunteerInventoryReservation,
+  sweepExpiredInventoryReservations,
 } from '@/services/logistics-service'
 import type { CenterResolutionMode } from '@/domain/center-operations.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
@@ -58,7 +61,10 @@ export function useCenterReservations(centerId: string | undefined) {
   })
   return useQuery({
     queryKey: [FARO_QUERY_KEYS.inventoryReservations, 'center', centerId],
-    queryFn: () => listReservationsByCenter(centerId!),
+    queryFn: async () => {
+      await sweepExpiredInventoryReservations().catch(() => 0)
+      return listReservationsByCenter(centerId!)
+    },
     enabled: !!centerId,
     staleTime: 8_000,
   })
@@ -127,7 +133,8 @@ export function useRespondToInventoryRequest() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       if (vars.resolutionMode === 'needs_volunteer') {
-        showToast('GC notificado: se requiere abrir Radar.', 'info')
+        qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+        showToast('Radar abierto automáticamente — buscando voluntarios.', 'info')
       } else {
         showToast('Respuesta del centro registrada.', 'success')
       }
@@ -188,6 +195,56 @@ export function useMarkReservationDelivered() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerResources] })
       showToast('Recursos entregados al voluntario.', 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'warning'),
+  })
+}
+
+export function useReserveInventoryByVolunteer() {
+  const qc = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (input: {
+      missionId: string
+      caseId: string
+      centerId: string
+      resourceType: string
+      quantity: number
+      volunteerId?: string
+      volunteerName?: string
+      etaMinutes?: number
+    }) => {
+      try {
+        return await reserveInventoryByVolunteer(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.centerResources] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      showToast('Reserva enviada al centro. Esperando confirmación.', 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'warning'),
+  })
+}
+
+export function useAcceptVolunteerInventoryReservation() {
+  const qc = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (reservationId: string) => {
+      try {
+        return await acceptVolunteerInventoryReservation(reservationId)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      showToast('Reserva aceptada — voluntario notificado.', 'success')
     },
     onError: (err: Error) => showToast(err.message, 'warning'),
   })

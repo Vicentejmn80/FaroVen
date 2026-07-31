@@ -24,6 +24,7 @@ export async function resolveCenterDispatchMode(centerId: string): Promise<Cente
 export function canOpenRadarForCase(
   caseData: CaseDomain,
   dispatchMode?: CenterDispatchMode | null,
+  opts?: { hasViableCenters?: boolean },
 ): { allowed: boolean; reason?: string } {
   if (dispatchMode === 'brigade') {
     return { allowed: false, reason: 'Este centro opera con brigada propia — no usa radar.' }
@@ -35,7 +36,17 @@ export function canOpenRadarForCase(
   ) {
     return {
       allowed: false,
-      reason: 'El radar se habilita cuando el centro confirme la asignación.',
+      reason: 'El radar se abre automáticamente si el centro indica que necesita voluntario.',
+    }
+  }
+  // Centro primero: en revisión, Radar solo si no hay centros viables
+  if (
+    caseData.pipelineStage === 'pending_review' &&
+    opts?.hasViableCenters === true
+  ) {
+    return {
+      allowed: false,
+      reason: 'Solicita primero a un centro recomendado. El radar es fallback.',
     }
   }
   return { allowed: true }

@@ -13,12 +13,15 @@ export function FaroRecommendationPanel({
   onAssignCenter,
   onOpenRadar,
   radarBlockedReason,
+  /** Si hay centros viables, Radar solo como fallback (centro primero). */
+  centerFirst = true,
   className,
 }: {
   caseData: CaseDomain
   onAssignCenter?: (centerId: string) => void
   onOpenRadar?: () => void
   radarBlockedReason?: string
+  centerFirst?: boolean
   className?: string
 }) {
   const enabled = Boolean(caseData?.id && caseData.location?.lat && caseData.location?.lng)
@@ -30,6 +33,8 @@ export function FaroRecommendationPanel({
   })
 
   const centers = useMemo(() => (data?.centers ?? []).slice(0, 5), [data?.centers])
+  const hasViableCenters = centers.length > 0
+  const allowRadarFallback = !centerFirst || !hasViableCenters
 
   return (
     <GlassCard
@@ -41,7 +46,7 @@ export function FaroRecommendationPanel({
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-operational">
-            Recomendación FARO
+            Recomendado por FARO
           </p>
           {data ? (
             <p className="mt-0.5 text-[11px] text-ink-muted">
@@ -107,20 +112,25 @@ export function FaroRecommendationPanel({
                     size="sm"
                     onClick={() => onAssignCenter(c.centerId)}
                   >
-                    Asignar al centro
-                  </EmergencyButton>
-                )}
-                {onOpenRadar && c.dispatchMode !== 'brigade' && (
-                  <EmergencyButton variant="glass" size="sm" onClick={onOpenRadar}>
-                    Abrir radar
+                    Solicitar al centro
                   </EmergencyButton>
                 )}
                 {c.dispatchMode === 'brigade' && (
-                  <span className="text-[10px] text-ink-faint self-center">Sin radar — brigada propia</span>
+                  <span className="text-[10px] text-ink-faint self-center">Brigada propia</span>
                 )}
               </div>
             </div>
           ))}
+          {allowRadarFallback && onOpenRadar && (
+            <EmergencyButton variant="glass" size="sm" className="w-full" onClick={onOpenRadar}>
+              Abrir radar (sin centros viables)
+            </EmergencyButton>
+          )}
+          {centerFirst && hasViableCenters && (
+            <p className="text-[10px] text-ink-faint">
+              Pipeline: solicita al centro primero. El radar se abre si responde “necesita voluntario”.
+            </p>
+          )}
           {radarBlockedReason && !onOpenRadar && (
             <p className="text-[10px] text-ink-faint">{radarBlockedReason}</p>
           )}

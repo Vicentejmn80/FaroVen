@@ -4,7 +4,11 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useAuth } from '@/store/auth-context'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
-import { useCenterReservations, useRespondToInventoryRequest } from '@/hooks/useLogistics'
+import {
+  useAcceptVolunteerInventoryReservation,
+  useCenterReservations,
+  useRespondToInventoryRequest,
+} from '@/hooks/useLogistics'
 import { useMissions } from '@/hooks/useMissions'
 import { getResourceLabel } from '@/lib/resource-catalog'
 import { cn, timeAgo } from '@/lib/utils'
@@ -22,6 +26,7 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
   const { data: reservations = [], isLoading } = useCenterReservations(assignment?.siteId)
   const { data: missions = [] } = useMissions()
   const respond = useRespondToInventoryRequest()
+  const acceptVolunteer = useAcceptVolunteerInventoryReservation()
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const missionById = useMemo(() => {
@@ -30,7 +35,12 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
     return map
   }, [missions])
 
-  const requests = reservations.filter((r) => r.status === 'reserved' && !r.resolutionMode)
+  const volunteerPending = reservations.filter(
+    (r) => r.status === 'reserved' && Boolean(r.volunteerUserId) && !r.resolutionMode,
+  )
+  const requests = reservations.filter(
+    (r) => r.status === 'reserved' && !r.resolutionMode && !r.volunteerUserId,
+  )
 
   if (!assignment?.siteId) {
     return (
@@ -61,7 +71,44 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
         </p>
       </div>
 
-      {requests.length === 0 ? (
+      {volunteerPending.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-operational">
+            Reservas de voluntarios
+          </p>
+          {volunteerPending.map((r) => {
+            const mission = missionById.get(r.missionId)
+            const expiresMin =
+              r.expiresAt != null
+                ? Math.max(0, Math.ceil((r.expiresAt.getTime() - Date.now()) / 60000))
+                : null
+            return (
+              <GlassCard key={r.id} className="space-y-3 !border-operational/25 !p-4">
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    {mission?.title ?? `Misión ${r.missionId.slice(0, 8)}`}
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-muted">
+                    Reservó {r.quantity} × {getResourceLabel(r.resourceType)}
+                    {expiresMin != null ? ` · expira en ${expiresMin}m` : ''}
+                  </p>
+                </div>
+                <EmergencyButton
+                  variant="primary"
+                  size="md"
+                  className="w-full"
+                  disabled={acceptVolunteer.isPending}
+                  onClick={() => void acceptVolunteer.mutateAsync(r.id)}
+                >
+                  Aceptar reserva
+                </EmergencyButton>
+              </GlassCard>
+            )
+          })}
+        </div>
+      )}
+
+      {requests.length === 0 && volunteerPending.length === 0 ? (
         <GlassCard className="p-6 text-center">
           <ClipboardList className="mx-auto mb-2 h-8 w-8 text-ink-faint" />
           <p className="text-sm text-ink-subtle">Sin solicitudes pendientes</p>
@@ -69,7 +116,7 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
             Cuando el GC asigne inventario de tu centro a una misión, aparecerá aquí.
           </p>
         </GlassCard>
-      ) : (
+      ) : requests.length === 0 ? null : (
         <div className="space-y-3">
           {requests.map((r) => {
             const mission = missionById.get(r.missionId)

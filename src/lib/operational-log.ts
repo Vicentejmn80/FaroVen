@@ -1,7 +1,18 @@
 type LogSource = 'ui' | 'service' | 'realtime' | 'system'
 
+export type OpsLogChannel =
+  | 'CASE'
+  | 'MISSION'
+  | 'RESERVATION'
+  | 'CENTER'
+  | 'VOLUNTEER'
+  | 'INVENTORY'
+  | 'TIMELINE'
+  | 'REALTIME'
+  | 'NOTIFICATION'
+
 export interface OperationalLogPayload {
-  entityType: 'case' | 'mission' | 'assignment' | 'application' | 'report' | 'public_need'
+  entityType: 'case' | 'mission' | 'assignment' | 'application' | 'report' | 'public_need' | 'reservation'
   entityId: string
   action: string
   from?: string | null
@@ -16,6 +27,8 @@ export interface OperationalLogPayload {
   payload?: Record<string, unknown>
   durationMs?: number
   error?: string | null
+  /** Canal canónico del centro de comando (además de FARO_OPS). */
+  channel?: OpsLogChannel
 }
 
 /**
@@ -48,7 +61,21 @@ export function operationalLog(entry: OperationalLogPayload): Record<string, unk
     console.info('[FARO_OPS]', record)
   }
 
+  if (entry.channel) {
+    const tag = `[${entry.channel}]`
+    if (entry.error) console.warn(tag, record)
+    else console.info(tag, record)
+  }
+
   return record
+}
+
+/** Log con canal canónico del pipeline logístico. */
+export function opsChannelLog(
+  channel: OpsLogChannel,
+  entry: Omit<OperationalLogPayload, 'channel'>,
+): Record<string, unknown> {
+  return operationalLog({ ...entry, channel })
 }
 
 export async function withOperationalLog<T>(

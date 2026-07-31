@@ -2,8 +2,9 @@ import { supabase } from '@/lib/supabase'
 import { logisticsRepository, type CenterRecommendation } from '@/repositories/logistics-repository'
 import { missionRepository } from '@/repositories/mission-repository'
 import { centerOpsRepository } from '@/repositories/center-operations-repository'
-import { logisticsLog } from '@/lib/operational-log'
+import { logisticsLog, opsChannelLog } from '@/lib/operational-log'
 import { OPS_ACTION_URLS, opsNotify } from '@/services/ops-notification-contract'
+import { INVENTORY_RESERVATION_TTL_MINUTES } from '@/domain/ops-pipeline-contract'
 import { volunteerRepository } from '@/repositories/volunteer-repository'
 import { getResourceLabel } from '@/lib/resource-catalog'
 import type { InventoryReservation } from '@/domain/center-operations.types'
@@ -262,6 +263,26 @@ export async function respondToInventoryRequest(input: {
       actorId: input.actorId,
       payload: { reason: 'needs_volunteer', notes: input.notes ?? null },
     })
+
+    // Pipeline canónico: needs_volunteer → abrir Radar automáticamente
+    try {
+      const { caseManagerService } = await import('@/services/case-manager-service')
+      await caseManagerService.openVolunteerCall(caseId, input.actorId, {
+        reservationsMode: true,
+        requiredQuantity: Math.max(1, reservation.quantity),
+      })
+      opsChannelLog('CENTER', {
+        entityType: 'case',
+        entityId: caseId,
+        action: 'auto_radar_after_needs_volunteer',
+        caseId,
+        centerId,
+        missionId,
+        actorId: input.actorId,
+      })
+    } catch (err) {
+      console.warn('[FARO_LOGISTICS] No se pudo abrir Radar automáticamente tras needs_volunteer', err)
+    }
 
     return reservation
   }
@@ -563,6 +584,151 @@ async function getVolunteerDisplayName(volunteerId?: string): Promise<string> {
   } catch {
     return 'Un voluntario'
   }
+}
+
+/**
+ * Voluntario reserva inventario en un centro (RPC atómica + TTL 20m).
+ * Notifica al coordinador del centro.
+ */
+export async function reserveInventoryByVolunteer(input: {
+  missionId: string
+  caseId: string
+  centerId: string
+  resourceType: string
+  quantity: number
+  volunteerId?: string
+  volunteerName?: string
+  etaMinutes?: number
+}): Promise<InventoryReservation> {
+  await logisticsRepository.expireStaleReservations().catch(() => 0)
+
+  const reservation = await logisticsRepository.reserveInventoryForMissionRpc({
+    missionId: input.missionId,
+    caseId: input.caseId,
+    centerId: input.centerId,
+    resourceType: input.resourceType,
+    quantity: input.quantity,
+    volunteerId: input.volunteerId,
+    ttlMinutes: INVENTORY_RESERVATION_TTL_MINUTES,
+  })
+
+  opsChannelLog('RESERVATION', {
+    entityType: 'reservation',
+    entityId: reservation.id,
+    action: 'volunteer_reserved_inventory',
+    caseId: input.caseId,
+    missionId: input.missionId,
+    centerId: input.centerId,
+    volunteerId: input.volunteerId,
+    from: null,
+    to: 'reserved',
+    payload: {
+      quantity: input.quantity,
+      resourceType: input.resourceType,
+      expiresAt: reservation.expiresAt?.toISOString() ?? null,
+    },
+  })
+
+  const coordinators = await getCenterCoordinatorUserIds(input.centerId)
+  const name = input.volunteerName ?? 'Un voluntario'
+  const resourceLabel = getResourceLabel(input.resourceType)
+  const eta = input.etaMinutes != null ? `${input.etaMinutes} minutos` : 'por confirmar'
+
+  await Promise.all(
+    coordinators.map((userId) =>
+      opsNotify({
+        to: userId,
+        type: 'logistics_preparation',
+        title: 'Nuevo voluntario — reserva pendiente',
+        message: `${name} reservó ${input.quantity} × ${resourceLabel}. ETA ${eta}.`,
+        priority: 'high',
+        actionUrl: OPS_ACTION_URLS.coordinatorNeeds(),
+        icon: 'package',
+        metadata: {
+          reservationId: reservation.id,
+          missionId: input.missionId,
+          caseId: input.caseId,
+          quantity: input.quantity,
+          resourceType: input.resourceType,
+          volunteerName: name,
+          etaMinutes: input.etaMinutes ?? null,
+        },
+        entityType: 'reservation',
+        entityId: reservation.id,
+        caseId: input.caseId,
+        missionId: input.missionId,
+      }),
+    ),
+  )
+
+  return reservation
+}
+
+/** Centro acepta reserva del voluntario → ready + notifica voluntario. */
+export async function acceptVolunteerInventoryReservation(
+  reservationId: string,
+): Promise<InventoryReservation> {
+  const reservation = await logisticsRepository.acceptInventoryReservationRpc(reservationId)
+
+  opsChannelLog('CENTER', {
+    entityType: 'reservation',
+    entityId: reservation.id,
+    action: 'center_accepted_volunteer_reservation',
+    caseId: reservation.caseId,
+    missionId: reservation.missionId,
+    centerId: reservation.centerId,
+    from: 'reserved',
+    to: 'ready',
+  })
+
+  const userId = reservation.volunteerUserId
+  if (userId) {
+    await opsNotify({
+      to: userId,
+      type: 'resources_ready',
+      title: 'Centro confirmó tu retiro',
+      message: 'Puedes dirigirte al centro. Ya tienes el contacto del coordinador.',
+      priority: 'high',
+      actionUrl: OPS_ACTION_URLS.volunteerMissionAssigned(reservation.missionId),
+      icon: 'package',
+      metadata: {
+        reservationId: reservation.id,
+        missionId: reservation.missionId,
+        caseId: reservation.caseId,
+        centerId: reservation.centerId,
+      },
+      entityType: 'reservation',
+      entityId: reservation.id,
+      caseId: reservation.caseId,
+      missionId: reservation.missionId,
+    })
+  }
+
+  // Actualizar pickup de la misión al centro aceptado
+  try {
+    await missionRepository.update(reservation.missionId, {
+      pickupCenterId: reservation.centerId,
+      resourceType: reservation.resourceType,
+      resourceQty: reservation.quantity,
+    })
+  } catch {
+    // non-blocking
+  }
+
+  return reservation
+}
+
+export async function sweepExpiredInventoryReservations(): Promise<number> {
+  const count = await logisticsRepository.expireStaleReservations()
+  if (count > 0) {
+    opsChannelLog('INVENTORY', {
+      entityType: 'reservation',
+      entityId: 'batch',
+      action: 'expire_stale_reservations',
+      payload: { count },
+    })
+  }
+  return count
 }
 
 export type { CenterRecommendation }

@@ -50,7 +50,7 @@ export interface OpsNotifyInput {
   icon?: string | null
   metadata?: Record<string, unknown>
   /** Para log FARO_OPS */
-  entityType?: 'case' | 'mission' | 'assignment' | 'application' | 'report' | 'public_need'
+  entityType?: 'case' | 'mission' | 'assignment' | 'application' | 'report' | 'public_need' | 'reservation'
   entityId?: string
   caseId?: string | null
   missionId?: string | null

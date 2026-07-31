@@ -242,13 +242,18 @@ export async function approveNeedInterest(input: {
     await notifyUser(
       reservation.collaboratorUserId,
       'Postulación aprobada',
-      `Tu postulación fue aprobada y se creó una misión operativa.`,
+      `Tu postulación fue aprobada. Elige un centro recomendado y reserva recursos.`,
       'coverage_interest_approved',
       {
         reservationId: reservation.id,
         publicNeedId: reservation.publicNeedId,
         missionId,
         assignmentId,
+      },
+      {
+        priority: 'high',
+        actionUrl: missionId ? `tab:map:mission-assigned:${missionId}` : OPS_ACTION_URLS.volunteerMissions(),
+        icon: 'flag',
       },
     )
   } else if (reservation.collaboratorUserId) {
@@ -269,12 +274,51 @@ export async function approveNeedInterest(input: {
     status: 'confirmed',
   })
 
+  // Pipeline: alinear caso a assigned cuando hay misión
+  if (missionId && need.caseId) {
+    try {
+      const { caseService } = await import('@/services/case-service')
+      const caseData = await caseService.getById(need.caseId)
+      if (
+        caseData &&
+        (caseData.pipelineStage === 'open_for_applications' ||
+          caseData.pipelineStage === 'awaiting_center_confirmation' ||
+          caseData.pipelineStage === 'pending_review')
+      ) {
+        await caseService.transition(
+          need.caseId,
+          'assigned',
+          input.operatorId,
+          'Cobertura aprobada — voluntario asignado',
+        )
+      }
+    } catch (err) {
+      console.warn('[PUBLIC_NEED] No se pudo transicionar caso a assigned', err)
+    }
+  }
+
   const refreshedNeed = await publicNeedRepository.findById(reservation.publicNeedId)
   if (refreshedNeed && refreshedNeed.remainingQuantity <= 0) {
     await publicNeedRepository.updateCallStatus({
       publicNeedId: refreshedNeed.id,
       callStatus: 'complete',
     })
+    // Cobertura completa: cancelar reservas hermanas pendientes
+    try {
+      const siblings = await publicNeedRepository.listCoverageReservationsByNeed(refreshedNeed.id)
+      await Promise.all(
+        siblings
+          .filter((s) => s.status === 'reserved' && s.id !== reservation.id)
+          .map((s) =>
+            publicNeedRepository.updateReservationStatus({
+              reservationId: s.id,
+              status: 'cancelled',
+            }),
+          ),
+      )
+    } catch {
+      // non-blocking
+    }
   }
 
   await operationalIntelligenceService.emitTimelineEvent({

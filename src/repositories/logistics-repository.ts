@@ -29,7 +29,11 @@ interface CenterGeoRow {
   dispatch_mode?: string | null
 }
 
-function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
+function mapReservationRow(row: InventoryReservationRow & {
+  expires_at?: string | null
+  accepted_at?: string | null
+  volunteer_user_id?: string | null
+}): InventoryReservation {
   const mode = row.resolution_mode
   return {
     id: row.id,
@@ -40,11 +44,14 @@ function mapReservationRow(row: InventoryReservationRow): InventoryReservation {
     quantity: row.quantity,
     status: row.status,
     volunteerId: row.volunteer_id ?? undefined,
+    volunteerUserId: row.volunteer_user_id ?? null,
     resolutionMode:
       mode === 'brigade' || mode === 'delivery' || mode === 'needs_volunteer' ? mode : null,
     resolutionMeta: (row.resolution_meta as Record<string, unknown> | null) ?? {},
     coordinatorNotes: row.coordinator_notes ?? null,
     respondedAt: row.responded_at ? new Date(row.responded_at) : null,
+    expiresAt: row.expires_at ? new Date(row.expires_at) : null,
+    acceptedAt: row.accepted_at ? new Date(row.accepted_at) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   }
@@ -280,13 +287,58 @@ export class LogisticsRepository {
   }
 
   async findByMissionId(missionId: string): Promise<InventoryReservation | null> {
+    const rows = await this.listByMission(missionId)
+    return (
+      rows.find((r) => r.status === 'reserved' || r.status === 'ready') ??
+      rows[0] ??
+      null
+    )
+  }
+
+  async listByMission(missionId: string): Promise<InventoryReservation[]> {
     const { data, error } = await supabase
       .from('inventory_reservations')
       .select('*')
       .eq('mission_id', missionId)
-      .maybeSingle()
+      .order('created_at', { ascending: false })
     if (error) throw error
-    return data ? mapReservationRow(data as InventoryReservationRow) : null
+    return ((data ?? []) as InventoryReservationRow[]).map(mapReservationRow)
+  }
+
+  async reserveInventoryForMissionRpc(input: {
+    missionId: string
+    caseId: string
+    centerId: string
+    resourceType: string
+    quantity: number
+    volunteerId?: string
+    ttlMinutes?: number
+  }): Promise<InventoryReservation> {
+    const { data, error } = await supabase.rpc('reserve_inventory_for_mission', {
+      p_mission_id: input.missionId,
+      p_case_id: input.caseId,
+      p_center_id: input.centerId,
+      p_resource_type: input.resourceType,
+      p_quantity: input.quantity,
+      p_volunteer_id: input.volunteerId ?? null,
+      p_ttl_minutes: input.ttlMinutes ?? 20,
+    })
+    if (error) throw error
+    return mapReservationRow(data as InventoryReservationRow)
+  }
+
+  async acceptInventoryReservationRpc(reservationId: string): Promise<InventoryReservation> {
+    const { data, error } = await supabase.rpc('accept_inventory_reservation', {
+      p_reservation_id: reservationId,
+    })
+    if (error) throw error
+    return mapReservationRow(data as InventoryReservationRow)
+  }
+
+  async expireStaleReservations(): Promise<number> {
+    const { data, error } = await supabase.rpc('expire_stale_inventory_reservations')
+    if (error) throw error
+    return Number(data ?? 0)
   }
 
   async listByCenter(centerId: string, statuses?: InventoryReservationStatus[]): Promise<InventoryReservation[]> {

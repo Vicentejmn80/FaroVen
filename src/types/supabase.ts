@@ -188,10 +188,13 @@ export interface InventoryReservationRow {
   quantity: number
   status: 'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'
   volunteer_id: string | null
+  volunteer_user_id?: string | null
   resolution_mode?: string | null
   resolution_meta?: Record<string, unknown> | null
   coordinator_notes?: string | null
   responded_at?: string | null
+  expires_at?: string | null
+  accepted_at?: string | null
   created_at: string
   updated_at: string
 }

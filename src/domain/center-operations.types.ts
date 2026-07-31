@@ -136,10 +136,15 @@ export interface InventoryReservation {
   quantity: number
   status: InventoryReservationStatus
   volunteerId?: string
+  /** auth.users / profiles id del voluntario que reservó (path Radar). */
+  volunteerUserId?: string | null
   resolutionMode?: CenterResolutionMode | null
   resolutionMeta?: Record<string, unknown>
   coordinatorNotes?: string | null
   respondedAt?: Date | null
+  /** TTL: si pasa expiresAt en status reserved sin aceptación → liberar. */
+  expiresAt?: Date | null
+  acceptedAt?: Date | null
   createdAt: Date
   updatedAt: Date
 }
