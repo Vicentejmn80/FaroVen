@@ -6,7 +6,7 @@ import { useUpdateMissionAssignment, useRespondMission, useSubmitEvidence } from
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { VolunteerMissionCard } from './volunteer-mission-card'
-import { VolunteerMissionCommand } from './volunteer-mission-command'
+import { ActiveMissionView } from './active-mission-view'
 import { GlassCard } from '@/components/ui/glass-card'
 import { LiveTrackingCard } from '@/components/dispatch/live-tracking-card'
 import { OperationalTimeline, type TimelineStep } from '@/components/dispatch/operational-timeline'
@@ -885,11 +885,10 @@ export function ImmersiveMissionGate() {
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#060b16] px-4 py-6">
       <div className="mx-auto max-w-md">
-        <VolunteerMissionCommand
+        <ActiveMissionView
           mission={mission}
           assignment={target}
-          volunteerId={profile?.id}
-          volunteerName={profile?.fullName}
+          volunteerId={profile?.id ?? ''}
           onClose={() => {
             if (target.status === 'completed' || target.status === 'verified') {
               if (user?.id) {

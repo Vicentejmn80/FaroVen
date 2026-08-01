@@ -133,8 +133,9 @@ export function useRespondToInventoryRequest() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       if (vars.resolutionMode === 'needs_volunteer') {
-        qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
-        showToast('Radar abierto automáticamente — buscando voluntarios.', 'info')
+        showToast('Centro confirmó inventario, pero requiere voluntario para retiro/entrega.', 'info')
+      } else if (vars.resolutionMode === 'declined') {
+        showToast('Centro rechazó la solicitud. Revisa otro centro.', 'warning')
       } else {
         showToast('Respuesta del centro registrada.', 'success')
       }
@@ -180,13 +181,15 @@ export function useMarkReservationDelivered() {
       reservationId,
       actorId,
       actorName,
+      deliveredQuantity,
     }: {
       reservationId: string
       actorId?: string
       actorName?: string
+      deliveredQuantity?: number
     }) => {
       try {
-        return await markReservationDelivered(reservationId, actorId, actorName)
+        return await markReservationDelivered(reservationId, actorId, actorName, deliveredQuantity)
       } catch (err) {
         throw new Error(humanizeSupabaseError(err))
       }

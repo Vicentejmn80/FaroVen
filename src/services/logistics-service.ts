@@ -173,7 +173,7 @@ export async function prepareMissionWithReservation(input: {
  */
 export async function respondToInventoryRequest(input: {
   reservationId: string
-  resolutionMode: 'brigade' | 'delivery' | 'needs_volunteer'
+  resolutionMode: 'brigade' | 'delivery' | 'needs_volunteer' | 'declined'
   actorId: string
   notes?: string
   meta?: {
@@ -217,13 +217,77 @@ export async function respondToInventoryRequest(input: {
   const caseData = await caseService.getById(caseId)
   const title = caseData?.title ?? caseId.slice(0, 8)
 
+  if (input.resolutionMode === 'declined') {
+    const reservation = await logisticsRepository.saveCoordinatorResolution({
+      reservationId: input.reservationId,
+      resolutionMode: 'declined',
+      resolutionMeta: input.meta ?? {},
+      coordinatorNotes: input.notes,
+      status: 'cancelled',
+    })
+
+    if (caseData?.pipelineStage === 'awaiting_center_confirmation') {
+      try {
+        await assignmentService.rejectCenter(
+          caseId,
+          input.actorId,
+          'El centro indicó que no puede cumplir con la solicitud',
+        )
+      } catch {
+        // best effort
+      }
+    }
+
+    const { data: managers } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('role', ['case_manager', 'regional_admin', 'super_admin'])
+      .eq('status', 'active')
+
+    await Promise.all(
+      (managers ?? []).map((m) =>
+        opsNotify({
+          to: String(m.id),
+          type: 'center_rejected',
+          title: 'Centro rechazó la solicitud',
+          message: `El centro no puede cumplir con "${title}". Revisa inventario o selecciona otro centro.`,
+          priority: 'high',
+          actionUrl: OPS_ACTION_URLS.gcCase(caseId),
+          icon: 'x',
+          metadata: {
+            caseId,
+            centerId,
+            reservationId: reservation.id,
+            notes: input.notes ?? null,
+          },
+          entityType: 'case',
+          entityId: caseId,
+          caseId,
+          missionId,
+          actorId: input.actorId,
+        }),
+      ),
+    )
+
+    logisticsLog('reservation_released', {
+      entityId: reservation.id,
+      entityType: 'mission',
+      missionId,
+      caseId,
+      centerId,
+      actorId: input.actorId,
+      payload: { reason: 'declined', notes: input.notes ?? null },
+    })
+
+    return reservation
+  }
+
   if (input.resolutionMode === 'needs_volunteer') {
     const reservation = await logisticsRepository.saveCoordinatorResolution({
       reservationId: input.reservationId,
       resolutionMode: 'needs_volunteer',
       resolutionMeta: input.meta ?? {},
       coordinatorNotes: input.notes,
-      status: 'cancelled',
     })
 
     const { data: managers } = await supabase
@@ -238,7 +302,7 @@ export async function respondToInventoryRequest(input: {
           to: String(m.id),
           type: 'center_needs_volunteer',
           title: 'El centro necesita voluntario',
-          message: `El centro no posee brigada propia para "${title}". Se requiere abrir Radar.`,
+          message: `El centro confirma inventario para "${title}", pero requiere voluntario para retirar y entregar.`,
           priority: 'high',
           actionUrl: OPS_ACTION_URLS.gcCase(caseId),
           icon: 'users',
@@ -266,26 +330,6 @@ export async function respondToInventoryRequest(input: {
       actorId: input.actorId,
       payload: { reason: 'needs_volunteer', notes: input.notes ?? null },
     })
-
-    // Pipeline canónico: needs_volunteer → abrir Radar automáticamente
-    try {
-      const { caseManagerService } = await import('@/services/case-manager-service')
-      await caseManagerService.openVolunteerCall(caseId, input.actorId, {
-        reservationsMode: true,
-        requiredQuantity: Math.max(1, reservation.quantity),
-      })
-      opsChannelLog('CENTER', {
-        entityType: 'case',
-        entityId: caseId,
-        action: 'auto_radar_after_needs_volunteer',
-        caseId,
-        centerId,
-        missionId,
-        actorId: input.actorId,
-      })
-    } catch (err) {
-      console.warn('[FARO_LOGISTICS] No se pudo abrir Radar automáticamente tras needs_volunteer', err)
-    }
 
     return reservation
   }
@@ -411,8 +455,19 @@ export async function markReservationReady(reservationId: string, actorId?: stri
  * Marcar recursos entregados al voluntario (coordinador).
  * Libera la reserva y descuenta el stock real.
  */
-export async function markReservationDelivered(reservationId: string, actorId?: string, actorName?: string): Promise<InventoryReservation> {
-  const reservation = await logisticsRepository.updateReservationStatus(reservationId, 'delivered')
+export async function markReservationDelivered(
+  reservationId: string,
+  actorId?: string,
+  actorName?: string,
+  deliveredQuantity?: number,
+): Promise<InventoryReservation> {
+  const reservation =
+    deliveredQuantity != null
+      ? await logisticsRepository.deliverReservation({
+          reservationId,
+          deliveredQuantity,
+        })
+      : await logisticsRepository.updateReservationStatus(reservationId, 'delivered')
 
   // Descontar stock real (delta negativo)
   await centerOpsRepository.createMovement({

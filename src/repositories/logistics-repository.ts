@@ -47,7 +47,9 @@ function mapReservationRow(row: InventoryReservationRow & {
     volunteerId: row.volunteer_id ?? undefined,
     volunteerUserId: row.volunteer_user_id ?? null,
     resolutionMode:
-      mode === 'brigade' || mode === 'delivery' || mode === 'needs_volunteer' ? mode : null,
+      mode === 'brigade' || mode === 'delivery' || mode === 'needs_volunteer' || mode === 'declined'
+        ? mode
+        : null,
     resolutionMeta: (row.resolution_meta as Record<string, unknown> | null) ?? {},
     coordinatorNotes: row.coordinator_notes ?? null,
     respondedAt: row.responded_at ? new Date(row.responded_at) : null,
@@ -259,9 +261,28 @@ export class LogisticsRepository {
     return mapReservationRow(data as InventoryReservationRow)
   }
 
+  async deliverReservation(input: {
+    reservationId: string
+    deliveredQuantity: number
+  }): Promise<InventoryReservation> {
+    const qty = Math.max(1, Math.floor(input.deliveredQuantity))
+    const { data, error } = await supabase
+      .from('inventory_reservations')
+      .update({
+        status: 'delivered',
+        quantity: qty,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.reservationId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapReservationRow(data as InventoryReservationRow)
+  }
+
   async saveCoordinatorResolution(input: {
     reservationId: string
-    resolutionMode: 'brigade' | 'delivery' | 'needs_volunteer'
+    resolutionMode: 'brigade' | 'delivery' | 'needs_volunteer' | 'declined'
     resolutionMeta?: Record<string, unknown>
     coordinatorNotes?: string
     status?: InventoryReservationStatus

@@ -128,7 +128,7 @@ export interface CenterResource {
 
 export type InventoryReservationStatus = 'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'
 
-export type CenterResolutionMode = 'brigade' | 'delivery' | 'needs_volunteer'
+export type CenterResolutionMode = 'brigade' | 'delivery' | 'needs_volunteer' | 'declined'
 
 export interface InventoryReservation {
   id: string

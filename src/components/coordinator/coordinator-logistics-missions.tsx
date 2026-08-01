@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { CheckCircle2, Package, Truck } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
@@ -26,6 +26,8 @@ export function CoordinatorLogisticsMissions() {
   const { data: reservations = [], isLoading } = useCenterReservations(assignment?.siteId)
   const { data: missions = [] } = useMissions()
   const markDelivered = useMarkReservationDelivered()
+  const [deliverModalId, setDeliverModalId] = useState<string | null>(null)
+  const [deliverQty, setDeliverQty] = useState<string>('0')
 
   const missionById = useMemo(() => {
     const map = new Map<string, (typeof missions)[number]>()
@@ -34,6 +36,7 @@ export function CoordinatorLogisticsMissions() {
   }, [missions])
 
   const active = reservations.filter((r) => r.status === 'ready')
+  const activeReservation = active.find((r) => r.id === deliverModalId) ?? null
 
   if (!assignment?.siteId) {
     return (
@@ -111,13 +114,10 @@ export function CoordinatorLogisticsMissions() {
                   size="md"
                   className="w-full !bg-operational"
                   disabled={markDelivered.isPending || !user?.id}
-                  onClick={() =>
-                    markDelivered.mutate({
-                      reservationId: r.id,
-                      actorId: user?.id,
-                      actorName: profile?.full_name ?? user?.email ?? 'Coordinador',
-                    })
-                  }
+                  onClick={() => {
+                    setDeliverModalId(r.id)
+                    setDeliverQty(String(r.quantity))
+                  }}
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   Marcar entregado
@@ -125,6 +125,73 @@ export function CoordinatorLogisticsMissions() {
               </GlassCard>
             )
           })}
+        </div>
+      )}
+
+      {activeReservation && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center">
+          <GlassCard className="w-full max-w-md space-y-4 !p-4">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
+                Confirmar entrega
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">
+                {activeReservation.quantity} × {getResourceLabel(activeReservation.resourceType)}
+              </p>
+              <p className="mt-0.5 text-xs text-ink-muted">
+                Indica cuánto se entregó realmente (si fue parcial).
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                Cantidad entregada
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={activeReservation.quantity}
+                value={deliverQty}
+                onChange={(e) => setDeliverQty(e.target.value)}
+                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-ink"
+              />
+              <p className="text-[11px] text-ink-faint">
+                Máximo: {activeReservation.quantity}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                className="flex-1"
+                disabled={markDelivered.isPending}
+                onClick={() => setDeliverModalId(null)}
+              >
+                Cancelar
+              </EmergencyButton>
+              <EmergencyButton
+                variant="primary"
+                size="sm"
+                className="flex-1 !bg-operational"
+                disabled={markDelivered.isPending || !user?.id}
+                onClick={() => {
+                  const qty = Math.max(1, Math.min(activeReservation.quantity, Number(deliverQty) || 0))
+                  markDelivered.mutate(
+                    {
+                      reservationId: activeReservation.id,
+                      deliveredQuantity: qty,
+                      actorId: user?.id,
+                      actorName: profile?.full_name ?? user?.email ?? 'Coordinador',
+                    },
+                    { onSuccess: () => setDeliverModalId(null) },
+                  )
+                }}
+              >
+                {markDelivered.isPending ? 'Guardando…' : 'Confirmar'}
+              </EmergencyButton>
+            </div>
+          </GlassCard>
         </div>
       )}
     </div>

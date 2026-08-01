@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
+import { useQuery } from '@tanstack/react-query'
 import { useReports, useDeleteReport } from '@/hooks/useReports'
 import { useMissions } from '@/hooks/useMissions'
 import { useCases, useArchiveCase } from '@/hooks/useCases'
@@ -33,6 +34,8 @@ import { getResourceLabel } from '@/lib/resource-catalog'
 import { SuccessCasesPanel } from '@/components/shared/success-cases-panel'
 import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { VOLUNTEER_AVAILABILITY_LABELS } from '@/domain/volunteer.types'
+import { caseRepository } from '@/repositories/case-repository'
+import { buildAuditTimeline, LiveMissionAuditTimeline } from '@/components/dispatch/live-mission-audit-timeline'
 
 type ManagerTab = 'inbox' | 'public-needs' | 'cases' | 'missions' | 'success' | 'solicitudes'
 
@@ -588,7 +591,7 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
                     <div className="space-y-2 px-1 pt-2 pb-3">
                       <p className="text-xs text-ink-muted line-clamp-2">{c.description}</p>
 
-                      {c.operationType === 'transfer' && <CaseLogisticsTracker caseId={c.id} />}
+                      <CaseLogisticsTracker caseId={c.id} />
 
                       {/* Caso en revisión: asistente FARO (stock → transferencia o radar) */}
                       {(c.pipelineStage === 'pending_review' ||
@@ -1002,8 +1005,10 @@ export function CaseManagerWorkspace({ section = 'full' }: CaseManagerWorkspaceP
 
 /** Seguimiento logístico de un caso transfer (reserva, preparación, traslado, entrega). */
 function CaseLogisticsTracker({ caseId }: { caseId: string }) {
+  const { user } = useAuth()
   const { data: reservations = [], isLoading } = useCaseReservations(caseId)
   const { data: missions = [] } = useMissions()
+  const verifyAssignment = useVerifyAssignment()
 
   const missionById = useMemo(() => {
     const map = new Map<string, Mission>()
@@ -1011,11 +1016,26 @@ function CaseLogisticsTracker({ caseId }: { caseId: string }) {
     return map
   }, [missions])
 
+  const active = useMemo(
+    () => reservations.filter((r) => r.status !== 'released' && r.status !== 'cancelled'),
+    [reservations],
+  )
+
+  const primaryMissionId = active[0]?.missionId ?? null
+  const primaryMission = primaryMissionId ? missionById.get(primaryMissionId) ?? null : null
+  const { data: missionEvents = [] } = useMissionTimeline(primaryMissionId ?? '')
+  const { data: assignments = [] } = useMissionAssignments(primaryMissionId ?? '')
+  const { data: caseEvents = [] } = useQuery({
+    queryKey: [FARO_QUERY_KEYS.caseEvents, caseId],
+    queryFn: () => caseRepository.listEvents(caseId),
+    enabled: Boolean(caseId),
+    staleTime: 5_000,
+  })
+
   if (isLoading) {
     return <GlassCard className="h-16 animate-pulse" />
   }
 
-  const active = reservations.filter((r) => r.status !== 'released' && r.status !== 'cancelled')
   if (active.length === 0) return null
 
   const statusLabel: Record<string, string> = {
@@ -1023,6 +1043,13 @@ function CaseLogisticsTracker({ caseId }: { caseId: string }) {
     ready: 'Preparado',
     delivered: 'Entregado al voluntario',
   }
+
+  const auditItems = buildAuditTimeline({
+    caseEvents,
+    missionEvents,
+  })
+
+  const pendingValidation = assignments.filter((a) => a.status === 'completed')
 
   return (
     <div className="space-y-2 rounded-xl border border-info/20 bg-info/[0.05] p-3">
@@ -1061,6 +1088,37 @@ function CaseLogisticsTracker({ caseId }: { caseId: string }) {
           </div>
         )
       })}
+
+      {primaryMission && (
+        <div className="pt-2">
+          <LiveMissionAuditTimeline items={auditItems} dense />
+        </div>
+      )}
+
+      {pendingValidation.length > 0 && (
+        <div className="rounded-xl border border-warning/20 bg-warning/[0.06] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-warning">
+            Esperando validación del GC
+          </p>
+          <p className="mt-1 text-[11px] text-ink-muted">
+            El ejecutor marcó entregado. Valida para cerrar la misión/caso.
+          </p>
+          <div className="mt-2 space-y-2">
+            {pendingValidation.map((a) => (
+              <EmergencyButton
+                key={a.id}
+                variant="primary"
+                size="sm"
+                className="w-full"
+                disabled={verifyAssignment.isPending || !user?.id}
+                onClick={() => verifyAssignment.mutate({ assignmentId: a.id, verifiedBy: user?.id ?? '' })}
+              >
+                Validar entrega
+              </EmergencyButton>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

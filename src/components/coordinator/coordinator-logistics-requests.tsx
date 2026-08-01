@@ -14,7 +14,7 @@ import { getResourceLabel } from '@/lib/resource-catalog'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CenterResolutionMode, InventoryReservation } from '@/domain/center-operations.types'
 
-type ResolutionStep = 'choose' | 'details'
+type ResolutionStep = 'can_fulfill' | 'choose' | 'details'
 
 /**
  * Solicitudes del GC → respuesta operativa del centro.
@@ -212,7 +212,7 @@ function ResolutionModal({
     }
   }) => Promise<void>
 }) {
-  const [step, setStep] = useState<ResolutionStep>('choose')
+  const [step, setStep] = useState<ResolutionStep>('can_fulfill')
   const [mode, setMode] = useState<CenterResolutionMode | null>(null)
   const [notes, setNotes] = useState('')
   const [responsibleName, setResponsibleName] = useState('')
@@ -277,6 +277,58 @@ function ResolutionModal({
           </p>
         </div>
 
+        {step === 'can_fulfill' && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-ink">¿Tu centro puede cumplir con esta solicitud?</p>
+
+            <div className="flex gap-2">
+              <EmergencyButton
+                variant="primary"
+                size="sm"
+                className="flex-1"
+                disabled={busy}
+                onClick={() => {
+                  setStep('choose')
+                  setError(null)
+                }}
+              >
+                Sí, podemos
+              </EmergencyButton>
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                className="flex-1"
+                disabled={busy}
+                onClick={() =>
+                  void onConfirm({
+                    resolutionMode: 'declined',
+                    notes: notes.trim() || undefined,
+                  })
+                }
+              >
+                No podemos
+              </EmergencyButton>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                Observaciones (opcional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder='Ej. "Inventario desactualizado / sin capacidad operativa hoy."'
+                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-ink"
+              />
+            </div>
+
+            <EmergencyButton variant="glass" size="sm" className="w-full" onClick={onClose}>
+              Cancelar
+            </EmergencyButton>
+          </div>
+        )}
+
         {step === 'choose' && (
           <div className="space-y-2">
             <p className="text-xs text-ink-muted">¿Cómo resolverá esta solicitud?</p>
@@ -284,7 +336,7 @@ function ResolutionModal({
               [
                 ['brigade', 'Tenemos brigada propia'],
                 ['delivery', 'Tenemos delivery propio'],
-                ['needs_volunteer', 'Necesitamos voluntario'],
+                ['needs_volunteer', 'Necesitamos voluntario (retira y entrega)'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -338,8 +390,7 @@ function ResolutionModal({
             )}
             {mode === 'needs_volunteer' && (
               <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-                Se notificará automáticamente al Gestor de Casos para abrir el Radar. No continuarás
-                esta misión con el centro solo.
+                Se notificará al Gestor de Casos para abrir postulaciones. Tu centro entregará los recursos cuando el voluntario llegue.
               </p>
             )}
 
