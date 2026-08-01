@@ -57,6 +57,8 @@ export class ReportRepository {
     contactEmail?: string
     location?: string
     category?: string
+    itemText?: string
+    itemId?: string | null
     latitude?: number | null
     longitude?: number | null
   }): Promise<{ report: Report; trackingCode: string }> {
@@ -79,6 +81,8 @@ export class ReportRepository {
         tracking_code: trackingCode,
         status: 'pending',
         site_label: input.location?.trim() || null,
+        item_text: input.itemText?.trim() || null,
+        item_id: input.itemId ?? null,
         latitude: hasCoords ? input.latitude : null,
         longitude: hasCoords ? input.longitude : null,
       })

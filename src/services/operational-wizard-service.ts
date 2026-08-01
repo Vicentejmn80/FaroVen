@@ -7,7 +7,7 @@ import { requestInventoryFromCenter } from '@/services/logistics-service'
 import type { CaseDomain, CasePriority, OperationType } from '@/domain/case-lifecycle.types'
 import { OPERATION_TYPES } from '@/domain/case-lifecycle.types'
 import { opsChannelLog } from '@/lib/operational-log'
-import { getResourceLabel, getResourceUnit, resolveCatalogKey } from '@/lib/resource-catalog'
+import { resolveCatalogKey } from '@/lib/resource-catalog'
 import { supabase } from '@/lib/supabase'
 
 export type WizardOperationKind =
@@ -109,9 +109,76 @@ export const operationalWizardService = {
       }
     }
 
-    const resolvedResourceType = resolveCatalogKey(input.needKeyOrText) ?? input.needKeyOrText.trim()
-    const needLabel = getResourceLabel(resolvedResourceType)
-    const unit = getResourceUnit(resolvedResourceType)
+    const rawNeed = (resolveCatalogKey(input.needKeyOrText) ?? input.needKeyOrText.trim()).trim()
+    let resolvedResourceType = rawNeed
+    let resolvedItemId: string | null = null
+    let needLabel = rawNeed
+    let unit = 'unidades'
+
+    // Resolver contra items_catalog (sin IA). Si no existe, crear sugerencia pending_review.
+    const { data: searchRows, error: searchErr } = await supabase.rpc('search_items_catalog', {
+      p_query: rawNeed,
+      p_limit: 1,
+      p_include_pending: true,
+    })
+    if (searchErr) {
+      opsChannelLog('CASE', {
+        entityType: 'report',
+        entityId: report.id,
+        action: 'wizard_item_search_failed',
+        actorId: input.actorId ?? null,
+        actorRole: 'case_manager',
+        source: 'service',
+        error: searchErr.message,
+        payload: { rawNeed },
+      })
+    }
+
+    const best = (searchRows as Array<{
+      item_id: string
+      item_key: string
+      canonical_name: string
+      unit: string
+      status: string
+      match_kind: string
+      match_score: number
+    }> | null)?.[0]
+
+    if (best?.item_id && best?.item_key) {
+      resolvedItemId = best.item_id
+      resolvedResourceType = best.item_key
+      needLabel = best.canonical_name
+      unit = best.unit || unit
+    } else {
+      const { data: created, error: createErr } = await supabase
+        .from('items_catalog')
+        .insert({
+          canonical_name: rawNeed,
+          unit: 'unidades',
+          category: null,
+          status: 'pending_review',
+          created_from_report_id: report.id,
+          created_by: input.actorId ?? null,
+        })
+        .select('id, key, canonical_name, unit')
+        .single()
+      if (createErr) throw createErr
+
+      resolvedItemId = created.id
+      resolvedResourceType = created.key
+      needLabel = created.canonical_name
+      unit = created.unit || unit
+
+      const { error: aliasErr } = await supabase.from('item_aliases').insert({
+        item_id: created.id,
+        alias: rawNeed,
+        status: 'pending_review',
+        created_from_report_id: report.id,
+        created_by: input.actorId ?? null,
+      })
+      // alias duplicado → ok (sin bloquear el wizard)
+      if (aliasErr && (aliasErr as { code?: string }).code !== '23505') throw aliasErr
+    }
 
     opsChannelLog('CASE', {
       entityType: 'report',
@@ -125,6 +192,7 @@ export const operationalWizardService = {
         priority: input.priority,
         needKeyOrText: input.needKeyOrText,
         resolvedResourceType,
+        resolvedItemId,
         peopleAffected: input.peopleAffected,
         requiredQuantity: input.requiredQuantity,
         durationHours: input.durationHours ?? null,
@@ -148,6 +216,7 @@ export const operationalWizardService = {
       needCategoryLabel: input.needCategoryLabel ?? null,
       needKeyOrText: input.needKeyOrText,
       resolvedResourceType,
+      resolvedItemId,
       peopleAffected: input.peopleAffected,
       requiredQuantity: input.requiredQuantity,
       durationHours: input.durationHours ?? null,
@@ -163,6 +232,7 @@ export const operationalWizardService = {
         priority: input.priority,
         zone: input.locationOverride?.zone ?? report.location.zone ?? 'Zona por confirmar',
         category: resolvedResourceType,
+        itemId: resolvedItemId,
         affectedCount: Math.max(1, input.requiredQuantity),
         location: {
           lat,
@@ -201,6 +271,7 @@ export const operationalWizardService = {
         title,
         summary: report.description,
         category: resolvedResourceType,
+        itemId: resolvedItemId,
         priority: input.priority,
         zone: reviewed.case.zone,
         location: {

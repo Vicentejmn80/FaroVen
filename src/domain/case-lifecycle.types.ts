@@ -255,6 +255,8 @@ export interface CaseDomain {
   affectedCount: number
   reporterInfo: ReporterInfo
   category?: string
+  /** Catálogo inteligente (dual-write). */
+  itemId?: string
   requestSource: RequestSource
   requestType: RequestType
   operationType: OperationType

@@ -19,6 +19,7 @@ function toPublicNeed(row: AnyRow): PublicNeed {
     title: String(row.title ?? 'Necesidad sin título'),
     summary: String(row.summary ?? ''),
     category: String(row.category ?? 'humanitarian'),
+    itemId: (row.item_id as string | null) ?? null,
     priority: (row.priority as PublicNeed['priority']) ?? 'medium',
     locationPublic: ((row.location_public as Record<string, unknown> | null) ?? {}) as PublicNeed['locationPublic'],
     locationPrivate: (row.location_private as Record<string, unknown> | null) ?? null,
@@ -194,6 +195,7 @@ export class PublicNeedRepository {
     title: string
     summary: string
     category: string
+    itemId?: string | null
     priority: string
     zone: string
     location?: { lat?: number | null; lng?: number | null; address?: string; zone?: string }
@@ -206,6 +208,7 @@ export class PublicNeedRepository {
         title: input.title,
         summary: input.summary,
         category: input.category,
+        item_id: input.itemId ?? null,
         priority: input.priority,
         required_quantity: 1,
         unit: 'unidad',

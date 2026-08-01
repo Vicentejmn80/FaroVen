@@ -89,6 +89,10 @@ export interface ReportRow {
   latitude?: number | null
   longitude?: number | null
   tracking_code?: string | null
+  item_text?: string | null
+  item_id?: string | null
+  item_match_kind?: string | null
+  item_match_score?: number | null
 }
 
 export interface EventRow {
@@ -127,6 +131,7 @@ export interface CaseRow {
   reporter_email: string | null
   reporter_relationship: string | null
   category: string | null
+  item_id?: string | null
   request_source: 'citizen' | 'coordinator' | 'manual' | 'admin'
   request_type: 'report' | 'inventory_request' | 'manual_request'
   operation_type: 'incident' | 'resource_request' | 'transfer' | 'volunteer_mission'
@@ -170,6 +175,7 @@ export interface CenterResourceRow {
   id: string
   center_id: string
   resource_type: string
+  item_id?: string | null
   current_level: number
   reserved_level?: number
   max_level: number
@@ -185,6 +191,7 @@ export interface InventoryReservationRow {
   case_id: string
   center_id: string
   resource_type: string
+  item_id?: string | null
   quantity: number
   status: 'reserved' | 'ready' | 'delivered' | 'released' | 'cancelled'
   volunteer_id: string | null
@@ -203,6 +210,7 @@ export interface InventoryMovementRow {
   id: string
   center_id: string
   resource_type: string
+  item_id?: string | null
   delta: number
   balance_after: number
   reason: string
@@ -310,6 +318,7 @@ export interface MissionRow {
   pickup_center_id: string | null
   pickup_address: string | null
   resource_type: string | null
+  item_id?: string | null
   resource_qty: number | null
   delivery_address: string | null
 }

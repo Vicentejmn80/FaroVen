@@ -18,19 +18,25 @@ import {
   getResourceUnit,
 } from '@/lib/resource-catalog'
 
-function mapResourceRow(row: CenterResourceRow): CenterResource {
+function mapResourceRow(
+  row: CenterResourceRow & { items_catalog?: { canonical_name: string; unit: string; status: string } | null },
+): CenterResource {
   const catalog = getResourceCatalogItem(row.resource_type)
   const reserved = row.reserved_level ?? 0
+  const itemName = row.items_catalog?.canonical_name ?? null
+  const itemUnit = row.items_catalog?.unit ?? null
   return {
     id: row.id,
     centerId: row.center_id,
     resourceType: row.resource_type,
+    itemId: row.item_id ?? null,
+    itemName,
     currentLevel: row.current_level,
     reservedLevel: reserved,
     available: Math.max(row.current_level - reserved, 0),
     maxLevel: row.max_level,
     minLevel: row.min_level ?? catalog?.minRecommended ?? getResourceMinRecommended(row.resource_type),
-    unit: row.unit || catalog?.unit || getResourceUnit(row.resource_type),
+    unit: row.unit || itemUnit || catalog?.unit || getResourceUnit(row.resource_type),
     category: row.category ?? catalog?.category,
     updatedAt: new Date(row.updated_at),
   }
@@ -93,11 +99,15 @@ export class CenterOperationsRepository {
   async getResources(centerId: string): Promise<CenterResource[]> {
     const { data, error } = await supabase
       .from('center_resources')
-      .select('*')
+      .select('*, items_catalog (canonical_name, unit, status)')
       .eq('center_id', centerId)
       .order('resource_type')
     if (error) throw error
-    return ((data ?? []) as CenterResourceRow[]).map(mapResourceRow)
+    return (
+      (data ?? []) as Array<
+        CenterResourceRow & { items_catalog?: { canonical_name: string; unit: string; status: string } | null }
+      >
+    ).map(mapResourceRow)
   }
 
   async upsertResource(input: {

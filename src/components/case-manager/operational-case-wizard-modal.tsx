@@ -10,6 +10,7 @@ import { cn, isValidCoord } from '@/lib/utils'
 import type { ResolvedPlace } from '@/lib/osm-geocoding'
 import { getResourceLabel, getResourceMinRecommended, getResourceUnit, resolveCatalogKey } from '@/lib/resource-catalog'
 import { recommendCenters } from '@/services/logistics-service'
+import { supabase } from '@/lib/supabase'
 import type { CasePriority } from '@/domain/case-lifecycle.types'
 import type { WizardDispatchAnswer, WizardOperationKind, WizardStrategy } from '@/services/operational-wizard-service'
 import { opsChannelLog } from '@/lib/operational-log'
@@ -166,6 +167,33 @@ export function OperationalCaseWizardModal({
   const [centerResults, setCenterResults] = useState<Array<Awaited<ReturnType<typeof recommendCenters>>[number]>>([])
   const [centersLoading, setCentersLoading] = useState(false)
   const [centersError, setCentersError] = useState<string | null>(null)
+  const [resolvedNeedItemId, setResolvedNeedItemId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    if (!resolvedResourceType) {
+      setResolvedNeedItemId(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('items_catalog')
+          .select('id')
+          .eq('key', resolvedResourceType)
+          .maybeSingle()
+        if (cancelled) return
+        setResolvedNeedItemId(data?.id ?? null)
+      } catch {
+        if (cancelled) return
+        setResolvedNeedItemId(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, resolvedResourceType])
 
   useEffect(() => {
     if (!open) return
@@ -180,6 +208,7 @@ export function OperationalCaseWizardModal({
     setCentersError(null)
     void recommendCenters({
       resourceType: resolvedResourceType,
+      itemId: resolvedNeedItemId ?? undefined,
       minQty: 1,
       missionLat: coords.lat,
       missionLng: coords.lng,

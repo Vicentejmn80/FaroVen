@@ -26,6 +26,7 @@ export interface CreateCaseInput {
   affectedCount?: number
   reporterInfo?: { name?: string; phone?: string; email?: string; relationship?: string }
   category?: string
+  itemId?: string
   requestSource?: import('@/domain/case-lifecycle.types').RequestSource
   requestType?: import('@/domain/case-lifecycle.types').RequestType
   operationType?: import('@/domain/case-lifecycle.types').OperationType
@@ -118,6 +119,7 @@ export class CaseRepository {
       reporter_email: input.reporterInfo?.email ?? null,
       reporter_relationship: input.reporterInfo?.relationship ?? null,
       category: input.category ?? null,
+      item_id: input.itemId ?? null,
       request_source: input.requestSource ?? 'manual',
       request_type: input.requestType ?? 'manual_request',
       operation_type: input.operationType ?? 'incident',
@@ -138,6 +140,7 @@ export class CaseRepository {
     zone: string
     location: { lat: number; lng: number; address?: string }
     category: string
+    itemId?: string | null
     affectedCount: number
     reporterInfo?: CaseDomain['reporterInfo']
     requestSource?: string
@@ -156,6 +159,7 @@ export class CaseRepository {
       p_address: input.location.address ?? null,
       p_category: input.category,
       p_affected_count: input.affectedCount,
+      p_item_id: input.itemId ?? null,
       p_reporter_name: input.reporterInfo?.name ?? null,
       p_reporter_phone: input.reporterInfo?.phone ?? null,
       p_reporter_email: input.reporterInfo?.email ?? null,

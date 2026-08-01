@@ -2,7 +2,10 @@ import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { supabase } from '@/lib/supabase'
 import { notifyUser } from '@/lib/notify'
 import { assignmentService } from '@/services/assignment-service'
-import { requestInventoryFromCenter } from '@/services/logistics-service'
+import {
+  getCenterCoordinatorUserIds,
+  requestInventoryFromCenter,
+} from '@/services/logistics-service'
 import type { CenterDispatchMode } from '@/services/faro-recommendation-engine'
 
 const CENTER_TABLES = ['hospitals', 'shelters', 'supply_centers'] as const
@@ -58,12 +61,7 @@ async function notifyCoordinatorOfBrigadeAssign(input: {
   actorId: string
 }): Promise<void> {
   try {
-    const { data } = await supabase
-      .from('coordinator_assignments')
-      .select('user_id')
-      .eq('site_id', input.centerId)
-      .eq('status', 'active')
-    const userIds = (data ?? []).map((r) => String((r as { user_id: string }).user_id))
+    const userIds = await getCenterCoordinatorUserIds(input.centerId)
     if (userIds.length === 0) return
     const body = `Caso "${input.caseData.title}" asignado — preparar despacho con brigada propia.`
     await Promise.all(

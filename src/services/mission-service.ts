@@ -17,6 +17,7 @@ import {
 import { missionLog, operationalLog } from '@/lib/operational-log'
 import { notifyUser } from '@/lib/notify'
 import { OPS_ACTION_URLS } from '@/services/ops-notification-contract'
+import { getCenterCoordinatorUserIds } from '@/services/logistics-service'
 
 async function emitAssignmentStatus(
   assignment: MissionAssignment,
@@ -65,17 +66,13 @@ async function notifyPickupCenterCoordinators(
   const template = CENTER_NOTICE[event]
   if (!template) return
 
-  const { data } = await supabase
-    .from('coordinator_profiles')
-    .select('auth_user_id')
-    .eq('site_id', mission.pickupCenterId)
-    .eq('onboarding_complete', true)
+  const coordinators = await getCenterCoordinatorUserIds(mission.pickupCenterId)
 
   const name = volunteerName ?? 'El voluntario'
   await Promise.all(
-    ((data ?? []) as { auth_user_id: string }[]).map((row) =>
+    coordinators.map((userId) =>
       notifyUser(
-        row.auth_user_id,
+        userId,
         template.title,
         template.body(name, mission.title),
         'mission_center_update',

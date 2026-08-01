@@ -41,6 +41,7 @@ function mapReservationRow(row: InventoryReservationRow & {
     caseId: row.case_id,
     centerId: row.center_id,
     resourceType: row.resource_type,
+    itemId: (row as InventoryReservationRow & { item_id?: string | null }).item_id ?? null,
     quantity: row.quantity,
     status: row.status,
     volunteerId: row.volunteer_id ?? undefined,
@@ -149,16 +150,22 @@ async function fetchCenterGeo(
 export class LogisticsRepository {
   /** Centros con stock libre (current - reserved) del recurso, ordenados por distancia/stock/modo. */
   async recommendCenters(input: {
-    resourceType: string
+    resourceType?: string
+    itemId?: string
     minQty: number
     missionLat: number
     missionLng: number
     limit?: number
   }): Promise<CenterRecommendation[]> {
-    const { data, error } = await supabase
+    if (!input.itemId && !input.resourceType) return []
+
+    let query = supabase
       .from('center_resources')
       .select('center_id, current_level, reserved_level, unit, updated_at')
-      .eq('resource_type', input.resourceType)
+
+    query = input.itemId ? query.eq('item_id', input.itemId) : query.eq('resource_type', input.resourceType ?? '')
+
+    const { data, error } = await query
     if (error) throw error
 
     const rows = ((data ?? []) as Array<{
@@ -311,6 +318,7 @@ export class LogisticsRepository {
     centerId: string
     resourceType: string
     quantity: number
+    itemId?: string | null
     volunteerId?: string
     ttlMinutes?: number
   }): Promise<InventoryReservation> {
@@ -320,6 +328,7 @@ export class LogisticsRepository {
       p_center_id: input.centerId,
       p_resource_type: input.resourceType,
       p_quantity: input.quantity,
+      p_item_id: input.itemId ?? null,
       p_volunteer_id: input.volunteerId ?? null,
       p_ttl_minutes: input.ttlMinutes ?? 20,
     })

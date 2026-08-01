@@ -5,6 +5,7 @@ import { EmergencyButton } from '@/components/ui/emergency-button'
 import { SectionHeader } from '@/components/coordinator/section-header'
 import { useCoordinatorAssignment } from '@/store/coordinator-context'
 import { useAuth } from '@/store/auth-context'
+import { supabase } from '@/lib/supabase'
 import {
   useCenterResources,
   useRemoveCatalogInventory,
@@ -14,10 +15,8 @@ import {
   getResourceLabel,
   getResourceMinRecommended,
   getResourceUnit,
-  groupSelectableByCategory,
-  RESOURCE_CATEGORY_LABELS,
-  type ResourceCategory,
 } from '@/lib/resource-catalog'
+import { useItemsCatalogSearch } from '@/hooks/useItemsCatalog'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CenterResource } from '@/domain/center-operations.types'
 import type { RegisterSiteType } from '@/repositories/types'
@@ -51,28 +50,25 @@ export function CoordinatorInventoryPanel() {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [qtyDraft, setQtyDraft] = useState(0)
   const [addKey, setAddKey] = useState('')
+  const [addQuery, setAddQuery] = useState('')
+  const [creatingSuggestion, setCreatingSuggestion] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [addQty, setAddQty] = useState(10)
-  const [addCategory, setAddCategory] = useState<ResourceCategory | 'all'>('all')
 
   const existingKeys = useMemo(
     () => new Set(resources.map((r) => r.resourceType)),
     [resources],
   )
 
-  const catalogGroups = useMemo(() => {
-    const groups = groupSelectableByCategory()
-    return groups
-      .map((g) => ({
-        ...g,
-        items: g.items.filter((item) => !existingKeys.has(item.key)),
-      }))
-      .filter((g) => g.items.length > 0)
-  }, [existingKeys])
+  const { data: catalogResults = [], isLoading: catalogLoading } = useItemsCatalogSearch(addQuery, {
+    limit: 10,
+    includePending: true,
+  })
 
-  const filteredGroups = useMemo(() => {
-    if (addCategory === 'all') return catalogGroups
-    return catalogGroups.filter((g) => g.category === addCategory)
-  }, [catalogGroups, addCategory])
+  const filteredResults = useMemo(
+    () => catalogResults.filter((r) => !existingKeys.has(r.key)),
+    [catalogResults, existingKeys],
+  )
 
   if (!assignment) {
     return (
@@ -135,10 +131,49 @@ export function CoordinatorInventoryPanel() {
         onSuccess: () => {
           setShowAdd(false)
           setAddKey('')
+          setAddQuery('')
+          setCreateError(null)
           setAddQty(10)
         },
       },
     )
+  }
+
+  const createSuggestion = async () => {
+    const name = addQuery.trim()
+    if (name.length < 3) return
+    if (!actorId) return
+    setCreatingSuggestion(true)
+    setCreateError(null)
+    try {
+      const { data: item, error } = await supabase
+        .from('items_catalog')
+        .insert({
+          canonical_name: name,
+          unit: 'unidades',
+          category: null,
+          status: 'pending_review',
+          created_from_report_id: null,
+          created_by: actorId,
+        })
+        .select('id, key, canonical_name, unit, status')
+        .single()
+      if (error) throw error
+      if (item?.id) {
+        await supabase.from('item_aliases').insert({
+          item_id: item.id,
+          alias: name,
+          status: 'pending_review',
+          created_from_report_id: null,
+          created_by: actorId,
+        })
+      }
+      if (item?.key) setAddKey(item.key)
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'No se pudo crear la sugerencia')
+    } finally {
+      setCreatingSuggestion(false)
+    }
   }
 
   return (
@@ -165,51 +200,70 @@ export function CoordinatorInventoryPanel() {
       {showAdd && (
         <GlassCard className="space-y-3 p-4">
           <p className="text-xs font-medium text-ink">Nuevo recurso del catálogo</p>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            <button
-              type="button"
-              onClick={() => setAddCategory('all')}
-              className={cn(
-                'shrink-0 rounded-full border px-2.5 py-1 text-[11px]',
-                addCategory === 'all'
-                  ? 'border-info/40 bg-info/15 text-ink'
-                  : 'border-white/10 text-ink-subtle',
-              )}
-            >
-              Todas
-            </button>
-            {(Object.keys(RESOURCE_CATEGORY_LABELS) as ResourceCategory[]).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setAddCategory(cat)}
-                className={cn(
-                  'shrink-0 rounded-full border px-2.5 py-1 text-[11px]',
-                  addCategory === cat
-                    ? 'border-info/40 bg-info/15 text-ink'
-                    : 'border-white/10 text-ink-subtle',
-                )}
+          <div className="space-y-2">
+            <label className="block">
+              <span className="mb-1 block text-[11px] text-ink-subtle">Buscar recurso</span>
+              <input
+                value={addQuery}
+                onChange={(e) => {
+                  setAddQuery(e.target.value)
+                  setAddKey('')
+                  setCreateError(null)
+                }}
+                placeholder="Ej: Alcohol 70%, Gasas, Agua potable…"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-ink outline-none focus:border-info/40"
+              />
+            </label>
+
+            {(catalogLoading || filteredResults.length > 0) && (
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-2">
+                {catalogLoading && <p className="px-2 py-1 text-xs text-ink-faint">Buscando…</p>}
+                <div className="space-y-1">
+                  {filteredResults.map((r) => (
+                    <button
+                      key={r.itemId}
+                      type="button"
+                      onClick={() => {
+                        setAddKey(r.key)
+                        setAddQuery(r.canonicalName)
+                      }}
+                      className={cn(
+                        'w-full rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
+                        addKey === r.key ? 'bg-info/10' : 'hover:bg-white/[0.05]',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink truncate">{r.canonicalName}</p>
+                          <p className="mt-0.5 text-[11px] text-ink-muted truncate">
+                            {r.unit} · {r.status}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-ink-faint">
+                          {r.matchKind}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+              <span>
+                ¿No aparece? Crea una sugerencia pendiente de revisión.
+              </span>
+              <EmergencyButton
+                variant="glass"
+                size="sm"
+                disabled={creatingSuggestion || addQuery.trim().length < 3}
+                onClick={() => void createSuggestion()}
               >
-                {RESOURCE_CATEGORY_LABELS[cat]}
-              </button>
-            ))}
+                {creatingSuggestion ? 'Creando…' : 'Crear sugerencia'}
+              </EmergencyButton>
+            </div>
+            {createError && <p className="text-xs text-critical">{createError}</p>}
           </div>
-          <select
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-ink"
-            value={addKey}
-            onChange={(e) => setAddKey(e.target.value)}
-          >
-            <option value="">Seleccionar recurso…</option>
-            {filteredGroups.map((g) => (
-              <optgroup key={g.category} label={g.label}>
-                {g.items.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
           <div>
             <label className="mb-1 block text-[11px] text-ink-subtle">Cantidad</label>
             <input
@@ -253,7 +307,9 @@ export function CoordinatorInventoryPanel() {
             <GlassCard key={r.id} className="space-y-2 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-ink">{getResourceLabel(r.resourceType)}</p>
+                  <p className="text-sm font-semibold text-ink">
+                    {r.itemName || getResourceLabel(r.resourceType)}
+                  </p>
                   <div className="mt-1.5 grid grid-cols-3 gap-2 text-center">
                     <div>
                       <p className="text-[10px] uppercase tracking-wide text-ink-faint">Disponible</p>

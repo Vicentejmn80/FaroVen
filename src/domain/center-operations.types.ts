@@ -111,6 +111,9 @@ export interface CenterResource {
   id: string
   centerId: string
   resourceType: CenterResourceType
+  /** Catálogo inteligente (dual-write). */
+  itemId?: string | null
+  itemName?: string | null
   currentLevel: number
   /** Reservado por misiones logisticas (trigger DB). */
   reservedLevel?: number
@@ -133,6 +136,8 @@ export interface InventoryReservation {
   caseId: string
   centerId: string
   resourceType: string
+  /** Catálogo inteligente (dual-write). */
+  itemId?: string | null
   quantity: number
   status: InventoryReservationStatus
   volunteerId?: string

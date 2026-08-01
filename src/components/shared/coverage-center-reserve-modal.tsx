@@ -45,6 +45,8 @@ export function CoverageCenterReserveModal({
     return resolveCatalogKey(publicNeed.category) ?? null
   }, [publicNeed])
 
+  const itemId = publicNeed?.itemId ?? null
+
   useEffect(() => {
     if (!open) return
     setSelectedCenterId(null)
@@ -61,7 +63,8 @@ export function CoverageCenterReserveModal({
     setCentersLoading(true)
     setCentersError(null)
     void recommendCenters({
-      resourceType,
+      itemId: itemId ?? undefined,
+      resourceType: resourceType ?? undefined,
       minQty: 1,
       missionLat: coords.lat,
       missionLng: coords.lng,
@@ -84,7 +87,7 @@ export function CoverageCenterReserveModal({
     return () => {
       cancelled = true
     }
-  }, [open, publicNeed, coords, resourceType, selectedCenterId])
+  }, [open, publicNeed, coords, resourceType, itemId, selectedCenterId])
 
   const remaining = publicNeed?.remainingQuantity ?? 0
   const canReserve = Boolean(publicNeed && publicNeed.callStatus === 'open' && remaining > 0)

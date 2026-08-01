@@ -30,6 +30,7 @@ function mapMissionRow(row: MissionRow): Mission {
     pickupCenterId: row.pickup_center_id ?? undefined,
     pickupAddress: row.pickup_address ?? undefined,
     resourceType: row.resource_type ?? undefined,
+    itemId: (row as MissionRow & { item_id?: string | null }).item_id ?? null,
     resourceQty: row.resource_qty ?? undefined,
     deliveryAddress: row.delivery_address ?? undefined,
   }
@@ -50,6 +51,7 @@ function missionDomainToRow(domain: Partial<Mission>): Record<string, unknown> {
   if (domain.verifiedAt !== undefined) row.verified_at = domain.verifiedAt?.toISOString() ?? null
   if (domain.cancelledAt !== undefined) row.cancelled_at = domain.cancelledAt?.toISOString() ?? null
   if (domain.cancellationReason !== undefined) row.cancellation_reason = domain.cancellationReason ?? null
+  if (domain.itemId !== undefined) row.item_id = domain.itemId ?? null
   if (domain.updatedAt !== undefined) row.updated_at = domain.updatedAt.toISOString()
   return row
 }

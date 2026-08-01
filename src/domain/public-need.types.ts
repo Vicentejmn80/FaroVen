@@ -99,6 +99,8 @@ export interface PublicNeed {
   title: string
   summary: string
   category: string
+  /** Catálogo inteligente (dual-write). */
+  itemId?: string | null
   priority: 'critical' | 'high' | 'medium' | 'low'
   locationPublic: PublicNeedLocation
   locationPrivate?: Record<string, unknown> | null

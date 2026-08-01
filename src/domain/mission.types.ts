@@ -186,6 +186,8 @@ export interface Mission {
   pickupCenterId?: string
   pickupAddress?: string
   resourceType?: string
+  /** Catálogo inteligente (dual-write). */
+  itemId?: string | null
   resourceQty?: number
   deliveryAddress?: string
 }

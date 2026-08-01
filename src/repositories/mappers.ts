@@ -257,6 +257,11 @@ export function reportRowToReport(row: ReportRow): Report {
     },
     centerId: row.site_id ?? undefined,
     contactInfo: row.contact_info ?? undefined,
+    itemId: (row as ReportRow & { item_id?: string | null }).item_id ?? undefined,
+    itemText: (row as ReportRow & { item_text?: string | null }).item_text ?? undefined,
+    itemMatchKind: (row as ReportRow & { item_match_kind?: string | null }).item_match_kind ?? undefined,
+    itemMatchScore:
+      (row as ReportRow & { item_match_score?: number | null }).item_match_score ?? undefined,
   }
 }
 
@@ -326,6 +331,7 @@ export function caseRowToDomain(row: CaseRow): CaseDomain {
       relationship: row.reporter_relationship ?? undefined,
     },
     category: row.category ?? undefined,
+    itemId: (row as CaseRow & { item_id?: string | null }).item_id ?? undefined,
     requestSource: (row.request_source ?? 'manual') as RequestSource,
     requestType: (row.request_type ?? 'manual_request') as RequestType,
     operationType: (row.operation_type ?? 'incident') as OperationType,
@@ -363,6 +369,7 @@ export function caseDomainToRow(domain: Partial<CaseDomain>): Record<string, unk
     row.reporter_relationship = domain.reporterInfo.relationship ?? null
   }
   if (domain.category !== undefined) row.category = domain.category ?? null
+  if (domain.itemId !== undefined) row.item_id = domain.itemId ?? null
   if (domain.requestSource !== undefined) row.request_source = domain.requestSource
   if (domain.requestType !== undefined) row.request_type = domain.requestType
   if (domain.operationType !== undefined) row.operation_type = domain.operationType

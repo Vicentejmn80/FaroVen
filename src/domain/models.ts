@@ -92,6 +92,11 @@ export interface Report {
   location: Location
   centerId?: string
   contactInfo?: string
+  /** Catálogo inteligente (opcional, dual-write) */
+  itemId?: string
+  itemText?: string
+  itemMatchKind?: string
+  itemMatchScore?: number
 }
 
 export interface Event {

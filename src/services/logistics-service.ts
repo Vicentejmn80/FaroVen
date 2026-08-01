@@ -13,7 +13,8 @@ import type { RegisterSiteType } from '@/repositories/types'
 
 /** Recomienda centros con stock libre para una mision de recursos. */
 export async function recommendCenters(input: {
-  resourceType: string
+  resourceType?: string
+  itemId?: string
   minQty: number
   missionLat: number
   missionLng: number
@@ -21,10 +22,11 @@ export async function recommendCenters(input: {
 }): Promise<CenterRecommendation[]> {
   const recommendations = await logisticsRepository.recommendCenters(input)
   logisticsLog('centers_recommended', {
-    entityId: input.resourceType,
+    entityId: input.itemId ?? input.resourceType ?? 'unknown',
     entityType: 'case',
     payload: {
-      resourceType: input.resourceType,
+      resourceType: input.resourceType ?? null,
+      itemId: input.itemId ?? null,
       minQty: input.minQty,
       count: recommendations.length,
       top: recommendations[0]
@@ -139,6 +141,7 @@ export async function prepareMissionWithReservation(input: {
     pickupCenterId: input.centerId,
     pickupAddress: center?.address,
     resourceType: input.resourceType,
+    itemId: reservation.itemId ?? null,
     resourceQty: input.quantity,
     deliveryAddress: input.mission.location.address ?? input.mission.location.zone,
     updatedAt: new Date(),
@@ -559,7 +562,7 @@ async function notifyCenterCoordinatorOfReservation(reservation: InventoryReserv
   }
 }
 
-async function getCenterCoordinatorUserIds(centerId: string): Promise<string[]> {
+export async function getCenterCoordinatorUserIds(centerId: string): Promise<string[]> {
   try {
     const { data } = await supabase
       .from('coordinator_profiles')
