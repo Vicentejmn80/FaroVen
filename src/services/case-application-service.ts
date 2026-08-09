@@ -13,6 +13,7 @@ import { OPS_ACTION_URLS, opsNotify } from '@/services/ops-notification-contract
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import type { Mission } from '@/domain/mission.types'
+import { encodeQuantityOffered } from '@/domain/case-application-quantity'
 
 export const caseApplicationService = {
   async listByCase(caseId: string): Promise<CaseApplicationWithApplicant[]> {
@@ -46,6 +47,7 @@ export const caseApplicationService = {
     skills?: string[]
     availability?: string
     distanceKm?: number
+    quantityOffered?: number
   }) {
     const existing = await caseApplicationRepository.findByCaseAndApplicant(caseId, applicantId)
     if (existing) return existing
@@ -55,14 +57,22 @@ export const caseApplicationService = {
       distanceKm = await resolveApplicantDistanceKm(caseId, applicantId)
     }
 
+    const quantityOffered = params?.quantityOffered
+    const encoded =
+      quantityOffered != null && quantityOffered > 0
+        ? encodeQuantityOffered(quantityOffered, params?.message ?? 'Quiero ayudar')
+        : null
+
     const app = await caseApplicationRepository.apply(caseId, applicantId, {
       ...params,
+      message: encoded?.message ?? params?.message,
+      availability: encoded?.availability ?? params?.availability,
       distanceKm,
     })
     missionLog('application_received', {
       entityId: app.id,
       volunteerId: applicantId,
-      payload: { caseId, distanceKm },
+      payload: { caseId, distanceKm, quantityOffered: quantityOffered ?? null },
     })
     try {
       const caseData = await caseService.getById(caseId)

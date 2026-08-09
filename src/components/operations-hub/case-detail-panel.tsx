@@ -18,6 +18,7 @@ import {
   parseCaseOpsSummary,
   reporterShortLabel,
 } from '@/components/operations-hub/case-ops-display'
+import { parseQuantityOffered } from '@/domain/case-application-quantity'
 
 interface CoverageBundle {
   applications: CaseApplicationWithApplicant[]
@@ -222,7 +223,9 @@ export function CaseDetailPanel({
 
           {pendingValidation.length > 0 && onVerifyAssignment && (
             <GlassCard className="!rounded-xl !border-warning/30 !bg-warning/[0.06] !p-3 !shadow-none space-y-2">
-              <p className="text-xs font-medium text-warning">Validar evidencia</p>
+              <p className="text-xs font-medium text-warning">
+                Entregado — esperando tu validación
+              </p>
               {pendingValidation.map((a) => (
                 <EmergencyButton
                   key={a.id}
@@ -232,7 +235,7 @@ export function CaseDetailPanel({
                   disabled={isVerifying}
                   onClick={() => onVerifyAssignment(a.id)}
                 >
-                  Aprobar y resolver
+                  Validar y cerrar caso
                 </EmergencyButton>
               ))}
             </GlassCard>
@@ -319,46 +322,52 @@ function CoverageSection({
 
       {pendingApps.length > 0 && (
         <ul className="space-y-1.5">
-          {pendingApps.slice(0, 4).map((a) => (
-            <li
-              key={a.id}
-              className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2"
-            >
-              <p className="truncate text-[13px] text-ink">
-                <span className="font-medium">{a.applicantName || 'Voluntario'}</span>
-                {a.distanceKm != null && (
-                  <span className="text-ink-muted/60">
+          {pendingApps.slice(0, 4).map((a) => {
+            const qty =
+              a.quantityOffered ??
+              parseQuantityOffered({ message: a.message, availability: a.availability }) ??
+              1
+            const dist = a.distanceKm != null ? formatDistanceKm(a.distanceKm) : null
+            return (
+              <li
+                key={a.id}
+                className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+              >
+                <p className="truncate text-[13px] text-ink">
+                  <span className="font-medium capitalize">{a.applicantName || 'Voluntario'}</span>
+                  <span className="text-ink-muted/70">
                     {' '}
-                    · {formatDistanceKm(a.distanceKm)}
+                    — Ofrece {qty} {qty === 1 ? 'unidad' : 'unidades'}
                   </span>
+                  {dist && <span className="text-ink-muted/60"> — a {dist}</span>}
+                </p>
+                {(onApproveApplication || onRejectApplication) && (
+                  <div className="mt-2 flex gap-1.5">
+                    {onApproveApplication && (
+                      <EmergencyButton
+                        variant="primary"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onApproveApplication(a.id, bestPickupCenterId)}
+                      >
+                        Aceptar
+                      </EmergencyButton>
+                    )}
+                    {onRejectApplication && (
+                      <EmergencyButton
+                        variant="glass"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => onRejectApplication(a.id)}
+                      >
+                        Rechazar
+                      </EmergencyButton>
+                    )}
+                  </div>
                 )}
-              </p>
-              {(onApproveApplication || onRejectApplication) && (
-                <div className="mt-2 flex gap-1.5">
-                  {onApproveApplication && (
-                    <EmergencyButton
-                      variant="primary"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => onApproveApplication(a.id, bestPickupCenterId)}
-                    >
-                      Aceptar
-                    </EmergencyButton>
-                  )}
-                  {onRejectApplication && (
-                    <EmergencyButton
-                      variant="glass"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => onRejectApplication(a.id)}
-                    >
-                      Rechazar
-                    </EmergencyButton>
-                  )}
-                </div>
-              )}
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
 

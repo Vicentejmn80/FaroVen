@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
-import { useCases, useCaseTimeline } from '@/hooks/useCases'
+import { useCases, useCaseTimeline, useOpenCaseForApplications } from '@/hooks/useCases'
 import {
   useOperationalPublicNeeds,
   useNeedInterests,
@@ -27,6 +27,7 @@ import {
   useMissionAssignments,
   usePendingVerificationCounts,
 } from '@/hooks/useMissions'
+import { useBoardMissionLive } from '@/hooks/useBoardMissionLive'
 import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
 import { useFaro } from '@/store/faro-context'
@@ -37,13 +38,12 @@ import { operationalRecommendationService } from '@/services/operational-recomme
 import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { isCoverageStage, isProgressStage, isReviewStage } from '@/domain/ops-pipeline'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
-import { EsperarPostulanteModal } from '@/components/case-manager/esperar-postulante-modal'
+import { markCaseEventsViewed } from '@/lib/case-events-viewed-storage'
 import { CommandKpiBar } from './command-kpi-bar'
 import { CaseKanbanBoard } from './case-kanban-board'
 import { CaseDetailDrawer } from './case-detail-drawer'
 import { OpsMapPanel } from './ops-map-panel'
 import { cn } from '@/lib/utils'
-import { MISSION_EVENT_LABELS, label } from '@/lib/labels'
 
 type WorkspaceMode = 'pipeline' | 'map'
 
@@ -56,9 +56,9 @@ export function OperationsHub() {
   const { data: operationalNeeds = [] } = useOperationalPublicNeeds()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  /** Snapshot estable: el radar NO depende de que el caso siga en la lista tras refetch. */
-  const [radarCase, setRadarCase] = useState<CaseDomain | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
+  const [viewedTick, setViewedTick] = useState(0)
+  const openCallMutation = useOpenCaseForApplications()
   const transitionMutation = useTransitionCase()
   const assignMutation = useMutation({
     mutationFn: async ({
@@ -217,21 +217,12 @@ export function OperationsHub() {
     [reco?.inventory],
   )
 
-  /** Hints vivos para tarjetas En progreso — se alimentan del timeline del caso seleccionado
-   * y se cachean por caseId mientras el GC navega. */
-  const [liveMissionHints, setLiveMissionHints] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    if (!selectedId || !missionTimeline.length) return
-    const latest = [...missionTimeline].sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-    )[0]
-    if (!latest) return
-    const text = latest.description || label(MISSION_EVENT_LABELS, latest.eventType)
-    setLiveMissionHints((prev) =>
-      prev[selectedId] === text ? prev : { ...prev, [selectedId]: text },
-    )
-  }, [selectedId, missionTimeline])
+  const progressCaseIds = useMemo(
+    () => opsCases.filter((c) => isProgressStage(c.pipelineStage)).map((c) => c.id),
+    [opsCases],
+  )
+  const { byCase: missionLiveByCase, unseenByCase: unseenMissionEventsByCase } =
+    useBoardMissionLive(progressCaseIds, user?.id, viewedTick)
 
   const mapSites = useMemo(
     () =>
@@ -257,6 +248,10 @@ export function OperationsHub() {
     (c: CaseDomain) => {
       setSelectedId(c.id)
       setDrawerOpen(true)
+      if (user?.id) {
+        markCaseEventsViewed(user.id, c.id)
+        setViewedTick((t) => t + 1)
+      }
       if (c.pipelineStage === 'nuevo' && !startReviewMutation.isPending) {
         startReviewMutation.mutate({ caseId: c.id, actorId: user?.id })
       }
@@ -356,14 +351,28 @@ export function OperationsHub() {
     [selectedCase, assignedDispatchMode],
   )
 
-  const handleOpenRadar = useCallback(() => {
+  const handlePublishNeed = useCallback(() => {
     if (!selectedCase) return
     if (!radarGate.allowed) {
-      showToast(radarGate.reason ?? 'Radar no disponible para este caso.', 'info')
+      showToast(radarGate.reason ?? 'No se puede abrir la convocatoria para este caso.', 'info')
       return
     }
-    setRadarCase(selectedCase)
-  }, [selectedCase, radarGate, showToast])
+    if (openCallMutation.isPending) return
+    openCallMutation.mutate(
+      { caseId: selectedCase.id, actorId: user?.id },
+      {
+        onSuccess: () => {
+          showToast(
+            'Convocatoria abierta. Los voluntarios pueden ver la necesidad en el mapa.',
+            'success',
+          )
+        },
+        onError: (err: Error) => {
+          showToast(err.message || 'No se pudo abrir la convocatoria.', 'warning')
+        },
+      },
+    )
+  }, [selectedCase, radarGate, showToast, openCallMutation, user?.id])
 
   const handleViewOnMap = useCallback(() => {
     setWorkspace('map')
@@ -455,9 +464,10 @@ export function OperationsHub() {
                 needs={operationalNeeds}
                 selectedId={selectedId}
                 onSelect={handleSelect}
-                liveMissionHints={liveMissionHints}
                 pendingApplicationsByCase={pendingApplicationsByCase}
                 pendingVerificationsByCase={pendingVerificationsByCase}
+                missionLiveByCase={missionLiveByCase}
+                unseenMissionEventsByCase={unseenMissionEventsByCase}
               />
             </div>
             <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
@@ -498,8 +508,8 @@ export function OperationsHub() {
           onUseInventory={handleUseInventory}
           onStartReview={handleStartReview}
           onVerifyAssignment={handleVerify}
-          onOpenRadar={handleOpenRadar}
-          canOpenRadar={radarGate.allowed}
+          onOpenRadar={handlePublishNeed}
+          canOpenRadar={radarGate.allowed && !openCallMutation.isPending}
           radarBlockedReason={radarGate.reason}
           needPublished={selectedNeedPublished}
           onViewOnMap={handleViewOnMap}
@@ -507,18 +517,13 @@ export function OperationsHub() {
           onRejectApplication={handleRejectApplication}
           onApproveInterest={handleApproveInterest}
           onRejectInterest={handleRejectInterest}
-          isTransitioning={transitionMutation.isPending || startReviewMutation.isPending}
+          isTransitioning={
+            transitionMutation.isPending ||
+            startReviewMutation.isPending ||
+            openCallMutation.isPending
+          }
           isVerifying={verifyMutation.isPending}
         />
-
-        {radarCase && (
-          <EsperarPostulanteModal
-            caseData={radarCase}
-            open
-            onClose={() => setRadarCase(null)}
-            actorId={user?.id}
-          />
-        )}
       </div>
     </div>
   )

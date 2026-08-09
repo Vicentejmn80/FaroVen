@@ -12,8 +12,11 @@ import {
   getPriorityVisual,
   parseCaseOpsSummary,
   reporterShortLabel,
-  shortenMissionHint,
 } from '@/components/operations-hub/case-ops-display'
+import {
+  buildKanbanTimeline,
+  type CaseMissionLive,
+} from '@/domain/kanban-mission-timeline'
 
 /** Columnas del pipeline operacional COE (sin drag — movimiento automático por dominio). */
 export const KANBAN_COLUMNS = OPS_BOARD_COLUMNS.map((col) => ({
@@ -32,12 +35,14 @@ interface CaseKanbanBoardProps {
   needs?: PublicNeed[]
   selectedId: string | null
   onSelect: (c: CaseDomain) => void
-  /** Último evento de misión por caseId (timeline vivo en En progreso). */
-  liveMissionHints?: Record<string, string>
   /** Postulaciones pendientes (pending/under_review) por caseId. */
   pendingApplicationsByCase?: Record<string, number>
   /** Verificaciones pendientes (assignment completed, caso no resuelto) por caseId. */
   pendingVerificationsByCase?: Record<string, number>
+  /** Misión en vivo por caseId (timeline en EN PROGRESO). */
+  missionLiveByCase?: Record<string, CaseMissionLive>
+  /** Eventos de misión no vistos por el GC. */
+  unseenMissionEventsByCase?: Record<string, number>
   className?: string
 }
 
@@ -55,9 +60,10 @@ export function CaseKanbanBoard({
   needs = [],
   selectedId,
   onSelect,
-  liveMissionHints = {},
   pendingApplicationsByCase = {},
   pendingVerificationsByCase = {},
+  missionLiveByCase = {},
+  unseenMissionEventsByCase = {},
   className,
 }: CaseKanbanBoardProps) {
   const [query, setQuery] = useState('')
@@ -160,9 +166,10 @@ export function CaseKanbanBoard({
                         key={c.id}
                         caseItem={c}
                         metrics={metricsByCase.get(c.id)}
-                        liveHint={liveMissionHints[c.id]}
+                        missionLive={missionLiveByCase[c.id]}
                         pendingApplications={pendingApplicationsByCase[c.id] ?? 0}
                         pendingVerifications={pendingVerificationsByCase[c.id] ?? 0}
+                        unseenEvents={unseenMissionEventsByCase[c.id] ?? 0}
                         columnId={col.id}
                         selected={c.id === selectedId}
                         onSelect={() => onSelect(c)}
@@ -188,9 +195,10 @@ export function CaseKanbanBoard({
 function KanbanCard({
   caseItem,
   metrics,
-  liveHint,
+  missionLive,
   pendingApplications,
   pendingVerifications,
+  unseenEvents,
   columnId,
   selected,
   onSelect,
@@ -198,9 +206,10 @@ function KanbanCard({
 }: {
   caseItem: CaseDomain
   metrics?: CaseCardMetrics
-  liveHint?: string
+  missionLive?: CaseMissionLive
   pendingApplications: number
   pendingVerifications: number
+  unseenEvents: number
   columnId: KanbanColumnId
   selected: boolean
   onSelect: () => void
@@ -216,13 +225,20 @@ function KanbanCard({
   const reporter = reporterShortLabel(caseItem)
   const showCoverage =
     metrics &&
-    (columnId === 'esperando_cobertura' ||
-      columnId === 'en_progreso' ||
-      columnId === 'en_revision')
+    (columnId === 'esperando_cobertura' || columnId === 'en_revision')
   const volunteersAccepted = metrics?.volunteersAccepted ?? 0
   const volunteersRequired = metrics?.volunteersRequired ?? 0
+
   const showAppBadge = pendingApplications > 0 && !resolved
   const showVerifyBadge = pendingVerifications > 0 && !resolved
+  const showUnseenBadge = unseenEvents > 0 && columnId === 'en_progreso' && !showVerifyBadge
+
+  const timeline =
+    columnId === 'en_progreso' && missionLive
+      ? buildKanbanTimeline(missionLive.assignmentStatus, {
+          delayMinutes: missionLive.delayMinutes,
+        })
+      : null
 
   return (
     <motion.button
@@ -241,7 +257,7 @@ function KanbanCard({
     >
       <span className={cn('absolute left-0 top-0 h-full w-[3px]', priority.bar)} />
 
-      {(showAppBadge || showVerifyBadge) && (
+      {(showAppBadge || showVerifyBadge || showUnseenBadge) && (
         <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
           {showAppBadge && (
             <span
@@ -252,11 +268,20 @@ function KanbanCard({
               {pendingApplications > 9 ? '9+' : pendingApplications}
             </span>
           )}
+          {showUnseenBadge && (
+            <span
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-critical px-1 text-[10px] font-bold tabular-nums text-white shadow-sm"
+              title={`${unseenEvents} actualización(es) de misión`}
+              aria-label={`${unseenEvents} actualizaciones pendientes`}
+            >
+              {unseenEvents > 9 ? '9+' : unseenEvents}
+            </span>
+          )}
           {showVerifyBadge && (
             <span
               className="flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-bold tabular-nums text-[#1a1200] shadow-sm"
-              title={`${pendingVerifications} verificación(es) pendiente(s)`}
-              aria-label={`${pendingVerifications} verificaciones pendientes`}
+              title="Entregado — necesita validación"
+              aria-label="Verificación pendiente"
             >
               {pendingVerifications > 9 ? '9+' : pendingVerifications}
             </span>
@@ -267,7 +292,7 @@ function KanbanCard({
       <div
         className={cn(
           'flex min-w-0 items-center gap-1.5 pl-1',
-          (showAppBadge || showVerifyBadge) && 'pr-10',
+          (showAppBadge || showVerifyBadge || showUnseenBadge) && 'pr-10',
         )}
       >
         <span className="shrink-0 text-[11px] leading-none" aria-hidden>
@@ -284,14 +309,16 @@ function KanbanCard({
         </p>
       )}
 
-      <div className="mt-2 space-y-1.5 pl-[22px]">
-        <p className="truncate text-[12px] text-ink-muted/60">
-          <span>📍 {caseItem.zone}</span>
-          <span className="mx-1.5 text-ink-faint/50">·</span>
-          <span>👤 {reporter}</span>
-        </p>
-        <p className="text-[12px] text-ink-muted/60">🕐 {timeAgo(caseItem.createdAt)}</p>
-      </div>
+      {columnId !== 'en_progreso' && (
+        <div className="mt-2 space-y-1.5 pl-[22px]">
+          <p className="truncate text-[12px] text-ink-muted/60">
+            <span>📍 {caseItem.zone}</span>
+            <span className="mx-1.5 text-ink-faint/50">·</span>
+            <span>👤 {reporter}</span>
+          </p>
+          <p className="text-[12px] text-ink-muted/60">🕐 {timeAgo(caseItem.createdAt)}</p>
+        </div>
+      )}
 
       {awaitingInfo && (
         <p className="mt-2 flex items-center gap-1 pl-[22px] text-[11px] text-warning">
@@ -306,10 +333,45 @@ function KanbanCard({
         </div>
       )}
 
-      {columnId === 'en_progreso' && liveHint && (
-        <p className="mt-2 truncate pl-[22px] text-[11px] font-medium text-operational">
-          {shortenMissionHint(liveHint)}
-        </p>
+      {timeline && (
+        <div className="mt-2.5 space-y-1 border-t border-white/[0.06] pt-2 pl-[22px]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Timeline
+          </p>
+          <ol className="space-y-1">
+            {timeline.steps.map((step) => (
+              <li
+                key={step.id}
+                className={cn(
+                  'flex items-start gap-1.5 text-[11px] leading-snug',
+                  step.state === 'current' && 'font-semibold text-ink',
+                  step.state === 'done' && 'text-ink-muted/80',
+                  step.state === 'pending' && 'text-ink-faint/70',
+                )}
+              >
+                <span className="w-4 shrink-0 text-center" aria-hidden>
+                  {step.icon}
+                </span>
+                <span className="min-w-0">
+                  {step.label}
+                  {step.state === 'current' && step.id !== 'completed' ? ' ←' : ''}
+                  {step.detail && (
+                    <span className="mt-0.5 block text-[10px] font-normal text-warning">
+                      {step.detail}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {timeline.delayLabel && (
+            <p className="text-[11px] font-medium text-warning">{timeline.delayLabel}</p>
+          )}
+        </div>
+      )}
+
+      {columnId === 'en_progreso' && !timeline && (
+        <p className="mt-2 pl-[22px] text-[11px] text-ink-faint">Misión pendiente de arranque</p>
       )}
 
       {resolved && (

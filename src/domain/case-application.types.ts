@@ -9,6 +9,8 @@ export interface CaseApplication {
   skills?: string[]
   availability?: string
   distanceKm?: number
+  /** Unidades/personas que ofrece cubrir (codificado en message/availability). */
+  quantityOffered?: number
   status: CaseApplicationStatus
   createdAt: Date
   updatedAt: Date

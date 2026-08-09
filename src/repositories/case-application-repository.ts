@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { CaseApplication, CaseApplicationStatus, CaseApplicationWithApplicant } from '@/domain/case-application.types'
+import { parseQuantityOffered } from '@/domain/case-application-quantity'
 
 interface CaseApplicationRow {
   id: string
@@ -33,6 +34,8 @@ interface VolunteerMetricsRow {
 }
 
 function mapRow(row: CaseApplicationRow): CaseApplication {
+  const quantityOffered =
+    parseQuantityOffered({ message: row.message, availability: row.availability }) ?? undefined
   return {
     id: row.id,
     caseId: row.case_id,
@@ -42,6 +45,7 @@ function mapRow(row: CaseApplicationRow): CaseApplication {
     skills: row.skills ?? undefined,
     availability: row.availability ?? undefined,
     distanceKm: row.distance_km ?? undefined,
+    quantityOffered,
     status: row.status as CaseApplicationStatus,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),

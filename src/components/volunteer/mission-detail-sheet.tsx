@@ -120,6 +120,7 @@ export function MissionDetailSheet({
   const expressInterest = useExpressInterest()
   const [phase, setPhase] = useState<HelpPhase>('idle')
   const [helpError, setHelpError] = useState<string | null>(null)
+  const [quantityOffered, setQuantityOffered] = useState(1)
 
   const resolvedCaseId = mission?.caseId ?? mission?.id
   const volunteerId = user?.id ?? profile?.id
@@ -130,6 +131,14 @@ export function MissionDetailSheet({
     enabled: !!mission && !!volunteerId && !!resolvedCaseId,
   })
 
+  const title = mission ? humanizeNeedTitle(mission.title) : ''
+  const remaining = remainingLabel(mission?.expiresAt ?? null)
+  const eta = mission ? etaFromDistance(mission.distanceKm) : ''
+  const shortage =
+    mission?.required != null && mission?.available != null
+      ? Math.max(0, mission.required - mission.available)
+      : null
+
   useEffect(() => {
     if (existingApplication) {
       if (existingApplication.status === 'approved') setPhase('approved')
@@ -138,19 +147,13 @@ export function MissionDetailSheet({
       setPhase('idle')
     }
     setHelpError(null)
-  }, [mission?.id, existingApplication?.id, existingApplication?.status])
+    const defaultQty = Math.max(1, mission?.required ?? shortage ?? 1)
+    setQuantityOffered(Math.min(defaultQty, Math.max(1, shortage ?? defaultQty)))
+  }, [mission?.id, mission?.required, shortage, existingApplication?.id, existingApplication?.status])
 
   const handleReportProblem = useCallback(() => {
     window.dispatchEvent(new CustomEvent('faro:open-help-center'))
   }, [])
-
-  const title = mission ? humanizeNeedTitle(mission.title) : ''
-  const remaining = remainingLabel(mission?.expiresAt ?? null)
-  const eta = mission ? etaFromDistance(mission.distanceKm) : ''
-  const shortage =
-    mission?.required != null && mission?.available != null
-      ? Math.max(0, mission.required - mission.available)
-      : null
 
   const timeline = useMemo(() => {
     if (!mission) return []
@@ -205,10 +208,12 @@ export function MissionDetailSheet({
         return
       }
 
+      const qty = Math.max(1, Math.floor(Number(quantityOffered)) || 1)
       // Postulación canónica → notificación a campanita del GC
       const app = await caseApplicationService.apply(caseId, volunteerId, {
         message: `Quiero ayudar: ${title}`,
         skills: profile?.specialty ? [profile.specialty] : [],
+        quantityOffered: qty,
       })
 
       // Interés legacy (best-effort, no bloquea)
@@ -243,6 +248,7 @@ export function MissionDetailSheet({
     title,
     volunteerId,
     queryClient,
+    quantityOffered,
   ])
 
   const handleNavigate = useCallback(() => {
@@ -432,6 +438,21 @@ export function MissionDetailSheet({
       </div>
 
       <div className="shrink-0 space-y-2 border-t border-white/[0.06] bg-base-900/80 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+        {phase !== 'submitted' && phase !== 'approved' && (
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-ink-muted">
+              ¿Cuántas unidades/personas puedes cubrir?
+            </span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={quantityOffered}
+              onChange={(e) => setQuantityOffered(Math.max(1, Number(e.target.value) || 1))}
+              className="h-10 w-full rounded-xl border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-ink outline-none focus:border-info/40"
+            />
+          </label>
+        )}
         <div className="grid grid-cols-2 gap-2">
           {phase === 'submitted' ? (
             <EmergencyButton variant="glass" size="md" className="w-full" onClick={() => {

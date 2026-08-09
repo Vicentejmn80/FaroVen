@@ -78,6 +78,8 @@ export function useApplyToCase() {
       message?: string
       skills?: string[]
       availability?: string
+      quantityOffered?: number
+      distanceKm?: number
     }) => {
       try {
         return await caseApplicationService.apply(caseId, applicantId, params)
