@@ -283,7 +283,7 @@ export function OperationsHub() {
           }
           showToast('Caso eliminado.', 'success')
         },
-        onError: (err) => showToast(humanizeSupabaseError(err), 'error'),
+        onError: (err) => showToast(humanizeSupabaseError(err), 'warning'),
       })
     },
     [deleteCaseMutation, selectedId, showToast],
