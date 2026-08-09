@@ -19,8 +19,15 @@ import {
   useCaseApplications,
   useApproveCaseApplication,
   useRejectCaseApplication,
+  usePendingApplicationsQueue,
 } from '@/hooks/useCaseApplications'
-import { useMissionByCase, useMissionTimeline, useMissionAssignments } from '@/hooks/useMissions'
+import {
+  useMissionByCase,
+  useMissionTimeline,
+  useMissionAssignments,
+  usePendingVerificationCounts,
+} from '@/hooks/useMissions'
+import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
 import { useVerifyAssignment } from '@/hooks/useMissionMutations'
 import { useFaro } from '@/store/faro-context'
 import { useAuth } from '@/store/auth-context'
@@ -115,10 +122,48 @@ export function OperationsHub() {
   const { data: missionTimeline = [] } = useMissionTimeline(missionId ?? '')
   const { data: missionAssignments = [] } = useMissionAssignments(missionId ?? '')
   const { data: applications = [] } = useCaseApplications(selectedId ?? undefined)
+  const { data: pendingAppsQueue = [] } = usePendingApplicationsQueue(true)
+  const { data: pendingVerifyRaw = {} } = usePendingVerificationCounts(true)
+
+  const pendingApplicationsByCase = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const app of pendingAppsQueue) {
+      map[app.caseId] = (map[app.caseId] ?? 0) + 1
+    }
+    return map
+  }, [pendingAppsQueue])
+
+  const pendingVerificationsByCase = useMemo(() => {
+    const resolved = new Set(
+      opsCases
+        .filter(
+          (c) =>
+            c.pipelineStage === PIPELINE_STAGES.RESOLVED ||
+            c.pipelineStage === PIPELINE_STAGES.ARCHIVED,
+        )
+        .map((c) => c.id),
+    )
+    const map: Record<string, number> = {}
+    for (const [caseId, count] of Object.entries(pendingVerifyRaw)) {
+      if (resolved.has(caseId) || count <= 0) continue
+      map[caseId] = count
+    }
+    return map
+  }, [pendingVerifyRaw, opsCases])
 
   const selectedNeedId = useMemo(() => {
     if (!selectedId) return null
     return operationalNeeds.find((n) => n.caseId === selectedId)?.id ?? null
+  }, [operationalNeeds, selectedId])
+
+  const selectedNeedPublished = useMemo(() => {
+    if (!selectedId) return false
+    return operationalNeeds.some(
+      (n) =>
+        n.caseId === selectedId &&
+        n.callStatus === 'open' &&
+        n.visibilityStatus === 'public',
+    )
   }, [operationalNeeds, selectedId])
 
   const { data: interests = [] } = useNeedInterests(selectedNeedId)
@@ -320,6 +365,10 @@ export function OperationsHub() {
     setRadarCase(selectedCase)
   }, [selectedCase, radarGate, showToast])
 
+  const handleViewOnMap = useCallback(() => {
+    setWorkspace('map')
+  }, [])
+
   const handleApproveApplication = useCallback(
     (applicationId: string, pickupCenterId?: string) => {
       if (!user?.id) return
@@ -407,6 +456,8 @@ export function OperationsHub() {
                 selectedId={selectedId}
                 onSelect={handleSelect}
                 liveMissionHints={liveMissionHints}
+                pendingApplicationsByCase={pendingApplicationsByCase}
+                pendingVerificationsByCase={pendingVerificationsByCase}
               />
             </div>
             <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">
@@ -450,6 +501,8 @@ export function OperationsHub() {
           onOpenRadar={handleOpenRadar}
           canOpenRadar={radarGate.allowed}
           radarBlockedReason={radarGate.reason}
+          needPublished={selectedNeedPublished}
+          onViewOnMap={handleViewOnMap}
           onApproveApplication={handleApproveApplication}
           onRejectApplication={handleRejectApplication}
           onApproveInterest={handleApproveInterest}

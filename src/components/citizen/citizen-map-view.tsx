@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { PORTAL_CATEGORIES, PORTAL_DEMO_NEEDS, PORTAL_DEMO_SITES, type PortalCategoryId } from '@/data/portal/public-portal-content'
 import { SITE_META } from '@/lib/status-config'
 import type { SiteType, Center } from '@/lib/types'
-import { cn, isValidCoord, openExternalNavigation } from '@/lib/utils'
+import { cn, isValidCoord, openExternalNavigation, timeAgo } from '@/lib/utils'
 import { label, PRIORITY_SHORT_LABELS } from '@/lib/labels'
 import { useFaro } from '@/store/faro-context'
 import type { Site } from '@/lib/types'
@@ -47,7 +47,18 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
   const [helpNotice, setHelpNotice] = useState<string | null>(null)
   const [helpingNeedId, setHelpingNeedId] = useState<string | null>(null)
 
-  const publicNeedSites = useMemo(() => publicNeeds.map(publicNeedToSite), [publicNeeds])
+  const publicNeedSites = useMemo(
+    () =>
+      publicNeeds
+        .filter((n) => {
+          if (n.callStatus !== 'open' || n.visibilityStatus !== 'public') return false
+          const lat = Number(n.locationPublic?.lat)
+          const lng = Number(n.locationPublic?.lng)
+          return isValidCoord(lat, lng)
+        })
+        .map(publicNeedToSite),
+    [publicNeeds],
+  )
   const usingPublicNeeds = publicNeedSites.length > 0
 
   const usingDemo = liveSites.length === 0
@@ -318,7 +329,21 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
                 <StatusPill status={nearest.status} />
               </div>
 
-              {summaryMessages.length > 0 && (
+              {usingPublicNeeds && selectedPublicNeed && (
+                <div className="mt-3 space-y-1 text-[13px] text-ink">
+                  <p>
+                    💊 {selectedPublicNeed.remainingQuantity} {selectedPublicNeed.unit} por cubrir
+                    {selectedPublicNeed.requiredQuantity > 0
+                      ? ` (de ${selectedPublicNeed.requiredQuantity})`
+                      : ''}
+                  </p>
+                  <p className="text-[12px] text-ink-muted/70">
+                    🕐 {timeAgo(selectedPublicNeed.createdAt)}
+                  </p>
+                </div>
+              )}
+
+              {summaryMessages.length > 0 && !usingPublicNeeds && (
                 <div className="mt-3.5">
                   <CenterPublicSummary messages={summaryMessages} />
                 </div>

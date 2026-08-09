@@ -369,6 +369,20 @@ export const caseManagerService = {
         source: 'service',
         payload: { lat: opened.location.lat, lng: opened.location.lng },
       })
+    } else {
+      // Si el pin no tiene coords, sincronizar desde el caso para que aparezca en el mapa.
+      const hasCoords =
+        Number.isFinite(Number(need.locationPublic?.lat)) &&
+        Number.isFinite(Number(need.locationPublic?.lng)) &&
+        !(Number(need.locationPublic.lat) === 0 && Number(need.locationPublic.lng) === 0)
+      if (!hasCoords && Number.isFinite(opened.location.lat) && Number.isFinite(opened.location.lng)) {
+        need = await publicNeedRepository.updateLocationPublic(need.id, {
+          lat: opened.location.lat,
+          lng: opened.location.lng,
+          address: opened.location.address,
+          zone: opened.zone,
+        })
+      }
     }
 
     // Siempre republicar: fuerza call_status=open, visibility=public, status=active + notificaciones.

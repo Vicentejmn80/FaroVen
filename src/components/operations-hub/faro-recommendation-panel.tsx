@@ -11,16 +11,12 @@ import { cn } from '@/lib/utils'
 export function FaroRecommendationPanel({
   caseData,
   onAssignCenter,
-  onOpenRadar,
-  radarBlockedReason,
-  /** Si hay centros viables, Radar solo como fallback (centro primero). */
+  /** Si hay centros viables, prioriza centro antes que convocatoria voluntaria. */
   centerFirst = true,
   className,
 }: {
   caseData: CaseDomain
   onAssignCenter?: (centerId: string) => void
-  onOpenRadar?: () => void
-  radarBlockedReason?: string
   centerFirst?: boolean
   className?: string
 }) {
@@ -34,7 +30,6 @@ export function FaroRecommendationPanel({
 
   const centers = useMemo(() => (data?.centers ?? []).slice(0, 5), [data?.centers])
   const hasViableCenters = centers.length > 0
-  const allowRadarFallback = !centerFirst || !hasViableCenters
 
   return (
     <GlassCard
@@ -63,16 +58,10 @@ export function FaroRecommendationPanel({
       {isLoading || !data ? (
         <p className="text-[11px] text-ink-faint">Calculando recomendaciones…</p>
       ) : centers.length === 0 ? (
-        <div className="space-y-2">
-          <p className="text-[11px] text-ink-muted">
-            No hay centros con inventario suficiente para este recurso.
-          </p>
-          {onOpenRadar && (
-            <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
-              Abrir radar
-            </EmergencyButton>
-          )}
-        </div>
+        <p className="text-[11px] text-ink-muted">
+          No hay centros con inventario suficiente. Usa «Publicar necesidad» arriba para convocar
+          voluntarios en el mapa.
+        </p>
       ) : (
         <div className="space-y-2">
           {centers.map((c) => (
@@ -121,18 +110,11 @@ export function FaroRecommendationPanel({
               </div>
             </div>
           ))}
-          {allowRadarFallback && onOpenRadar && (
-            <EmergencyButton variant="glass" size="sm" className="w-full" onClick={onOpenRadar}>
-              Abrir radar (sin centros viables)
-            </EmergencyButton>
-          )}
           {centerFirst && hasViableCenters && (
             <p className="text-[10px] text-ink-faint">
-              Pipeline: solicita al centro primero. El radar se abre si responde “necesita voluntario”.
+              Pipeline: solicita al centro primero. Publica la necesidad si responde “necesita
+              voluntario”.
             </p>
-          )}
-          {radarBlockedReason && !onOpenRadar && (
-            <p className="text-[10px] text-ink-faint">{radarBlockedReason}</p>
           )}
         </div>
       )}

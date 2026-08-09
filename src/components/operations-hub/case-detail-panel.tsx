@@ -41,6 +41,9 @@ interface CaseDetailPanelProps {
   onOpenRadar?: () => void
   canOpenRadar?: boolean
   radarBlockedReason?: string
+  /** true si ya hay public_need con call_status=open para este caso */
+  needPublished?: boolean
+  onViewOnMap?: () => void
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
   onApproveInterest?: (reservationId: string) => void
@@ -72,6 +75,8 @@ export function CaseDetailPanel({
   onOpenRadar,
   canOpenRadar = true,
   radarBlockedReason,
+  needPublished = false,
+  onViewOnMap,
   onApproveApplication,
   onRejectApplication,
   onApproveInterest,
@@ -132,18 +137,22 @@ export function CaseDetailPanel({
               <p className="text-[12px] text-ink-muted/60">🕐 {timeAgo(caseItem.createdAt)}</p>
             </div>
 
-            {(onOpenRadar || canOpenRadar) && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {onOpenRadar && canOpenRadar && (
-                  <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
-                    Abrir radar
-                  </EmergencyButton>
-                )}
-                {radarBlockedReason && !canOpenRadar && (
-                  <span className="text-[11px] text-ink-faint">{radarBlockedReason}</span>
-                )}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {needPublished && onViewOnMap ? (
+                <EmergencyButton variant="glass" size="sm" onClick={onViewOnMap}>
+                  Ver en mapa
+                </EmergencyButton>
+              ) : onOpenRadar && canOpenRadar ? (
+                <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
+                  {caseItem.pipelineStage === PIPELINE_STAGES.OPEN_FOR_APPLICATIONS
+                    ? 'Abrir convocatoria'
+                    : 'Publicar necesidad'}
+                </EmergencyButton>
+              ) : null}
+              {!needPublished && radarBlockedReason && !canOpenRadar && (
+                <span className="text-[11px] text-ink-faint">{radarBlockedReason}</span>
+              )}
+            </div>
           </div>
 
           {ops.narrative &&
@@ -183,8 +192,6 @@ export function CaseDetailPanel({
             <FaroRecommendationPanel
               caseData={caseItem}
               onAssignCenter={onAssign}
-              onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
-              radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
               centerFirst={isReviewStage(caseItem.pipelineStage)}
             />
           )}
@@ -204,10 +211,6 @@ export function CaseDetailPanel({
               inventoryTips={inventoryTips}
               onAssign={onAssign}
               assignedCenterId={caseItem.assignedCenterId}
-              onOpenRadar={
-                canOpenRadar && isCoverageStage(caseItem.pipelineStage) ? onOpenRadar : undefined
-              }
-              radarBlockedReason={!canOpenRadar ? radarBlockedReason : undefined}
               onApproveApplication={onApproveApplication}
               onRejectApplication={onRejectApplication}
               onApproveInterest={onApproveInterest}
@@ -263,8 +266,6 @@ function CoverageSection({
   interests,
   inventoryTips,
   onAssign,
-  onOpenRadar,
-  radarBlockedReason,
   onApproveApplication,
   onRejectApplication,
   onApproveInterest,
@@ -284,8 +285,6 @@ function CoverageSection({
   }>
   onAssign?: (centerId: string) => void
   assignedCenterId?: string
-  onOpenRadar?: () => void
-  radarBlockedReason?: string
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
   onApproveInterest?: (reservationId: string) => void
@@ -302,14 +301,6 @@ function CoverageSection({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-ink-muted">Cobertura</p>
-        {onOpenRadar && (
-          <EmergencyButton variant="glass" size="sm" onClick={onOpenRadar}>
-            Radar
-          </EmergencyButton>
-        )}
-        {radarBlockedReason && !onOpenRadar && (
-          <span className="text-[10px] text-ink-faint">{radarBlockedReason}</span>
-        )}
       </div>
 
       {tip && (

@@ -30,6 +30,8 @@ interface CaseDetailDrawerProps {
   onOpenRadar?: () => void
   canOpenRadar?: boolean
   radarBlockedReason?: string
+  needPublished?: boolean
+  onViewOnMap?: () => void
   onApproveApplication?: (applicationId: string, pickupCenterId?: string) => void
   onRejectApplication?: (applicationId: string) => void
   onApproveInterest?: (reservationId: string) => void
@@ -66,6 +68,8 @@ export function CaseDetailDrawer({
   onOpenRadar,
   canOpenRadar = true,
   radarBlockedReason,
+  needPublished = false,
+  onViewOnMap,
   onApproveApplication,
   onRejectApplication,
   onApproveInterest,
@@ -132,6 +136,8 @@ export function CaseDetailDrawer({
                 onOpenRadar={canOpenRadar ? onOpenRadar : undefined}
                 canOpenRadar={canOpenRadar}
                 radarBlockedReason={radarBlockedReason}
+                needPublished={needPublished}
+                onViewOnMap={onViewOnMap}
                 onApproveApplication={onApproveApplication}
                 onRejectApplication={onRejectApplication}
                 onApproveInterest={onApproveInterest}

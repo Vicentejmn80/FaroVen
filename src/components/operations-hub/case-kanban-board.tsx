@@ -34,6 +34,10 @@ interface CaseKanbanBoardProps {
   onSelect: (c: CaseDomain) => void
   /** Último evento de misión por caseId (timeline vivo en En progreso). */
   liveMissionHints?: Record<string, string>
+  /** Postulaciones pendientes (pending/under_review) por caseId. */
+  pendingApplicationsByCase?: Record<string, number>
+  /** Verificaciones pendientes (assignment completed, caso no resuelto) por caseId. */
+  pendingVerificationsByCase?: Record<string, number>
   className?: string
 }
 
@@ -52,6 +56,8 @@ export function CaseKanbanBoard({
   selectedId,
   onSelect,
   liveMissionHints = {},
+  pendingApplicationsByCase = {},
+  pendingVerificationsByCase = {},
   className,
 }: CaseKanbanBoardProps) {
   const [query, setQuery] = useState('')
@@ -155,6 +161,8 @@ export function CaseKanbanBoard({
                         caseItem={c}
                         metrics={metricsByCase.get(c.id)}
                         liveHint={liveMissionHints[c.id]}
+                        pendingApplications={pendingApplicationsByCase[c.id] ?? 0}
+                        pendingVerifications={pendingVerificationsByCase[c.id] ?? 0}
                         columnId={col.id}
                         selected={c.id === selectedId}
                         onSelect={() => onSelect(c)}
@@ -181,6 +189,8 @@ function KanbanCard({
   caseItem,
   metrics,
   liveHint,
+  pendingApplications,
+  pendingVerifications,
   columnId,
   selected,
   onSelect,
@@ -189,6 +199,8 @@ function KanbanCard({
   caseItem: CaseDomain
   metrics?: CaseCardMetrics
   liveHint?: string
+  pendingApplications: number
+  pendingVerifications: number
   columnId: KanbanColumnId
   selected: boolean
   onSelect: () => void
@@ -209,6 +221,8 @@ function KanbanCard({
       columnId === 'en_revision')
   const volunteersAccepted = metrics?.volunteersAccepted ?? 0
   const volunteersRequired = metrics?.volunteersRequired ?? 0
+  const showAppBadge = pendingApplications > 0 && !resolved
+  const showVerifyBadge = pendingVerifications > 0 && !resolved
 
   return (
     <motion.button
@@ -227,7 +241,35 @@ function KanbanCard({
     >
       <span className={cn('absolute left-0 top-0 h-full w-[3px]', priority.bar)} />
 
-      <div className="flex min-w-0 items-center gap-1.5 pl-1">
+      {(showAppBadge || showVerifyBadge) && (
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+          {showAppBadge && (
+            <span
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-critical px-1 text-[10px] font-bold tabular-nums text-white shadow-sm"
+              title={`${pendingApplications} postulación(es) pendiente(s)`}
+              aria-label={`${pendingApplications} postulaciones pendientes`}
+            >
+              {pendingApplications > 9 ? '9+' : pendingApplications}
+            </span>
+          )}
+          {showVerifyBadge && (
+            <span
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-bold tabular-nums text-[#1a1200] shadow-sm"
+              title={`${pendingVerifications} verificación(es) pendiente(s)`}
+              aria-label={`${pendingVerifications} verificaciones pendientes`}
+            >
+              {pendingVerifications > 9 ? '9+' : pendingVerifications}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div
+        className={cn(
+          'flex min-w-0 items-center gap-1.5 pl-1',
+          (showAppBadge || showVerifyBadge) && 'pr-10',
+        )}
+      >
         <span className="shrink-0 text-[11px] leading-none" aria-hidden>
           {priority.dot}
         </span>

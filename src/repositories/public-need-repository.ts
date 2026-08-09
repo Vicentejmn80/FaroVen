@@ -303,6 +303,20 @@ export class PublicNeedRepository {
     return toPublicNeed(data as AnyRow)
   }
 
+  async updateLocationPublic(
+    publicNeedId: string,
+    locationPublic: PublicNeed['locationPublic'],
+  ): Promise<PublicNeed> {
+    const { data, error } = await supabase
+      .from('public_needs')
+      .update({ location_public: locationPublic })
+      .eq('id', publicNeedId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return toPublicNeed(data as AnyRow)
+  }
+
   async closeAllByCaseId(caseId: string): Promise<void> {
     const { error } = await supabase
       .from('public_needs')
