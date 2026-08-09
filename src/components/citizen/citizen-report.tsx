@@ -6,7 +6,7 @@ import { LocationPickerMap } from '@/components/faro/location-picker-map'
 import { reportRepository } from '@/repositories/report-repository'
 import type { ResolvedPlace } from '@/lib/osm-geocoding'
 import { cn, isValidCoord } from '@/lib/utils'
-import { useItemsCatalogSearch } from '@/hooks/useItemsCatalog'
+import { CitizenNeedSelector } from '@/components/citizen/citizen-need-selector'
 import {
   ReportContactSheet,
   type ReportContactData,
@@ -45,7 +45,7 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
   const [description, setDescription] = useState('')
   const [itemQuery, setItemQuery] = useState('')
   const [itemId, setItemId] = useState<string | null>(null)
-  const [debouncedItemQuery, setDebouncedItemQuery] = useState('')
+  const [peopleCount, setPeopleCount] = useState('')
   const [submitted, setSubmitted] = useState<{ trackingCode: string } | null>(null)
   const [lookupCode, setLookupCode] = useState('')
   const [lookupResult, setLookupResult] = useState<{ code: string; status: string; description: string } | null>(null)
@@ -56,28 +56,30 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedItemQuery(itemQuery), 250)
-    return () => window.clearTimeout(t)
-  }, [itemQuery])
-
-  const { data: itemResults = [] } = useItemsCatalogSearch(debouncedItemQuery, { limit: 8 })
-
-  useEffect(() => {
     if (contactData && step === 'start') setStep('category')
   }, [contactData, step])
 
   const handleSubmit = async () => {
     if (!contactData || description.trim().length < 8) return
+    if (itemQuery.trim().length < 2) {
+      setSubmitError('Indica qué recurso se necesita antes de enviar.')
+      setStep('description')
+      return
+    }
     if (!resolvedPlace || !isValidCoord(resolvedPlace.lat, resolvedPlace.lng)) {
       setSubmitError('Marca la ubicación en el mapa o usa el GPS antes de enviar.')
       setStep('location')
       return
     }
+    const peopleNote =
+      peopleCount.trim().length > 0
+        ? `\n\n[Aprox. ${peopleCount.trim()} personas afectadas]`
+        : ''
     setSubmitting(true)
     setSubmitError(null)
     try {
       const { trackingCode } = await reportRepository.createPublic({
-        description,
+        description: description + peopleNote,
         contactName: contactData.name,
         contactPhone: contactData.phone,
         contactEmail: contactData.email,
@@ -136,7 +138,7 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
     setDescription('')
     setItemQuery('')
     setItemId(null)
-    setDebouncedItemQuery('')
+    setPeopleCount('')
     setSubmitted(null)
     setContactData(null)
     onDone()
@@ -366,45 +368,14 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
       {step === 'description' && (
         <div className="space-y-3">
           <p className="text-sm text-ink-subtle">Describe la situación con el mayor detalle posible</p>
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-              Recurso principal (opcional)
-            </p>
-            <input
-              value={itemQuery}
-              onChange={(e) => {
-                setItemQuery(e.target.value)
-                setItemId(null)
-              }}
-              placeholder="Ej: Agua potable, Alcohol 70%, Gasas..."
-              className="h-11 w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-ink placeholder:text-ink-muted outline-none focus:border-info/50"
-            />
-            {itemQuery.trim().length >= 2 && itemResults.length > 0 && (
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2">
-                <div className="space-y-1">
-                  {itemResults.map((r) => (
-                    <button
-                      key={r.itemId}
-                      type="button"
-                      onClick={() => {
-                        setItemId(r.itemId)
-                        setItemQuery(r.canonicalName)
-                      }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-xs transition-colors hover:bg-white/[0.05]"
-                    >
-                      <p className="text-sm font-semibold text-ink">{r.canonicalName}</p>
-                      <p className="mt-0.5 text-[11px] text-ink-muted">
-                        {r.unit} · {r.matchKind}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <p className="text-[11px] text-ink-muted">
-              Si no existe, FARO creará una sugerencia pendiente de revisión vinculada a tu reporte.
-            </p>
-          </div>
+          <CitizenNeedSelector
+            itemQuery={itemQuery}
+            itemId={itemId}
+            peopleCount={peopleCount}
+            onItemQueryChange={setItemQuery}
+            onItemIdChange={setItemId}
+            onPeopleCountChange={setPeopleCount}
+          />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -420,7 +391,7 @@ export function CitizenReport({ onDone }: CitizenReportProps) {
               variant="primary"
               size="sm"
               className="flex-1"
-              disabled={description.trim().length < 8}
+              disabled={description.trim().length < 8 || itemQuery.trim().length < 2}
               onClick={() => setStep('photo')}
             >
               Continuar
