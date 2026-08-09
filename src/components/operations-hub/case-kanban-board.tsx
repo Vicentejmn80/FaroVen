@@ -1,13 +1,19 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Clock, Search, User } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { AlertTriangle, Search } from 'lucide-react'
+import { cn, timeAgo } from '@/lib/utils'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
-import { REQUEST_SOURCE_LABELS } from '@/domain/case-lifecycle.types'
 import { OPS_BOARD_COLUMNS, type OpsBoardColumnId } from '@/domain/ops-pipeline'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PublicNeed } from '@/domain/public-need.types'
-import { PIPELINE_LABELS, label } from '@/lib/labels'
+import {
+  cleanCaseTitle,
+  CoverageProgressDots,
+  getPriorityVisual,
+  parseCaseOpsSummary,
+  reporterShortLabel,
+  shortenMissionHint,
+} from '@/components/operations-hub/case-ops-display'
 
 /** Columnas del pipeline operacional COE (sin drag — movimiento automático por dominio). */
 export const KANBAN_COLUMNS = OPS_BOARD_COLUMNS.map((col) => ({
@@ -29,29 +35,6 @@ interface CaseKanbanBoardProps {
   /** Último evento de misión por caseId (timeline vivo en En progreso). */
   liveMissionHints?: Record<string, string>
   className?: string
-}
-
-const PRIORITY_STYLE: Record<string, { bar: string; chip: string; label: string }> = {
-  critical: {
-    bar: 'bg-critical shadow-[0_0_8px_rgba(239,68,68,0.45)]',
-    chip: 'bg-critical/15 text-critical border-critical/30',
-    label: 'Crítico',
-  },
-  high: {
-    bar: 'bg-critical',
-    chip: 'bg-critical/10 text-critical border-critical/20',
-    label: 'Alta',
-  },
-  medium: {
-    bar: 'bg-warning',
-    chip: 'bg-warning/10 text-warning border-warning/20',
-    label: 'Media',
-  },
-  low: {
-    bar: 'bg-white/20',
-    chip: 'bg-white/[0.06] text-ink-muted border-white/10',
-    label: 'Baja',
-  },
 }
 
 interface CaseCardMetrics {
@@ -211,9 +194,21 @@ function KanbanCard({
   onSelect: () => void
   index: number
 }) {
-  const priority = PRIORITY_STYLE[caseItem.priority] ?? PRIORITY_STYLE.low
+  const resolved = columnId === 'resuelto'
+  const priority = getPriorityVisual(caseItem.priority, resolved)
   const awaitingInfo = caseItem.pipelineStage === 'awaiting_info'
-  const stageLabel = label(PIPELINE_LABELS, caseItem.pipelineStage)
+  const { headline, subline } = cleanCaseTitle(caseItem.title)
+  const ops = parseCaseOpsSummary(caseItem)
+  const title = ops.resource || headline
+  const location = ops.location || subline || caseItem.zone
+  const reporter = reporterShortLabel(caseItem)
+  const showCoverage =
+    metrics &&
+    (columnId === 'esperando_cobertura' ||
+      columnId === 'en_progreso' ||
+      columnId === 'en_revision')
+  const volunteersAccepted = metrics?.volunteersAccepted ?? 0
+  const volunteersRequired = metrics?.volunteersRequired ?? 0
 
   return (
     <motion.button
@@ -232,69 +227,52 @@ function KanbanCard({
     >
       <span className={cn('absolute left-0 top-0 h-full w-[3px]', priority.bar)} />
 
-      <div className="flex items-start justify-between gap-2 pl-1">
-        <p className="min-w-0 text-[13px] font-semibold leading-snug text-ink line-clamp-2">
-          {caseItem.title}
-        </p>
-        <span
-          className={cn(
-            'shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
-            priority.chip,
-          )}
-        >
-          {priority.label}
+      <div className="flex min-w-0 items-center gap-1.5 pl-1">
+        <span className="shrink-0 text-[11px] leading-none" aria-hidden>
+          {priority.dot}
         </span>
+        <p className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-tight text-ink">
+          {title}
+        </p>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-1 text-[10px] text-ink-muted">
-        <span className="inline-flex items-center gap-1">
-          <User className="h-2.5 w-2.5" />
-          {caseItem.reporterInfo.name
-            ?? REQUEST_SOURCE_LABELS[caseItem.requestSource]
-            ?? 'Reportante'}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Clock className="h-2.5 w-2.5" />
-          {formatShortTime(caseItem.createdAt)}
-        </span>
-        {caseItem.requestSource === 'coordinator' && (
-          <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-medium text-warning">
-            Coordinador
-          </span>
-        )}
+      {location && (
+        <p className="mt-1 truncate pl-[22px] text-[13px] font-medium leading-snug text-ink/90">
+          {location}
+        </p>
+      )}
+
+      <div className="mt-2 space-y-1.5 pl-[22px]">
+        <p className="truncate text-[12px] text-ink-muted/60">
+          <span>📍 {caseItem.zone}</span>
+          <span className="mx-1.5 text-ink-faint/50">·</span>
+          <span>👤 {reporter}</span>
+        </p>
+        <p className="text-[12px] text-ink-muted/60">🕐 {timeAgo(caseItem.createdAt)}</p>
       </div>
 
       {awaitingInfo && (
-        <p className="mt-1.5 flex items-center gap-1 pl-1 text-[10px] text-warning">
-          <AlertTriangle className="h-2.5 w-2.5" />
+        <p className="mt-2 flex items-center gap-1 pl-[22px] text-[11px] text-warning">
+          <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
           Falta información
         </p>
       )}
 
-      {columnId === 'esperando_cobertura' && metrics && (
-        <p className="mt-1.5 pl-1 text-[10px] text-info">
-          Cobertura {metrics.volunteersAccepted}/{metrics.volunteersRequired || '—'}
-          {metrics.callStatus === 'open' ? ' · convocatoria abierta' : ''}
-        </p>
+      {showCoverage && volunteersRequired > 0 && (
+        <div className="mt-2 pl-[22px]">
+          <CoverageProgressDots accepted={volunteersAccepted} required={volunteersRequired} />
+        </div>
       )}
 
       {columnId === 'en_progreso' && liveHint && (
-        <p className="mt-1.5 truncate pl-1 text-[10px] font-medium text-operational">
-          ● {liveHint}
+        <p className="mt-2 truncate pl-[22px] text-[11px] font-medium text-operational">
+          {shortenMissionHint(liveHint)}
         </p>
       )}
 
-      {columnId === 'en_revision' && !awaitingInfo && (
-        <p className="mt-1.5 pl-1 text-[10px] text-ink-faint">{stageLabel}</p>
+      {resolved && (
+        <p className="mt-2 pl-[22px] text-[11px] font-medium text-info">✅ Resuelto</p>
       )}
     </motion.button>
   )
-}
-
-function formatShortTime(d: Date): string {
-  try {
-    return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
 }

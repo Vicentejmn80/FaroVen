@@ -4,11 +4,11 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { listReservationsByCase } from '@/services/logistics-service'
 import { missionService } from '@/services/mission-service'
-import { getResourceLabel } from '@/lib/resource-catalog'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
+import { CoverageProgressBar, parseCaseOpsSummary } from '@/components/operations-hub/case-ops-display'
 
 /**
- * Panel GC en tiempo real: Necesario / Reservado / Entregado / Disponible + voluntarios activos.
+ * Cobertura en vivo dentro de la ficha operativa — barra de progreso clara.
  */
 export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
   const { data: reservations = [] } = useQuery({
@@ -32,50 +32,37 @@ export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
   })
 
   const stats = useMemo(() => {
-    const needed = Math.max(1, caseData.affectedCount || 1)
+    const ops = parseCaseOpsSummary(caseData)
+    const qtyFromDesc = ops.quantity?.match(/^(\d+)/)?.[1]
+    const neededFromDesc = qtyFromDesc ? Number(qtyFromDesc) : null
+
     const reserved = reservations
       .filter((r) => r.status === 'reserved' || r.status === 'ready')
       .reduce((s, r) => s + r.quantity, 0)
     const delivered = reservations
       .filter((r) => r.status === 'delivered')
       .reduce((s, r) => s + r.quantity, 0)
-    const available = Math.max(0, needed - reserved - delivered)
+    const covered = reserved + delivered
+    const needed = Math.max(
+      neededFromDesc ?? 0,
+      caseData.affectedCount || 0,
+      covered,
+      1,
+    )
     const activeVolunteers = missionBundle?.activeVolunteers ?? 0
-    const centerId =
-      reservations.find((r) => r.status === 'ready' || r.status === 'reserved')?.centerId ??
-      caseData.assignedCenterId
-    return { needed, reserved, delivered, available, activeVolunteers, centerId }
+
+    return { needed, covered, activeVolunteers }
   }, [reservations, missionBundle, caseData])
 
-  const resourceHint = reservations[0]
-    ? getResourceLabel(reservations[0].resourceType)
-    : caseData.category
-
   return (
-    <GlassCard className="!rounded-xl !border-info/20 !bg-info/[0.04] !p-3 !shadow-none space-y-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-info">
-        Cobertura en vivo
-      </p>
-      <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-        <Metric label="Necesario" value={stats.needed} />
-        <Metric label="Reservado" value={stats.reserved} />
-        <Metric label="Entregado" value={stats.delivered} />
-        <Metric label="Disponible" value={stats.available} />
-      </div>
-      <div className="flex flex-wrap gap-3 text-[11px] text-ink-muted">
-        <span>Voluntarios activos · {stats.activeVolunteers}</span>
-        {stats.centerId && <span>Centro · {stats.centerId.slice(0, 10)}…</span>}
-        <span>{resourceHint}</span>
-      </div>
+    <GlassCard className="!rounded-xl !border-white/[0.08] !bg-white/[0.02] !p-3 !shadow-none space-y-2">
+      <CoverageProgressBar current={stats.covered} total={stats.needed} />
+      {stats.activeVolunteers > 0 && (
+        <p className="text-[12px] text-ink-muted/60">
+          {stats.activeVolunteers}{' '}
+          {stats.activeVolunteers === 1 ? 'voluntario activo' : 'voluntarios activos'}
+        </p>
+      )}
     </GlassCard>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg bg-white/[0.03] px-2 py-1.5">
-      <p className="text-[9px] uppercase tracking-wide text-ink-faint">{label}</p>
-      <p className="text-sm font-semibold tabular-nums text-ink">{value}</p>
-    </div>
   )
 }

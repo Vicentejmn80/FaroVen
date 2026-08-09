@@ -1,19 +1,23 @@
-import { MapPin, Phone } from 'lucide-react'
+import { Phone } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { GlassCard } from '@/components/ui/glass-card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CaseDomain, CaseDomainEvent, PipelineStage } from '@/domain/case-lifecycle.types'
-import { PIPELINE_STAGES, REQUEST_SOURCE_LABELS } from '@/domain/case-lifecycle.types'
+import { PIPELINE_STAGES } from '@/domain/case-lifecycle.types'
 import { isCoverageStage, isReviewStage } from '@/domain/ops-pipeline'
 import type { AssignmentSuggestion } from '@/types/operations-hub.types'
-import { CaseStatusBadge } from './case-status-badge'
 import type { MissionEvent } from '@/domain/mission.types'
 import type { MissionAssignment } from '@/domain/mission.types'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CoverageInterest } from '@/domain/public-need.types'
 import { FaroRecommendationPanel } from '@/components/operations-hub/faro-recommendation-panel'
 import { CoverageLivePanel } from '@/components/operations-hub/coverage-live-panel'
+import {
+  getPriorityVisual,
+  parseCaseOpsSummary,
+  reporterShortLabel,
+} from '@/components/operations-hub/case-ops-display'
 
 interface CoverageBundle {
   applications: CaseApplicationWithApplicant[]
@@ -89,47 +93,72 @@ export function CaseDetailPanel({
 
   const showCoverage = isCoverageStage(caseItem.pipelineStage) || isReviewStage(caseItem.pipelineStage)
   const pendingValidation = missionAssignments.filter((a) => a.status === 'completed')
-  const sourceLabel = REQUEST_SOURCE_LABELS[caseItem.requestSource] ?? 'Solicitud'
-  const requesterName =
-    caseItem.reporterInfo.name ||
-    (caseItem.requestSource === 'coordinator' ? 'Coordinador' : null) ||
-    (caseItem.requestSource === 'manual' ? 'Gestor' : null) ||
-    'Reportante'
-  const zone = caseItem.location.address ?? caseItem.location.zone ?? caseItem.zone
+  const resolved = caseItem.pipelineStage === PIPELINE_STAGES.RESOLVED
+  const priority = getPriorityVisual(caseItem.priority, resolved)
+  const ops = parseCaseOpsSummary(caseItem)
+  const reporter = reporterShortLabel(caseItem)
+  const quantityIcon = ops.quantity?.toLowerCase().includes('unidad') ? '💊' : '📦'
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
       <ScrollArea className={cn('flex-1', dense ? 'px-3 py-3' : 'px-4 py-4')}>
         <div className={cn(dense ? 'space-y-3' : 'space-y-4')}>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-ink-muted">
-                {sourceLabel}
+          <div className="space-y-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-sm leading-none" aria-hidden>
+                {priority.dot}
               </span>
-              <CaseStatusBadge stage={caseItem.pipelineStage} />
+              <h2
+                className={cn(
+                  'min-w-0 flex-1 truncate font-semibold leading-tight text-ink',
+                  dense ? 'text-base' : 'text-lg',
+                )}
+              >
+                {ops.resource}
+              </h2>
             </div>
-            <h2 className={cn('font-semibold leading-tight text-ink', dense ? 'text-base' : 'text-lg')}>
-              {caseItem.title}
-            </h2>
-            <p className="flex items-center gap-1.5 text-xs text-ink-muted">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{zone}</span>
-              <span className="text-ink-faint">· {timeAgo(caseItem.createdAt)}</span>
-            </p>
+
+            <p className="truncate text-[14px] font-medium text-ink/90">📍 {ops.location}</p>
+
+            <div className="space-y-1 pt-0.5">
+              {ops.quantity && (
+                <p className="text-[14px] text-ink">
+                  {quantityIcon} {ops.quantity}
+                </p>
+              )}
+              {ops.people != null && ops.people > 0 && (
+                <p className="text-[14px] text-ink">👥 {ops.people} personas</p>
+              )}
+              <p className="text-[12px] text-ink-muted/60">🕐 {timeAgo(caseItem.createdAt)}</p>
+            </div>
+
+            {(onOpenRadar || canOpenRadar) && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {onOpenRadar && canOpenRadar && (
+                  <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
+                    Abrir radar
+                  </EmergencyButton>
+                )}
+                {radarBlockedReason && !canOpenRadar && (
+                  <span className="text-[11px] text-ink-faint">{radarBlockedReason}</span>
+                )}
+              </div>
+            )}
           </div>
 
-          {caseItem.description && (
-            <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-sm leading-relaxed text-ink">
-              {caseItem.description}
-            </p>
-          )}
+          {ops.narrative &&
+            !ops.narrative.includes('[FARO Wizard]') &&
+            ops.narrative !== caseItem.title && (
+              <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-sm leading-relaxed text-ink-muted">
+                {ops.narrative}
+              </p>
+            )}
 
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{sourceLabel}</p>
-            <p className="mt-0.5 text-sm font-medium text-ink">{requesterName}</p>
+            <p className="text-[12px] text-ink-muted/60">👤 {reporter}</p>
             {caseItem.reporterInfo.phone && (
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
-                <Phone className="h-3 w-3" />
+              <p className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-muted/60">
+                <Phone className="h-3 w-3 shrink-0" />
                 {caseItem.reporterInfo.phone}
               </p>
             )}
@@ -223,10 +252,10 @@ export function CaseDetailPanel({
   )
 }
 
-function formatRangeToReport(km?: number | null): string {
-  if (km == null || !Number.isFinite(km)) return 'Rango no disponible'
-  if (km < 1) return `a ${Math.round(km * 1000)} m del reporte`
-  return `a ${km.toFixed(1)} km del reporte`
+function formatDistanceKm(km?: number | null): string {
+  if (km == null || !Number.isFinite(km)) return ''
+  if (km < 1) return `${Math.round(km * 1000)} m`
+  return `${km.toFixed(1)} km`
 }
 
 function CoverageSection({
@@ -298,14 +327,21 @@ function CoverageSection({
       )}
 
       {pendingApps.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           {pendingApps.slice(0, 4).map((a) => (
             <li
               key={a.id}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+              className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2"
             >
-              <p className="text-sm font-medium text-ink">{a.applicantName || 'Voluntario'}</p>
-              <p className="text-[11px] text-ink-muted">{formatRangeToReport(a.distanceKm)}</p>
+              <p className="truncate text-[13px] text-ink">
+                <span className="font-medium">{a.applicantName || 'Voluntario'}</span>
+                {a.distanceKm != null && (
+                  <span className="text-ink-muted/60">
+                    {' '}
+                    · {formatDistanceKm(a.distanceKm)}
+                  </span>
+                )}
+              </p>
               {(onApproveApplication || onRejectApplication) && (
                 <div className="mt-2 flex gap-1.5">
                   {onApproveApplication && (
@@ -336,22 +372,25 @@ function CoverageSection({
       )}
 
       {pendingInterests.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-            Reservas parciales
-          </p>
-          <ul className="space-y-2">
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium text-ink-muted/70">Reservas parciales</p>
+          <ul className="space-y-1.5">
             {pendingInterests.slice(0, 4).map((interest) => (
               <li
                 key={interest.id}
-                className="rounded-xl border border-operational/20 bg-operational/[0.04] px-3 py-2"
+                className="rounded-lg border border-operational/20 bg-operational/[0.04] px-3 py-2"
               >
-                <p className="text-sm font-medium text-ink">
-                  {interest.collaboratorName || 'Voluntario'}
-                </p>
-                <p className="text-[11px] text-ink-muted">
-                  Ofrece {interest.quantity} unidad(es)
-                  {interest.distanceKm != null ? ` · ${formatRangeToReport(interest.distanceKm)}` : ''}
+                <p className="truncate text-[13px] text-ink">
+                  <span className="font-medium capitalize">
+                    {interest.collaboratorName || 'Voluntario'}
+                  </span>
+                  <span className="text-ink-muted/70">
+                    {' '}
+                    — {interest.quantity} {interest.quantity === 1 ? 'unidad' : 'unidades'}
+                  </span>
+                  {interest.distanceKm != null && (
+                    <span className="text-ink-muted/60"> · {formatDistanceKm(interest.distanceKm)}</span>
+                  )}
                 </p>
                 {(onApproveInterest || onRejectInterest) && (
                   <div className="mt-2 flex gap-1.5">
