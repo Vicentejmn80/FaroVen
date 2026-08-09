@@ -184,6 +184,12 @@ export class CaseRepository {
     if (error) throw error
   }
 
+  /** Borrado completo vía RPC (gestor): misiones, necesidades, postulaciones y caso. */
+  async deletePermanently(id: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_operational_case', { p_case_id: id })
+    if (error) throw error
+  }
+
   async addEvent(input: CreateEventInput): Promise<CaseDomainEvent> {
     const { data, error } = await supabase
       .from('case_events')

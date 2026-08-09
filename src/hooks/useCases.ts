@@ -55,6 +55,25 @@ export function useArchiveCase() {
   })
 }
 
+export function useDeleteCase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (caseId: string) => caseService.deletePermanently(caseId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missionAssignments] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.volunteerMissions] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.publicNeeds] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseApplications] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.successCases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.coverage] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+    },
+  })
+}
+
 export function useOpenCaseForApplications() {
   const qc = useQueryClient()
   return useMutation({

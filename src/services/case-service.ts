@@ -282,4 +282,8 @@ export const caseService = {
 
     return caseService.transition(caseId, 'archived', actorId, comment)
   },
+
+  async deletePermanently(caseId: string): Promise<void> {
+    return caseRepository.deletePermanently(caseId)
+  },
 }

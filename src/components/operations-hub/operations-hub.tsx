@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, Map as MapIcon } from 'lucide-react'
-import { useCases, useCaseTimeline, useOpenCaseForApplications } from '@/hooks/useCases'
+import { useCases, useCaseTimeline, useOpenCaseForApplications, useDeleteCase } from '@/hooks/useCases'
 import {
   useOperationalPublicNeeds,
   useNeedInterests,
@@ -39,6 +39,7 @@ import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { isCoverageStage, isProgressStage, isReviewStage } from '@/domain/ops-pipeline'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { markCaseEventsViewed } from '@/lib/case-events-viewed-storage'
+import { cleanCaseTitle } from '@/components/operations-hub/case-ops-display'
 import { CommandKpiBar } from './command-kpi-bar'
 import { CaseKanbanBoard } from './case-kanban-board'
 import { CaseDetailDrawer } from './case-detail-drawer'
@@ -59,6 +60,7 @@ export function OperationsHub() {
   const [workspace, setWorkspace] = useState<WorkspaceMode>('pipeline')
   const [viewedTick, setViewedTick] = useState(0)
   const openCallMutation = useOpenCaseForApplications()
+  const deleteCaseMutation = useDeleteCase()
   const transitionMutation = useTransitionCase()
   const assignMutation = useMutation({
     mutationFn: async ({
@@ -262,6 +264,30 @@ export function OperationsHub() {
   const handleCloseDrawer = useCallback(() => {
     setDrawerOpen(false)
   }, [])
+
+  const handleDeleteCase = useCallback(
+    (c: CaseDomain) => {
+      const label = cleanCaseTitle(c.title).headline || c.title
+      if (
+        !window.confirm(
+          `¿Eliminar el caso "${label}" por completo?\n\nSe borrarán misiones, postulaciones y necesidades asociadas. Esta acción no se puede deshacer.`,
+        )
+      ) {
+        return
+      }
+      deleteCaseMutation.mutate(c.id, {
+        onSuccess: () => {
+          if (selectedId === c.id) {
+            setSelectedId(null)
+            setDrawerOpen(false)
+          }
+          showToast('Caso eliminado.', 'success')
+        },
+        onError: (err) => showToast(humanizeSupabaseError(err), 'error'),
+      })
+    },
+    [deleteCaseMutation, selectedId, showToast],
+  )
 
   const handleTransition = useCallback(
     (caseId: string, toStage: PipelineStage, comment?: string) => {
@@ -468,6 +494,8 @@ export function OperationsHub() {
                 pendingVerificationsByCase={pendingVerificationsByCase}
                 missionLiveByCase={missionLiveByCase}
                 unseenMissionEventsByCase={unseenMissionEventsByCase}
+                onDelete={handleDeleteCase}
+                deletingCaseId={deleteCaseMutation.isPending ? deleteCaseMutation.variables ?? null : null}
               />
             </div>
             <div className="hidden w-72 shrink-0 border-l border-white/[0.06] xl:block xl:w-80">

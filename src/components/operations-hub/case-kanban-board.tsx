@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Search } from 'lucide-react'
+import { AlertTriangle, Search, Trash2 } from 'lucide-react'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { OPS_BOARD_COLUMNS, type OpsBoardColumnId } from '@/domain/ops-pipeline'
@@ -43,6 +43,9 @@ interface CaseKanbanBoardProps {
   missionLiveByCase?: Record<string, CaseMissionLive>
   /** Eventos de misión no vistos por el GC. */
   unseenMissionEventsByCase?: Record<string, number>
+  /** Eliminar caso por completo del backend. */
+  onDelete?: (c: CaseDomain) => void
+  deletingCaseId?: string | null
   className?: string
 }
 
@@ -64,6 +67,8 @@ export function CaseKanbanBoard({
   pendingVerificationsByCase = {},
   missionLiveByCase = {},
   unseenMissionEventsByCase = {},
+  onDelete,
+  deletingCaseId = null,
   className,
 }: CaseKanbanBoardProps) {
   const [query, setQuery] = useState('')
@@ -173,6 +178,8 @@ export function CaseKanbanBoard({
                         columnId={col.id}
                         selected={c.id === selectedId}
                         onSelect={() => onSelect(c)}
+                        onDelete={onDelete ? () => onDelete(c) : undefined}
+                        isDeleting={deletingCaseId === c.id}
                         index={i}
                       />
                     ))}
@@ -202,6 +209,8 @@ function KanbanCard({
   columnId,
   selected,
   onSelect,
+  onDelete,
+  isDeleting,
   index,
 }: {
   caseItem: CaseDomain
@@ -213,6 +222,8 @@ function KanbanCard({
   columnId: KanbanColumnId
   selected: boolean
   onSelect: () => void
+  onDelete?: () => void
+  isDeleting?: boolean
   index: number
 }) {
   const resolved = columnId === 'resuelto'
@@ -241,21 +252,25 @@ function KanbanCard({
       : null
 
   return (
-    <motion.button
-      type="button"
-      onClick={onSelect}
+    <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.2) }}
       className={cn(
-        'group relative w-full overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all',
+        'group relative w-full overflow-hidden rounded-xl border transition-all',
         'bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-md',
         selected
           ? 'border-info/40 ring-1 ring-info/25 shadow-[0_0_20px_rgba(56,132,255,0.12)]'
           : 'border-white/[0.08] hover:border-white/[0.14] hover:from-white/[0.09]',
+        isDeleting && 'pointer-events-none opacity-60',
       )}
     >
-      <span className={cn('absolute left-0 top-0 h-full w-[3px]', priority.bar)} />
+      <button
+        type="button"
+        onClick={onSelect}
+        className="relative w-full px-3 py-2.5 text-left"
+      >
+      <span className={cn('pointer-events-none absolute left-0 top-0 h-full w-[3px]', priority.bar)} />
 
       {(showAppBadge || showVerifyBadge || showUnseenBadge) && (
         <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
@@ -377,6 +392,29 @@ function KanbanCard({
       {resolved && (
         <p className="mt-2 pl-[22px] text-[11px] font-medium text-info">✅ Resuelto</p>
       )}
-    </motion.button>
+      </button>
+
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          disabled={isDeleting}
+          className={cn(
+            'absolute bottom-2 right-2 z-20 flex h-7 w-7 items-center justify-center rounded-lg',
+            'border border-white/[0.08] bg-white/[0.06] text-ink-muted transition-colors',
+            'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+            'hover:border-critical/40 hover:bg-critical/15 hover:text-critical',
+            'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-critical/40',
+          )}
+          title="Eliminar caso"
+          aria-label="Eliminar caso"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </motion.div>
   )
 }
