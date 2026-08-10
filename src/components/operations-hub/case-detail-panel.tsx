@@ -16,6 +16,7 @@ import type { MissionAssignment } from '@/domain/mission.types'
 import type { CaseApplicationWithApplicant } from '@/domain/case-application.types'
 import type { CoverageInterest } from '@/domain/public-need.types'
 import { FaroRecommendationPanel } from '@/components/operations-hub/faro-recommendation-panel'
+import { CoverageLivePanel } from '@/components/operations-hub/coverage-live-panel'
 import { CaseDetailTimeline } from '@/components/operations-hub/case-detail-timeline'
 import {
   getPriorityVisual,
@@ -228,6 +229,16 @@ export function CaseDetailPanel({
               )}
             </div>
           </DetailSection>
+
+          {/* COBERTURA DEL CENTRO */}
+          {(caseItem.assignedCenterId ||
+            isCoverageStage(caseItem.pipelineStage) ||
+            inProgress ||
+            caseItem.pipelineStage === PIPELINE_STAGES.AWAITING_CENTER_CONFIRMATION) && (
+            <DetailSection title="Cobertura del centro">
+              <CoverageLivePanel caseData={caseItem} />
+            </DetailSection>
+          )}
 
           {/* TIMELINE DEL CASO */}
           <DetailSection title="Timeline del caso">

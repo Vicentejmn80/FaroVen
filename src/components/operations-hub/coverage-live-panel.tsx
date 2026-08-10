@@ -4,11 +4,26 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { listReservationsByCase } from '@/services/logistics-service'
 import { missionService } from '@/services/mission-service'
+import { supabase } from '@/lib/supabase'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
+import {
+  centerMissionStageLabel,
+  getCenterMissionStage,
+} from '@/domain/center-operations.types'
+import { getResourceLabel } from '@/lib/resource-catalog'
 import { CoverageProgressBar, parseCaseOpsSummary } from '@/components/operations-hub/case-ops-display'
 
+async function resolveCenterName(centerId: string): Promise<string> {
+  for (const table of ['hospitals', 'shelters', 'supply_centers'] as const) {
+    const { data } = await supabase.from(table).select('name').eq('id', centerId).maybeSingle()
+    const name = (data as { name?: string } | null)?.name
+    if (name?.trim()) return name.trim()
+  }
+  return 'Centro asignado'
+}
+
 /**
- * Cobertura en vivo dentro de la ficha operativa — barra de progreso clara.
+ * Cobertura en vivo dentro de la ficha operativa — barra + estado del centro.
  */
 export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
   const { data: reservations = [] } = useQuery({
@@ -24,11 +39,39 @@ export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
       if (!mission) return { activeVolunteers: 0 }
       const assignments = await missionService.getAssignments(mission.id)
       const activeVolunteers = assignments.filter((a) =>
-        ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress'].includes(a.status),
+        ['assigned', 'accepted', 'preparing', 'en_route', 'on_site', 'in_progress'].includes(
+          a.status,
+        ),
       ).length
       return { activeVolunteers }
     },
     staleTime: 6_000,
+  })
+
+  const activeCenterReservation = useMemo(() => {
+    return (
+      reservations.find(
+        (r) =>
+          (r.status === 'ready' || r.status === 'reserved') &&
+          r.resolutionMode !== 'declined',
+      ) ??
+      reservations.find((r) => r.status === 'delivered') ??
+      null
+    )
+  }, [reservations])
+
+  const declinedReservation = useMemo(
+    () => reservations.find((r) => r.resolutionMode === 'declined' || r.status === 'cancelled'),
+    [reservations],
+  )
+
+  const centerId = activeCenterReservation?.centerId ?? declinedReservation?.centerId ?? caseData.assignedCenterId
+
+  const { data: centerName } = useQuery({
+    queryKey: [FARO_QUERY_KEYS.coverage, 'center-name', centerId],
+    queryFn: () => resolveCenterName(centerId!),
+    enabled: Boolean(centerId),
+    staleTime: 60_000,
   })
 
   const stats = useMemo(() => {
@@ -54,8 +97,46 @@ export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
     return { needed, covered, activeVolunteers }
   }, [reservations, missionBundle, caseData])
 
+  const centerStatusLine = useMemo(() => {
+    const name = centerName ?? 'Centro'
+    if (activeCenterReservation) {
+      if (activeCenterReservation.status === 'reserved' && !activeCenterReservation.resolutionMode) {
+        return `Esperando respuesta de ${name}`
+      }
+      if (activeCenterReservation.resolutionMode === 'needs_volunteer') {
+        return `${name} confirmó inventario — necesita voluntario`
+      }
+      const stage = getCenterMissionStage(activeCenterReservation)
+      return `Cubierto por ${name} — Estado: ${centerMissionStageLabel(stage)}`
+    }
+    if (declinedReservation) {
+      return `${name} no puede cubrir ${getResourceLabel(declinedReservation.resourceType)}`
+    }
+    if (caseData.assignedCenterId && caseData.pipelineStage === 'awaiting_center_confirmation') {
+      return `Centro propuesto — esperando confirmación`
+    }
+    return null
+  }, [
+    activeCenterReservation,
+    declinedReservation,
+    centerName,
+    caseData.assignedCenterId,
+    caseData.pipelineStage,
+  ])
+
   return (
     <GlassCard className="!rounded-xl !border-white/[0.08] !bg-white/[0.02] !p-3 !shadow-none space-y-2">
+      {centerStatusLine && (
+        <p
+          className={`text-[13px] font-medium ${
+            declinedReservation && !activeCenterReservation
+              ? 'text-warning'
+              : 'text-operational'
+          }`}
+        >
+          {centerStatusLine}
+        </p>
+      )}
       <CoverageProgressBar current={stats.covered} total={stats.needed} />
       {stats.activeVolunteers > 0 && (
         <p className="text-[12px] text-ink-muted/60">

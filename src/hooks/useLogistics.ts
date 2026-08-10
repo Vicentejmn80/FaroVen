@@ -6,6 +6,7 @@ import {
   listReservationsByCase,
   markReservationReady,
   markReservationDelivered,
+  advanceCenterMissionStage,
   requestInventoryFromCenter,
   respondToInventoryRequest,
   reserveInventoryByVolunteer,
@@ -133,11 +134,11 @@ export function useRespondToInventoryRequest() {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       if (vars.resolutionMode === 'needs_volunteer') {
-        showToast('Centro confirmó inventario, pero requiere voluntario para retiro/entrega.', 'info')
+        showToast('Inventario confirmado. Se notificó al GC para abrir convocatoria.', 'info')
       } else if (vars.resolutionMode === 'declined') {
-        showToast('Centro rechazó la solicitud. Revisa otro centro.', 'warning')
+        showToast('Solicitud rechazada. El gestor fue notificado.', 'info')
       } else {
-        showToast('Respuesta del centro registrada.', 'success')
+        showToast('Aceptado. La misión aparece en tu panel de Misiones.', 'success')
       }
     },
     onError: (err: Error) => showToast(err.message, 'warning'),
@@ -170,6 +171,38 @@ export function useRequestInventoryFromCenter() {
       showToast('Solicitud enviada al centro — esperando preparación.', 'success')
     },
     onError: (err: Error) => showToast(err.message || 'No se pudo solicitar el inventario.', 'warning'),
+  })
+}
+
+/** Coordinador: Preparando → En camino (misión interna del centro). */
+export function useAdvanceCenterMission() {
+  const qc = useQueryClient()
+  const { showToast } = useToast()
+  return useMutation({
+    mutationFn: async (input: {
+      reservationId: string
+      toStage: 'en_route' | 'delivered'
+      actorId?: string
+      actorName?: string
+      deliveredQuantity?: number
+    }) => {
+      try {
+        return await advanceCenterMissionStage(input)
+      } catch (err) {
+        throw new Error(humanizeSupabaseError(err))
+      }
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
+      if (vars.toStage === 'en_route') {
+        showToast('Misión avanzada a En camino.', 'success')
+      } else {
+        showToast('Entrega marcada. El gestor puede validar el caso.', 'success')
+      }
+    },
+    onError: (err: Error) => showToast(err.message, 'warning'),
   })
 }
 

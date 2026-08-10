@@ -130,6 +130,9 @@ export type InventoryReservationStatus = 'reserved' | 'ready' | 'delivered' | 'r
 
 export type CenterResolutionMode = 'brigade' | 'delivery' | 'needs_volunteer' | 'declined'
 
+/** Timeline simplificado de misiones internas del centro (brigada / delivery). */
+export type CenterMissionStage = 'preparing' | 'en_route' | 'delivered'
+
 export interface InventoryReservation {
   id: string
   missionId: string
@@ -152,6 +155,26 @@ export interface InventoryReservation {
   acceptedAt?: Date | null
   createdAt: Date
   updatedAt: Date
+}
+
+export function getCenterMissionStage(
+  reservation: Pick<InventoryReservation, 'status' | 'resolutionMeta'>,
+): CenterMissionStage {
+  if (reservation.status === 'delivered') return 'delivered'
+  const raw = reservation.resolutionMeta?.centerMissionStage
+  if (raw === 'en_route') return 'en_route'
+  return 'preparing'
+}
+
+export function centerMissionStageLabel(stage: CenterMissionStage): string {
+  switch (stage) {
+    case 'preparing':
+      return 'Preparando'
+    case 'en_route':
+      return 'En camino'
+    case 'delivered':
+      return 'Entregado'
+  }
 }
 
 export type InventoryMovementReason =

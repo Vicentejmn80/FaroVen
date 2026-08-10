@@ -215,8 +215,6 @@ export async function respondToInventoryRequest(input: {
   })
 
   const caseData = await caseService.getById(caseId)
-  const title = caseData?.title ?? caseId.slice(0, 8)
-
   if (input.resolutionMode === 'declined') {
     const reservation = await logisticsRepository.saveCoordinatorResolution({
       reservationId: input.reservationId,
@@ -238,6 +236,8 @@ export async function respondToInventoryRequest(input: {
       }
     }
 
+    const centerName = await getCenterDisplayName(centerId)
+    const resourceLabel = getResourceLabel(reservation.resourceType)
     const { data: managers } = await supabase
       .from('profiles')
       .select('id')
@@ -249,8 +249,8 @@ export async function respondToInventoryRequest(input: {
         opsNotify({
           to: String(m.id),
           type: 'center_rejected',
-          title: 'Centro rechazó la solicitud',
-          message: `El centro no puede cumplir con "${title}". Revisa inventario o selecciona otro centro.`,
+          title: 'Centro no puede cubrir',
+          message: `${centerName} no puede cubrir ${resourceLabel}. Asigna otro centro o publica la necesidad.`,
           priority: 'high',
           actionUrl: OPS_ACTION_URLS.gcCase(caseId),
           icon: 'x',
@@ -302,7 +302,7 @@ export async function respondToInventoryRequest(input: {
           to: String(m.id),
           type: 'center_needs_volunteer',
           title: 'El centro necesita voluntario',
-          message: `El centro confirma inventario para "${title}", pero requiere voluntario para retirar y entregar.`,
+          message: `El centro confirma inventario para el caso, pero requiere voluntario para retirar y entregar.`,
           priority: 'high',
           actionUrl: OPS_ACTION_URLS.gcCase(caseId),
           icon: 'users',
@@ -341,7 +341,10 @@ export async function respondToInventoryRequest(input: {
   const reservation = await logisticsRepository.saveCoordinatorResolution({
     reservationId: input.reservationId,
     resolutionMode: input.resolutionMode,
-    resolutionMeta: input.meta ?? {},
+    resolutionMeta: {
+      ...(input.meta ?? {}),
+      centerMissionStage: 'preparing',
+    },
     coordinatorNotes: input.notes,
     status: 'ready',
   })
@@ -352,14 +355,15 @@ export async function respondToInventoryRequest(input: {
     .in('role', ['case_manager', 'regional_admin', 'super_admin'])
     .eq('status', 'active')
 
-  const modeLabel = input.resolutionMode === 'brigade' ? 'brigada propia' : 'delivery propio'
+  const centerName = await getCenterDisplayName(centerId)
+  const resourceLabel = getResourceLabel(reservation.resourceType)
   await Promise.all(
     (managers ?? []).map((m) =>
       opsNotify({
         to: String(m.id),
         type: 'center_accepted_request',
-        title: 'Centro aceptó solicitud',
-        message: `El centro resolverá "${title}" con ${modeLabel}.`,
+        title: 'Centro aceptó cobertura',
+        message: `${centerName} aceptó cubrir ${resourceLabel}. Estado: Preparando.`,
         priority: 'normal',
         actionUrl: OPS_ACTION_URLS.gcCase(caseId),
         icon: 'package',
@@ -393,6 +397,57 @@ export async function respondToInventoryRequest(input: {
     },
   })
 
+  return reservation
+}
+
+/**
+ * Coordinador avanza la misión interna del centro: Preparando → En camino → Entregado.
+ * Usa resolution_meta.centerMissionStage (sin cambiar el esquema de status).
+ */
+export async function advanceCenterMissionStage(input: {
+  reservationId: string
+  toStage: 'en_route' | 'delivered'
+  actorId?: string
+  actorName?: string
+  deliveredQuantity?: number
+}): Promise<InventoryReservation> {
+  const current = await logisticsRepository.findById(input.reservationId)
+  if (!current) throw new Error('Solicitud no encontrada')
+  if (current.status !== 'ready' && current.status !== 'delivered') {
+    throw new Error('Esta misión aún no fue aceptada por el centro')
+  }
+  if (current.resolutionMode === 'declined' || current.resolutionMode === 'needs_volunteer') {
+    throw new Error('Esta solicitud no usa el flujo de misión interna del centro')
+  }
+
+  if (input.toStage === 'en_route') {
+    const reservation = await logisticsRepository.patchResolutionMeta(input.reservationId, {
+      centerMissionStage: 'en_route',
+      enRouteAt: new Date().toISOString(),
+    })
+    logisticsLog('reservation_ready', {
+      entityId: reservation.id,
+      entityType: 'mission',
+      missionId: reservation.missionId,
+      caseId: reservation.caseId,
+      centerId: reservation.centerId,
+      actorId: input.actorId,
+      payload: { centerMissionStage: 'en_route' },
+    })
+    return reservation
+  }
+
+  // delivered
+  const reservation = await markReservationDelivered(
+    input.reservationId,
+    input.actorId,
+    input.actorName,
+    input.deliveredQuantity,
+  )
+  await logisticsRepository.patchResolutionMeta(input.reservationId, {
+    centerMissionStage: 'delivered',
+    deliveredAt: new Date().toISOString(),
+  }).catch(() => null)
   return reservation
 }
 
@@ -515,14 +570,16 @@ export async function markReservationDelivered(
       .select('id')
       .in('role', ['case_manager', 'regional_admin', 'super_admin'])
       .eq('status', 'active')
+    const centerName = await getCenterDisplayName(reservation.centerId)
+    const resourceLabel = getResourceLabel(reservation.resourceType)
     await Promise.all(
       (managers ?? []).map((m) =>
         opsNotify({
           to: String(m.id),
           type: 'resources_delivered',
-          title: 'Centro entregó recursos',
-          message: `Se entregaron ${reservation.quantity} × ${getResourceLabel(reservation.resourceType)} al voluntario.`,
-          priority: 'normal',
+          title: 'Entrega lista para validar',
+          message: `${centerName} marcó entregado ${reservation.quantity} × ${resourceLabel}. Valida y cierra el caso.`,
+          priority: 'high',
           actionUrl: reservation.caseId
             ? OPS_ACTION_URLS.gcCase(reservation.caseId)
             : OPS_ACTION_URLS.gcBandeja(),
@@ -584,16 +641,19 @@ async function notifyCenterCoordinatorOfReservation(reservation: InventoryReserv
       ? await getVolunteerDisplayName(reservation.volunteerId)
       : null
     const resourceLabel = getResourceLabel(reservation.resourceType)
-    const missionTitle = mission.title
+    const location =
+      mission.location?.address?.split(',')[0]?.trim() ||
+      mission.location?.zone ||
+      mission.title
     const body = volunteerName
-      ? `${volunteerName} recogerá ${reservation.quantity} ${resourceLabel} para "${missionTitle}".`
-      : `El Gestor solicita preparar ${reservation.quantity} × ${resourceLabel} para "${missionTitle}".`
+      ? `${volunteerName} reservó ${reservation.quantity} × ${resourceLabel} para ${location}.`
+      : `Nueva solicitud: ${resourceLabel} para ${location}`
 
     for (const userId of coordinators) {
       await opsNotify({
         to: userId,
         type: 'logistics_preparation',
-        title: 'Solicitud de recursos del Gestor',
+        title: volunteerName ? 'Reserva de voluntario' : 'Nueva solicitud logística',
         message: body,
         priority: 'high',
         actionUrl: OPS_ACTION_URLS.coordinatorNeeds(),
@@ -615,6 +675,15 @@ async function notifyCenterCoordinatorOfReservation(reservation: InventoryReserv
   } catch {
     console.warn('[FARO_LOGISTICS] No se pudo notificar al coordinador del centro')
   }
+}
+
+async function getCenterDisplayName(centerId: string): Promise<string> {
+  for (const table of ['hospitals', 'shelters', 'supply_centers'] as const) {
+    const { data } = await supabase.from(table).select('name').eq('id', centerId).maybeSingle()
+    const name = (data as { name?: string } | null)?.name
+    if (name?.trim()) return name.trim()
+  }
+  return 'El centro'
 }
 
 export async function getCenterCoordinatorUserIds(centerId: string): Promise<string[]> {

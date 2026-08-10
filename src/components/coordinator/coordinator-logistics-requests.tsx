@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, Clock, MapPin, Package } from 'lucide-react'
+import { ClipboardList, MapPin } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { useAuth } from '@/store/auth-context'
@@ -14,13 +14,18 @@ import { getResourceLabel } from '@/lib/resource-catalog'
 import { cn, timeAgo } from '@/lib/utils'
 import type { CenterResolutionMode, InventoryReservation } from '@/domain/center-operations.types'
 
-type ResolutionStep = 'can_fulfill' | 'choose' | 'details'
+type ResolutionStep = 'choose' | 'details'
 
 /**
  * Solicitudes del GC → respuesta operativa del centro.
- * Flujo: ¿cómo resolverá? → brigada | delivery | necesita voluntario.
+ * Sí dispongo → elige brigada / delivery / voluntario.
+ * No dispongo → rechaza, libera reserva y notifica al GC.
  */
-export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () => void }) {
+export function CoordinatorLogisticsRequests({
+  onPrepared,
+}: {
+  onPrepared?: () => void
+}) {
   const { user } = useAuth()
   const { assignment } = useCoordinatorAssignment()
   const { data: reservations = [], isLoading } = useCenterReservations(assignment?.siteId)
@@ -28,6 +33,8 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
   const respond = useRespondToInventoryRequest()
   const acceptVolunteer = useAcceptVolunteerInventoryReservation()
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [declineError, setDeclineError] = useState<string | null>(null)
+  const [decliningId, setDecliningId] = useState<string | null>(null)
 
   const missionById = useMemo(() => {
     const map = new Map<string, (typeof missions)[number]>()
@@ -62,14 +69,59 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
 
   const active = requests.find((r) => r.id === activeId) ?? null
 
+  const handleDecline = async (reservation: InventoryReservation) => {
+    if (!user?.id) return
+    setDeclineError(null)
+    setDecliningId(reservation.id)
+    try {
+      await respond.mutateAsync({
+        reservationId: reservation.id,
+        actorId: user.id,
+        resolutionMode: 'declined',
+      })
+      setActiveId(null)
+    } catch (err) {
+      setDeclineError(err instanceof Error ? err.message : 'No se pudo rechazar la solicitud')
+    } finally {
+      setDecliningId(null)
+    }
+  }
+
+  const handleAcceptConfirm = async (payload: {
+    resolutionMode: CenterResolutionMode
+    notes?: string
+    meta?: {
+      responsibleName?: string
+      etaMinutes?: number
+      driverName?: string
+      driverPhone?: string
+      vehicle?: string
+    }
+  }) => {
+    if (!user?.id || !activeId) return
+    await respond.mutateAsync({
+      reservationId: activeId,
+      actorId: user.id,
+      ...payload,
+    })
+    setActiveId(null)
+    if (payload.resolutionMode === 'brigade' || payload.resolutionMode === 'delivery') {
+      onPrepared?.()
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold text-ink">Solicitudes del Gestor</h2>
+        <h2 className="text-sm font-semibold text-ink">Solicitudes</h2>
         <p className="text-xs text-ink-subtle">
-          Indica cómo resolverá tu centro cada solicitud del GC.
+          Responde si tu centro puede cubrir cada pedido del Gestor de Casos.
         </p>
       </div>
+
+      {declineError && (
+        <p className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical">{declineError}</p>
+      )}
 
       {volunteerPending.length > 0 && (
         <div className="space-y-3">
@@ -113,55 +165,67 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
           <ClipboardList className="mx-auto mb-2 h-8 w-8 text-ink-faint" />
           <p className="text-sm text-ink-subtle">Sin solicitudes pendientes</p>
           <p className="mt-1 text-xs text-ink-faint">
-            Cuando el GC asigne inventario de tu centro a una misión, aparecerá aquí.
+            Cuando el GC asigne inventario de tu centro a un caso, aparecerá aquí.
           </p>
         </GlassCard>
       ) : requests.length === 0 ? null : (
         <div className="space-y-3">
           {requests.map((r) => {
             const mission = missionById.get(r.missionId)
-            const eta = mission?.eta ? new Date(mission.eta) : null
+            const resourceLabel = getResourceLabel(r.resourceType)
+            const location =
+              mission?.location?.address?.split(',')[0]?.trim() ||
+              mission?.location?.zone ||
+              mission?.title ||
+              `Caso ${r.caseId.slice(0, 8)}`
+            const busy = decliningId === r.id || (respond.isPending && decliningId === r.id)
+
             return (
               <GlassCard key={r.id} className="space-y-3 !p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-ink">
-                      {mission?.title ?? `Caso ${r.caseId.slice(0, 8)}`}
+                      🔵 {resourceLabel} — {location}
                     </p>
                     <p className="mt-0.5 text-xs text-ink-muted">
-                      {r.quantity} × {getResourceLabel(r.resourceType)}
+                      {r.quantity} {r.quantity === 1 ? 'unidad' : 'unidades'} · {timeAgo(r.createdAt)}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning">
+                  <span className="shrink-0 rounded-full bg-critical/15 px-2 py-0.5 text-[10px] font-medium text-critical">
                     Pendiente
                   </span>
                 </div>
 
-                <div className="space-y-1 text-[11px] text-ink-faint">
-                  {mission?.location?.zone && (
-                    <p className="flex items-center gap-1.5">
-                      <MapPin className="h-3 w-3" />
-                      {mission.location.address ?? mission.location.zone}
-                    </p>
-                  )}
-                  <p className="flex items-center gap-1.5">
-                    <Clock className="h-3 w-3" />
-                    {eta && !Number.isNaN(eta.getTime())
-                      ? `ETA · ${eta.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}`
-                      : `Solicitado ${timeAgo(r.createdAt)}`}
+                {mission?.location?.zone && (
+                  <p className="flex items-center gap-1.5 text-[11px] text-ink-faint">
+                    <MapPin className="h-3 w-3" />
+                    {mission.location.address ?? mission.location.zone}
                   </p>
-                </div>
+                )}
 
-                <EmergencyButton
-                  variant="primary"
-                  size="md"
-                  className="w-full"
-                  disabled={!user?.id}
-                  onClick={() => setActiveId(r.id)}
-                >
-                  <Package className="h-4 w-4" />
-                  Responder solicitud
-                </EmergencyButton>
+                <div className="flex gap-2">
+                  <EmergencyButton
+                    variant="primary"
+                    size="sm"
+                    className="flex-1"
+                    disabled={!user?.id || busy}
+                    onClick={() => {
+                      setDeclineError(null)
+                      setActiveId(r.id)
+                    }}
+                  >
+                    Sí dispongo
+                  </EmergencyButton>
+                  <EmergencyButton
+                    variant="glass"
+                    size="sm"
+                    className="flex-1"
+                    disabled={!user?.id || busy}
+                    onClick={() => void handleDecline(r)}
+                  >
+                    {busy ? 'Rechazando…' : 'No dispongo'}
+                  </EmergencyButton>
+                </div>
               </GlassCard>
             )
           })}
@@ -172,17 +236,13 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
         <ResolutionModal
           reservation={active}
           missionTitle={missionById.get(active.missionId)?.title}
+          location={
+            missionById.get(active.missionId)?.location?.zone ||
+            missionById.get(active.missionId)?.location?.address
+          }
           busy={respond.isPending}
           onClose={() => setActiveId(null)}
-          onConfirm={async (payload) => {
-            await respond.mutateAsync({
-              reservationId: active.id,
-              actorId: user.id,
-              ...payload,
-            })
-            setActiveId(null)
-            onPrepared?.()
-          }}
+          onConfirm={handleAcceptConfirm}
         />
       )}
     </div>
@@ -192,12 +252,14 @@ export function CoordinatorLogisticsRequests({ onPrepared }: { onPrepared?: () =
 function ResolutionModal({
   reservation,
   missionTitle,
+  location,
   busy,
   onClose,
   onConfirm,
 }: {
   reservation: InventoryReservation
   missionTitle?: string
+  location?: string
   busy: boolean
   onClose: () => void
   onConfirm: (payload: {
@@ -212,7 +274,7 @@ function ResolutionModal({
     }
   }) => Promise<void>
 }) {
-  const [step, setStep] = useState<ResolutionStep>('can_fulfill')
+  const [step, setStep] = useState<ResolutionStep>('choose')
   const [mode, setMode] = useState<CenterResolutionMode | null>(null)
   const [notes, setNotes] = useState('')
   const [responsibleName, setResponsibleName] = useState('')
@@ -232,17 +294,13 @@ function ResolutionModal({
     if (!mode) return
     setError(null)
 
-    if (mode === 'brigade') {
-      if (!responsibleName.trim()) {
-        setError('Indica el nombre del responsable.')
-        return
-      }
+    if (mode === 'brigade' && !responsibleName.trim()) {
+      setError('Indica el nombre del responsable.')
+      return
     }
-    if (mode === 'delivery') {
-      if (!driverName.trim() || !driverPhone.trim()) {
-        setError('Indica conductor y teléfono.')
-        return
-      }
+    if (mode === 'delivery' && (!driverName.trim() || !driverPhone.trim())) {
+      setError('Indica conductor y teléfono.')
+      return
     }
 
     try {
@@ -267,71 +325,21 @@ function ResolutionModal({
       <GlassCard className="w-full max-w-md space-y-4 !p-4">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
-            Respuesta operativa
+            Cómo cubrirás
           </p>
           <h3 className="mt-1 text-sm font-semibold text-ink">
-            {missionTitle ?? `Caso ${reservation.caseId.slice(0, 8)}`}
+            {getResourceLabel(reservation.resourceType)}
+            {location ? ` — ${location}` : ''}
           </h3>
           <p className="mt-0.5 text-xs text-ink-muted">
-            {reservation.quantity} × {getResourceLabel(reservation.resourceType)}
+            {reservation.quantity} unidades
+            {missionTitle ? ` · ${missionTitle}` : ''}
           </p>
         </div>
 
-        {step === 'can_fulfill' && (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-ink">¿Tu centro puede cumplir con esta solicitud?</p>
-
-            <div className="flex gap-2">
-              <EmergencyButton
-                variant="primary"
-                size="sm"
-                className="flex-1"
-                disabled={busy}
-                onClick={() => {
-                  setStep('choose')
-                  setError(null)
-                }}
-              >
-                Sí, podemos
-              </EmergencyButton>
-              <EmergencyButton
-                variant="glass"
-                size="sm"
-                className="flex-1"
-                disabled={busy}
-                onClick={() =>
-                  void onConfirm({
-                    resolutionMode: 'declined',
-                    notes: notes.trim() || undefined,
-                  })
-                }
-              >
-                No podemos
-              </EmergencyButton>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
-                Observaciones (opcional)
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder='Ej. "Inventario desactualizado / sin capacidad operativa hoy."'
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-ink"
-              />
-            </div>
-
-            <EmergencyButton variant="glass" size="sm" className="w-full" onClick={onClose}>
-              Cancelar
-            </EmergencyButton>
-          </div>
-        )}
-
         {step === 'choose' && (
           <div className="space-y-2">
-            <p className="text-xs text-ink-muted">¿Cómo resolverá esta solicitud?</p>
+            <p className="text-xs text-ink-muted">¿Cómo resolverá tu centro esta solicitud?</p>
             {(
               [
                 ['brigade', 'Tenemos brigada propia'],
@@ -379,7 +387,12 @@ function ResolutionModal({
               <>
                 <Field label="Nombre del conductor" value={driverName} onChange={setDriverName} />
                 <Field label="Teléfono" value={driverPhone} onChange={setDriverPhone} />
-                <Field label="Vehículo" value={vehicle} onChange={setVehicle} placeholder="Moto / Camioneta" />
+                <Field
+                  label="Vehículo"
+                  value={vehicle}
+                  onChange={setVehicle}
+                  placeholder="Moto / Camioneta"
+                />
                 <Field
                   label="Tiempo estimado (min)"
                   value={etaMinutes}
@@ -390,7 +403,8 @@ function ResolutionModal({
             )}
             {mode === 'needs_volunteer' && (
               <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-                Se notificará al Gestor de Casos para abrir postulaciones. Tu centro entregará los recursos cuando el voluntario llegue.
+                Se notificará al Gestor para abrir convocatoria. Tu centro preparará los recursos
+                cuando el voluntario llegue.
               </p>
             )}
 

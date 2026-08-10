@@ -64,17 +64,23 @@ export function CoordinatorWorkspace({
     () => reservations.filter((r) => r.status === 'reserved' && !r.resolutionMode).length,
     [reservations],
   )
-  const readyMissionsCount = useMemo(
-    () => reservations.filter((r) => r.status === 'ready').length,
+  /** Misiones aceptadas (brigada/delivery) esperando avance del coordinador. */
+  const activeMissionsCount = useMemo(
+    () =>
+      reservations.filter(
+        (r) =>
+          r.status === 'ready' &&
+          (r.resolutionMode === 'brigade' || r.resolutionMode === 'delivery'),
+      ).length,
     [reservations],
   )
   const moduleBadges = useMemo(
     () =>
       ({
         needs: pendingRequestsCount,
-        missions: readyMissionsCount,
+        missions: activeMissionsCount,
       }) as Partial<Record<(typeof LOGISTICS_MODULES)[number]['id'], number>>,
-    [pendingRequestsCount, readyMissionsCount],
+    [pendingRequestsCount, activeMissionsCount],
   )
 
   useRealtimeSync({
@@ -146,7 +152,11 @@ export function CoordinatorWorkspace({
                   <Icon className="h-4 w-4" strokeWidth={active ? 2.25 : 1.75} />
                   {item.label}
                   {badge > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 text-[9px] font-semibold text-white">
+                    <span
+                      className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold text-white ${
+                        item.id === 'missions' ? 'bg-warning text-[#1a1200]' : 'bg-critical'
+                      }`}
+                    >
                       {badge > 9 ? '9+' : badge}
                     </span>
                   )}

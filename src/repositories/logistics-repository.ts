@@ -306,12 +306,48 @@ export class LogisticsRepository {
     return mapReservationRow(data as InventoryReservationRow)
   }
 
+  /** Fusiona campos en resolution_meta (p. ej. etapa de misión del centro). */
+  async patchResolutionMeta(
+    reservationId: string,
+    metaPatch: Record<string, unknown>,
+  ): Promise<InventoryReservation> {
+    const { data: current, error: readError } = await supabase
+      .from('inventory_reservations')
+      .select('*')
+      .eq('id', reservationId)
+      .single()
+    if (readError) throw readError
+    const prev = (current?.resolution_meta as Record<string, unknown> | null) ?? {}
+    const { data, error } = await supabase
+      .from('inventory_reservations')
+      .update({
+        resolution_meta: { ...prev, ...metaPatch },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', reservationId)
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapReservationRow(data as InventoryReservationRow)
+  }
+
   async updateReservationStatusByMission(missionId: string, status: InventoryReservationStatus): Promise<void> {
     const { error } = await supabase
       .from('inventory_reservations')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('mission_id', missionId)
     if (error) throw error
+  }
+
+  async findById(reservationId: string): Promise<InventoryReservation | null> {
+    const { data, error } = await supabase
+      .from('inventory_reservations')
+      .select('*')
+      .eq('id', reservationId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return mapReservationRow(data as InventoryReservationRow)
   }
 
   async findByMissionId(missionId: string): Promise<InventoryReservation | null> {
