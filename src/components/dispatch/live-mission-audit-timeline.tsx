@@ -28,6 +28,9 @@ const CASE_EVENT_HUMAN: Record<string, { title: string; icon: string }> = {
   case_reopened: { title: 'Caso reabierto', icon: '↺' },
   case_closed: { title: 'Archivado en historial', icon: '📦' },
   case_dismissed: { title: 'Caso descartado', icon: '✕' },
+  /** Eventos de centro (brigada/delivery) — distintos de voluntario (🚗). */
+  center_dispatched: { title: 'Brigada en camino', icon: '🚚' },
+  center_delivered: { title: 'Centro confirmó entrega', icon: '✅' },
 }
 
 const MISSION_EVENT_ICON: Record<string, string> = {
@@ -78,6 +81,8 @@ export function buildAuditTimeline(input: {
   for (const e of input.caseEvents ?? []) {
     // Evitar ruido: si hay misión, omitir saltos internos duplicados con el mismo comment genérico de validación
     const meta = CASE_EVENT_HUMAN[e.eventType]
+    const isCenterLogistics =
+      e.eventType === 'center_dispatched' || e.eventType === 'center_delivered'
     const title = meta?.title ?? e.comment ?? e.eventType
     // Preferir comment humano si no es el placeholder de resolución en cascada
     const isCascadeNoise =
@@ -85,13 +90,24 @@ export function buildAuditTimeline(input: {
       e.eventType !== 'case_resolved'
     if (isCascadeNoise) continue
 
+    const displayTitle = isCenterLogistics
+      ? e.comment?.trim() || meta?.title || e.eventType
+      : e.comment && !isCascadeNoise && e.eventType !== 'case_submitted'
+        ? (meta?.title ?? e.comment)
+        : title
+
+    const sourceTag =
+      typeof e.metadata?.source === 'string'
+        ? e.metadata.source
+        : isCenterLogistics
+          ? 'center'
+          : undefined
+
     items.push({
       id: `c-${e.id}`,
       at: e.createdAt,
-      title: e.comment && !isCascadeNoise && e.eventType !== 'case_submitted'
-        ? (meta?.title ?? e.comment)
-        : title,
-      detail: undefined,
+      title: displayTitle,
+      detail: sourceTag === 'center' ? 'Centro' : undefined,
       icon: meta?.icon ?? '●',
       source: 'case',
     })

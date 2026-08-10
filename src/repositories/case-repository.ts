@@ -40,6 +40,7 @@ export interface CreateEventInput {
   toStage?: string
   actorId?: string
   comment?: string
+  metadata?: Record<string, unknown>
 }
 
 export class CaseRepository {
@@ -201,6 +202,7 @@ export class CaseRepository {
         // '' no es UUID: PostgREST responde 400 y corta el approve a mitad.
         actor_id: asOptionalUuid(input.actorId) ?? null,
         comment: input.comment ?? null,
+        metadata: input.metadata ?? {},
       })
       .select('*')
       .single()

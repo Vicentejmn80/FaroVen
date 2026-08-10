@@ -48,6 +48,7 @@ import { PendingRoleBanner } from '@/components/auth/pending-role-banner'
 import { useReports } from '@/hooks/useReports'
 import { usePendingApplicationsQueue } from '@/hooks/useCaseApplications'
 import { usePublicNeeds } from '@/hooks/usePublicNeeds'
+import { useCenterReservations } from '@/hooks/useLogistics'
 import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import { CreateCaseHintSheet } from '@/components/case-manager/create-case-hint-sheet'
@@ -191,6 +192,9 @@ export function AppShell() {
   const { data: inboxReports = [] } = useReports()
   const { data: pendingApplications = [] } = usePendingApplicationsQueue(isCaseManager)
   const { data: publicNeeds = [] } = usePublicNeeds()
+  const { data: centerReservations = [] } = useCenterReservations(
+    isCoordinatorOps ? assignment?.siteId : undefined,
+  )
 
   const pendingReportCount = useMemo(
     () => (isCaseManager ? inboxReports.filter((r) => r.status === 'new').length : 0),
@@ -207,6 +211,14 @@ export function AppShell() {
         ? publicNeeds.filter((n) => n.callStatus === 'open' && n.visibilityStatus === 'public').length
         : 0,
     [isVolunteer, publicNeeds],
+  )
+  /** Solicitudes logísticas sin responder (status reserved, sin resolutionMode). */
+  const coordinatorPendingRequestsCount = useMemo(
+    () =>
+      isCoordinatorOps
+        ? centerReservations.filter((r) => r.status === 'reserved' && !r.resolutionMode).length
+        : 0,
+    [isCoordinatorOps, centerReservations],
   )
 
   useRealtimeSync({
@@ -226,9 +238,12 @@ export function AppShell() {
         if (tab.id === 'needs' && volunteerOpenNeedsCount > 0) {
           return { ...tab, badge: volunteerOpenNeedsCount }
         }
+        if (tab.id === 'ops' && coordinatorPendingRequestsCount > 0) {
+          return { ...tab, badge: coordinatorPendingRequestsCount }
+        }
         return tab
       }),
-    [tabs, gcInboxBadgeCount, volunteerOpenNeedsCount],
+    [tabs, gcInboxBadgeCount, volunteerOpenNeedsCount, coordinatorPendingRequestsCount],
   )
 
   const mobileTabsWithBadges = useMemo(
@@ -240,9 +255,12 @@ export function AppShell() {
         if (tab.id === 'needs' && volunteerOpenNeedsCount > 0) {
           return { ...tab, badge: volunteerOpenNeedsCount }
         }
+        if (tab.id === 'ops' && coordinatorPendingRequestsCount > 0) {
+          return { ...tab, badge: coordinatorPendingRequestsCount }
+        }
         return tab
       }),
-    [mobileTabs, gcInboxBadgeCount, volunteerOpenNeedsCount],
+    [mobileTabs, gcInboxBadgeCount, volunteerOpenNeedsCount, coordinatorPendingRequestsCount],
   )
 
   const actionsMode = isCoordinatorOps

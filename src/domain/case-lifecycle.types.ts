@@ -41,6 +41,10 @@ export const CASE_EVENT_TYPES = {
   CASE_CENTER_CONFIRMED: 'case_center_confirmed',
   CASE_STALE_ARCHIVED: 'case_stale_archived',
   CASE_UNABLE_TO_ASSIGN: 'case_unable_to_assign',
+  /** Brigada/delivery del centro en camino (distinto de voluntario). */
+  CENTER_DISPATCHED: 'center_dispatched',
+  /** Centro confirmó entrega de unidades. */
+  CENTER_DELIVERED: 'center_delivered',
 } as const
 
 export type CaseEventType = typeof CASE_EVENT_TYPES[keyof typeof CASE_EVENT_TYPES]
@@ -288,6 +292,8 @@ export interface CaseDomainEvent {
   toStage?: PipelineStage
   actorId?: string
   comment?: string
+  /** Extensible: p. ej. { source: 'center', center_id, coordinator_id, quantity }. */
+  metadata?: Record<string, unknown>
   createdAt: Date
 }
 

@@ -435,10 +435,22 @@ export async function advanceCenterMissionStage(input: {
       actorId: input.actorId,
       payload: { centerMissionStage: 'en_route' },
     })
+    await writeCenterCaseTimelineEvent({
+      reservation,
+      eventType: 'center_dispatched',
+      actorId: input.actorId,
+      quantity: reservation.quantity,
+    }).catch((err) => {
+      console.warn('[FARO_LOGISTICS] No se pudo escribir center_dispatched en case_events', err)
+    })
     return reservation
   }
 
   // delivered
+  const deliveredQty =
+    input.deliveredQuantity != null
+      ? Math.max(1, Math.min(current.quantity, Math.floor(input.deliveredQuantity)))
+      : current.quantity
   const reservation = await markReservationDelivered(
     input.reservationId,
     input.actorId,
@@ -449,7 +461,47 @@ export async function advanceCenterMissionStage(input: {
     centerMissionStage: 'delivered',
     deliveredAt: new Date().toISOString(),
   }).catch(() => null)
+  await writeCenterCaseTimelineEvent({
+    reservation,
+    eventType: 'center_delivered',
+    actorId: input.actorId,
+    quantity: deliveredQty,
+  }).catch((err) => {
+    console.warn('[FARO_LOGISTICS] No se pudo escribir center_delivered en case_events', err)
+  })
   return reservation
+}
+
+/** Escribe en case_events para que el GC vea avances de brigada/delivery del centro. */
+async function writeCenterCaseTimelineEvent(input: {
+  reservation: InventoryReservation
+  eventType: 'center_dispatched' | 'center_delivered'
+  actorId?: string
+  quantity: number
+}): Promise<void> {
+  if (!input.reservation.caseId) return
+  const { caseRepository } = await import('@/repositories/case-repository')
+  const centerName = await getCenterDisplayName(input.reservation.centerId)
+  const comment =
+    input.eventType === 'center_dispatched'
+      ? `Brigada de ${centerName} en camino`
+      : `${centerName} confirmó entrega de ${input.quantity} unidades`
+
+  await caseRepository.addEvent({
+    caseId: input.reservation.caseId,
+    eventType: input.eventType,
+    actorId: input.actorId,
+    comment,
+    metadata: {
+      source: 'center',
+      center_id: input.reservation.centerId,
+      coordinator_id: input.actorId ?? null,
+      quantity: input.quantity,
+      reservation_id: input.reservation.id,
+      mission_id: input.reservation.missionId,
+      center_name: centerName,
+    },
+  })
 }
 
 /** Marcar recursos preparados (coordinador). */

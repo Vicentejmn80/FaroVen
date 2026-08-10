@@ -149,7 +149,26 @@ export interface CaseRow {
 export interface CaseEventRow {
   id: string
   case_id: string
-  event_type: 'case_submitted' | 'case_review_started' | 'case_validated' | 'case_info_requested' | 'case_info_received' | 'case_assigned' | 'case_accepted' | 'case_attention_started' | 'case_resolved' | 'case_reopened' | 'case_closed' | 'case_dismissed' | 'case_opened_for_applications' | 'case_stale_archived' | 'case_unable_to_assign'
+  event_type:
+    | 'case_submitted'
+    | 'case_review_started'
+    | 'case_validated'
+    | 'case_info_requested'
+    | 'case_info_received'
+    | 'case_assigned'
+    | 'case_accepted'
+    | 'case_attention_started'
+    | 'case_resolved'
+    | 'case_reopened'
+    | 'case_closed'
+    | 'case_dismissed'
+    | 'case_opened_for_applications'
+    | 'case_awaiting_center'
+    | 'case_center_confirmed'
+    | 'case_stale_archived'
+    | 'case_unable_to_assign'
+    | 'center_dispatched'
+    | 'center_delivered'
   from_stage: string | null
   to_stage: string | null
   actor_id: string | null

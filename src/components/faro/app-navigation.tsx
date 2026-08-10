@@ -131,6 +131,16 @@ export function getMobilePrimaryTabs(role: FaroRole, email?: string | null): Nav
   if (isVolunteerRole(role)) return getNavigationTabs(role, email).slice(0, 4)
   if (isCaseManagerRole(role)) return [...CASE_MANAGER_MOBILE]
 
+  // Coordinador: Mi Centro visible en bottom nav (badge de solicitudes pendientes).
+  if (canAccessCoordinatorPanel(role)) {
+    return [
+      { id: 'map', label: 'Mapa', icon: Map },
+      { id: 'ops', label: 'Mi Centro', icon: Building2 },
+      { id: 'reports', label: 'Reportar', icon: FileText },
+      { id: 'profile', label: 'Perfil', icon: User },
+    ]
+  }
+
   const tabs = getNavigationTabs(role, email)
   const baseIds = new Set(CITIZEN_BASE.map((t) => t.id))
   const primary = tabs.filter((t) => baseIds.has(t.id)).slice(0, 4)
@@ -245,6 +255,8 @@ function shortMobileLabel(tab: NavTab): string {
       return 'Perfil'
     case 'reports':
       return 'Reportar'
+    case 'ops':
+      return 'Centro'
     default:
       return tab.label
   }

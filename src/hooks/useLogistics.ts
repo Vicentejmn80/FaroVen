@@ -74,6 +74,8 @@ export function useCenterReservations(centerId: string | undefined) {
     },
     enabled: !!centerId,
     staleTime: 8_000,
+    /** Fallback si Realtime no llega — awareness de solicitudes pendientes. */
+    refetchInterval: centerId ? 30_000 : false,
   })
 }
 
@@ -201,6 +203,7 @@ export function useAdvanceCenterMission() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.inventoryReservations] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.cases] })
+      qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.caseEvents] })
       qc.invalidateQueries({ queryKey: [FARO_QUERY_KEYS.missions] })
       if (vars.toStage === 'en_route') {
         showToast('Misión avanzada a En camino.', 'success')

@@ -392,6 +392,7 @@ export function caseEventRowToDomain(row: CaseEventRow): CaseDomainEvent {
     toStage: (row.to_stage ?? undefined) as PipelineStage | undefined,
     actorId: row.actor_id ?? undefined,
     comment: row.comment ?? undefined,
+    metadata: row.metadata ?? {},
     createdAt: new Date(row.created_at),
   }
 }
