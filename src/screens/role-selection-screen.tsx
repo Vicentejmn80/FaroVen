@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Building2, ClipboardList, HeartHandshake, Loader2 } from 'lucide-react'
 import { FaroIcon } from '@/components/brand/faro-icon'
+import { RegistrationOnboarding } from '@/components/auth/registration-onboarding'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { textareaClassName } from '@/components/faro/flow-sheet'
+import {
+  hasCompletedRegistrationOnboarding,
+  markRegistrationOnboardingCompleted,
+} from '@/lib/onboarding-storage'
 import { FARO_ROLE_LABELS, FARO_ROLES, type RequestableNetworkRole } from '@/lib/roles'
 import { humanizeSupabaseError } from '@/lib/supabase-errors'
 import { cn } from '@/lib/utils'
@@ -47,6 +52,7 @@ const ROLE_CARDS: Array<{
  */
 export function RoleSelectionScreen() {
   const {
+    user,
     selectVolunteerRole,
     requestNetworkRole,
     pendingAuthIntent,
@@ -57,6 +63,14 @@ export function RoleSelectionScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmedBanner, setConfirmedBanner] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(() =>
+    user?.id ? !hasCompletedRegistrationOnboarding(user.id) : false,
+  )
+
+  useEffect(() => {
+    if (!user?.id) return
+    setShowOnboarding(!hasCompletedRegistrationOnboarding(user.id))
+  }, [user?.id])
 
   useEffect(() => {
     if (pendingAuthIntent === 'email_confirmation') {
@@ -64,6 +78,11 @@ export function RoleSelectionScreen() {
       clearPendingAuthIntent()
     }
   }, [pendingAuthIntent, clearPendingAuthIntent])
+
+  const finishOnboarding = () => {
+    markRegistrationOnboardingCompleted(user?.id)
+    setShowOnboarding(false)
+  }
 
   const selectedCard = ROLE_CARDS.find((c) => c.id === choice)
   const needsReason = selectedCard && !selectedCard.immediate
@@ -88,6 +107,10 @@ export function RoleSelectionScreen() {
     } finally {
       setBusy(false)
     }
+  }
+
+  if (showOnboarding) {
+    return <RegistrationOnboarding onComplete={finishOnboarding} />
   }
 
   return (
