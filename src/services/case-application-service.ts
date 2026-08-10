@@ -180,6 +180,15 @@ export const caseApplicationService = {
     }
 
     const volunteerId = await volunteerRepository.ensureIdForUser(app.applicantId)
+    const { resolveCaseResource } = await import('@/domain/case-resource')
+    const { getCaseCoverage } = await import('@/services/case-coverage-service')
+    const resource = resolveCaseResource(caseData)
+    const offeredQty = Math.max(1, app.quantityOffered ?? 1)
+    const coverageBefore = await getCaseCoverage(app.caseId)
+    const remainingBefore = Math.max(
+      0,
+      coverageBefore.required - coverageBefore.covered - coverageBefore.committed,
+    )
 
     // 1) Crear misión + assignment PRIMERO (falla aquí = caso sigue esperando postulantes)
     const mission = await ensureMissionForApprovedApplication({
@@ -188,6 +197,9 @@ export const caseApplicationService = {
       actorId,
       applicantProfileId: app.applicantId,
       pickupCenterId,
+      quantity: offeredQty,
+      resourceType: resource.resourceType,
+      itemId: resource.itemId,
     })
 
     // 1b) Mision de recursos: reservar inventario y completar mision con centro de recogida
@@ -195,8 +207,8 @@ export const caseApplicationService = {
       const logistics = caseData.metadata?.logistics as
         | { originCenterId?: string; resourceType?: string; quantity?: number }
         | undefined
-      const resourceType = logistics?.resourceType ?? caseData.category ?? 'agua'
-      const quantity = Math.max(1, logistics?.quantity ?? caseData.affectedCount ?? 1)
+      const resourceType = logistics?.resourceType ?? resource.resourceType
+      const quantity = Math.max(1, logistics?.quantity ?? offeredQty)
       const centerId = pickupCenterId ?? logistics?.originCenterId
       if (centerId) {
         await prepareMissionWithReservation({
@@ -217,7 +229,7 @@ export const caseApplicationService = {
       volunteerId: app.applicantId,
       from: stage,
       to: 'assigned',
-      payload: { caseId: app.caseId, missionId: mission.id },
+      payload: { caseId: app.caseId, missionId: mission.id, quantity: offeredQty },
     })
 
     // 2) Transicionar caso a assigned
@@ -226,20 +238,23 @@ export const caseApplicationService = {
         app.caseId,
         'assigned',
         actorId,
-        'Postulación aprobada — voluntario asignado al caso',
+        `Postulación aprobada — ${offeredQty} u asignadas`,
       )
     } else {
       await ensureAssignedEvent(app.caseId, actorId)
     }
 
-    // 3) Marcar postulación aprobada + rechazar el resto
+    // 3) Marcar postulación aprobada
     if (app.status !== 'approved') {
       await caseApplicationRepository.updateStatus(applicationId, 'approved')
     }
-    await rejectSiblingApplications(app.caseId, applicationId)
 
-    // 4) Cerrar radar (convocatoria) — no completa la necesidad hasta validación
-    await closeRadarForCase(app.caseId)
+    // Cobertura acumulativa: solo cerrar radar / rechazar hermanos si esta oferta cubre lo que falta
+    const fillsRemaining = offeredQty >= Math.max(1, remainingBefore)
+    if (fillsRemaining) {
+      await rejectSiblingApplications(app.caseId, applicationId)
+      await closeRadarForCase(app.caseId)
+    }
 
     // 5) Notificar voluntario — abre modal de misión asignada
     await opsNotify({
@@ -364,17 +379,33 @@ async function ensureMissionForApprovedApplication(input: {
   actorId: string
   applicantProfileId: string
   pickupCenterId?: string
+  quantity?: number
+  resourceType?: string
+  itemId?: string
 }): Promise<Mission> {
-  const existing = await missionRepository.findByCaseId(input.caseData.id)
+  const qty = Math.max(1, input.quantity ?? 1)
   const volunteerId = await volunteerRepository.ensureIdForUser(input.applicantProfileId)
+  const missions = await missionRepository.listByCaseId(input.caseData.id)
+  const reusable = missions.find(
+    (m) =>
+      m.status !== 'verified' &&
+      m.status !== 'completed' &&
+      m.status !== 'cancelled' &&
+      m.status !== 'archived',
+  )
 
-  if (existing) {
-    const assignments = await missionRepository.listAssignments(existing.id)
+  if (reusable) {
+    const assignments = await missionRepository.listAssignments(reusable.id)
     const alreadyAssigned = assignments.some((a) => a.volunteerId === volunteerId)
     if (!alreadyAssigned) {
-      await missionService.assignVolunteer(existing.id, volunteerId, input.actorId)
+      await missionService.assignVolunteer(reusable.id, volunteerId, input.actorId, qty)
     }
-    return existing
+    await missionRepository.update(reusable.id, {
+      resourceQty: qty,
+      resourceType: input.resourceType,
+      itemId: input.itemId ?? null,
+    } as Partial<Mission>)
+    return reusable
   }
 
   const created = await missionService.create({
@@ -393,13 +424,19 @@ async function ensureMissionForApprovedApplication(input: {
     caseId: input.caseData.id,
     createdBy: input.actorId,
     pickupCenterId: input.pickupCenterId,
+    resourceType: input.resourceType,
+    resourceQty: qty,
   })
+
+  if (input.itemId) {
+    await missionRepository.update(created.mission.id, { itemId: input.itemId } as Partial<Mission>)
+  }
 
   missionLog('mission_created', {
     entityId: created.mission.id,
     actorId: input.actorId,
     volunteerId: input.applicantProfileId,
-    payload: { caseId: input.caseData.id },
+    payload: { caseId: input.caseData.id, quantity: qty },
   })
 
   const { pipelineLog } = await import('@/lib/operational-log')
@@ -408,10 +445,10 @@ async function ensureMissionForApprovedApplication(input: {
     entityType: 'mission',
     actorId: input.actorId,
     volunteerId: input.applicantProfileId,
-    payload: { caseId: input.caseData.id },
+    payload: { caseId: input.caseData.id, quantity: qty },
   })
 
-  await missionService.assignVolunteer(created.mission.id, volunteerId, input.actorId)
+  await missionService.assignVolunteer(created.mission.id, volunteerId, input.actorId, qty)
   return created.mission
 }
 

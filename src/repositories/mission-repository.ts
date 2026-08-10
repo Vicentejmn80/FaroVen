@@ -52,6 +52,8 @@ function missionDomainToRow(domain: Partial<Mission>): Record<string, unknown> {
   if (domain.cancelledAt !== undefined) row.cancelled_at = domain.cancelledAt?.toISOString() ?? null
   if (domain.cancellationReason !== undefined) row.cancellation_reason = domain.cancellationReason ?? null
   if (domain.itemId !== undefined) row.item_id = domain.itemId ?? null
+  if (domain.resourceType !== undefined) row.resource_type = domain.resourceType ?? null
+  if (domain.resourceQty !== undefined) row.resource_qty = domain.resourceQty ?? null
   if (domain.updatedAt !== undefined) row.updated_at = domain.updatedAt.toISOString()
   return row
 }
@@ -62,6 +64,7 @@ function mapMissionAssignmentRow(row: MissionAssignmentRow): MissionAssignment {
     missionId: row.mission_id,
     volunteerId: row.volunteer_id,
     status: row.status as MissionAssignment['status'],
+    quantity: Math.max(1, Number(row.quantity ?? 1) || 1),
     assignedAt: new Date(row.assigned_at),
     respondedAt: row.responded_at ? new Date(row.responded_at) : undefined,
     preparingAt: row.preparing_at ? new Date(row.preparing_at) : undefined,
@@ -256,12 +259,14 @@ export class MissionRepository {
   async createAssignment(input: {
     missionId: string
     volunteerId: string
+    quantity?: number
   }): Promise<MissionAssignment> {
     const { data, error } = await supabase
       .from('mission_assignments')
       .insert({
         mission_id: input.missionId,
         volunteer_id: input.volunteerId,
+        quantity: Math.max(1, input.quantity ?? 1),
       })
       .select('*')
       .single()
@@ -272,6 +277,7 @@ export class MissionRepository {
   async updateAssignment(id: string, input: Partial<MissionAssignment>): Promise<MissionAssignment> {
     const row: Record<string, unknown> = {}
     if (input.status) row.status = input.status
+    if (input.quantity !== undefined) row.quantity = Math.max(1, input.quantity)
     if (input.respondedAt) row.responded_at = input.respondedAt.toISOString()
     if (input.preparingAt) row.preparing_at = input.preparingAt.toISOString()
     if (input.arrivedAt) row.arrived_at = input.arrivedAt.toISOString()

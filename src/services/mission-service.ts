@@ -327,8 +327,17 @@ export const missionService = {
     return result
   },
 
-  async assignVolunteer(missionId: string, volunteerId: string, actorId?: string): Promise<MissionAssignment> {
-    const assignment = await missionRepository.createAssignment({ missionId, volunteerId })
+  async assignVolunteer(
+    missionId: string,
+    volunteerId: string,
+    actorId?: string,
+    quantity = 1,
+  ): Promise<MissionAssignment> {
+    const assignment = await missionRepository.createAssignment({
+      missionId,
+      volunteerId,
+      quantity: Math.max(1, quantity),
+    })
     const mission = await missionRepository.findById(missionId)
     await announce(assignment, 'volunteer_assigned', { volunteer: true, operators: false })
     if (mission) {
@@ -550,28 +559,57 @@ export const missionService = {
 
     const mission = await missionRepository.findById(updated.missionId)
     if (mission?.caseId) {
-      try {
-        await resolveCaseBestEffort(mission.caseId, verifiedBy, 'Misión validada — caso resuelto')
-      } catch {
-        // La transición puede no estar permitida desde la etapa actual.
-      }
+      const {
+        getCaseCoverage,
+        syncPublicNeedCoveredQuantity,
+        reopenCoverageIfNeeded,
+      } = await import('@/services/case-coverage-service')
+      const coverage = await getCaseCoverage(mission.caseId)
+      await syncPublicNeedCoveredQuantity(mission.caseId, coverage.covered)
 
-      const recorded = await recordSuccessCase({
-        mission,
-        verifiedBy,
-        volunteerId: updated.volunteerId,
-        evidenceUrls: updated.evidenceUrls,
-        durationMinutes: durationInMinutes(mission.createdAt, updated.completedAt ?? mission.completedAt),
-        responseMinutes: durationInMinutes(mission.createdAt, updated.respondedAt),
-      })
-      if (recorded) await announce(updated, 'success_case_created', { volunteer: true, operators: true })
+      if (coverage.complete) {
+        try {
+          await resolveCaseBestEffort(
+            mission.caseId,
+            verifiedBy,
+            `Cobertura completa (${coverage.covered}/${coverage.required}) — caso resuelto`,
+          )
+        } catch {
+          // La transición puede no estar permitida desde la etapa actual.
+        }
+
+        const recorded = await recordSuccessCase({
+          mission,
+          verifiedBy,
+          volunteerId: updated.volunteerId,
+          evidenceUrls: updated.evidenceUrls,
+          durationMinutes: durationInMinutes(
+            mission.createdAt,
+            updated.completedAt ?? mission.completedAt,
+          ),
+          responseMinutes: durationInMinutes(mission.createdAt, updated.respondedAt),
+        })
+        if (recorded) {
+          await announce(updated, 'success_case_created', { volunteer: true, operators: true })
+        }
+      } else {
+        // Cobertura parcial: el caso NO se cierra; se reabre convocatoria
+        const caseData = await caseService.getById(mission.caseId)
+        if (caseData) {
+          await reopenCoverageIfNeeded(caseData, verifiedBy, coverage.remaining)
+        }
+      }
     }
 
     missionLog('mission_verified', {
       entityId: updated.missionId,
       actorId: verifiedBy,
       volunteerId: updated.volunteerId,
-      payload: { assignmentId, caseId: mission?.caseId },
+      payload: {
+        assignmentId,
+        caseId: mission?.caseId,
+        quantity: updated.quantity,
+      },
     })
     missionLog('mission_closed', {
       entityId: updated.missionId,

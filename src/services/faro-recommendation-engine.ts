@@ -1,6 +1,6 @@
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { recommendCenters } from '@/services/logistics-service'
-import { resolveCatalogKey, getResourceLabel } from '@/lib/resource-catalog'
+import { resolveCaseResource } from '@/domain/case-resource'
 
 export type CenterDispatchMode = 'brigade' | 'needs_volunteers' | 'mixed'
 
@@ -25,6 +25,8 @@ export interface FaroRecommendationResult {
   resourceLabel: string
   requiredQty: number
   centers: FaroCenterRecommendation[]
+  /** true si no hay centros con el recurso solicitado. */
+  noMatchingInventory: boolean
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -38,14 +40,12 @@ function dispatchModeLabel(mode: CenterDispatchMode): string {
 }
 
 function scoreDispatchMode(mode: CenterDispatchMode): number {
-  // Preferencia suave: todos siguen siendo válidos.
   if (mode === 'brigade') return 10
   if (mode === 'mixed') return 6
   return 2
 }
 
 function scoreOperationalMode(mode: string): number {
-  // Basado en `operational_mode` existente (active/limited/saturated/etc).
   if (mode === 'active') return 10
   if (mode === 'limited') return 5
   if (mode === 'emergency_only') return -5
@@ -62,8 +62,8 @@ function computeScore(input: {
   dispatchMode: CenterDispatchMode
 }): number {
   const qtyRatio = input.requiredQty > 0 ? input.available / input.requiredQty : 1
-  const qtyScore = 35 * clamp(qtyRatio, 0, 1.5) // 0..52.5
-  const distanceScore = 40 - clamp(input.distanceKm, 0, 15) * 2.4 // 40..4
+  const qtyScore = 35 * clamp(qtyRatio, 0, 1.5)
+  const distanceScore = 40 - clamp(input.distanceKm, 0, 15) * 2.4
   const opScore = scoreOperationalMode(input.operationalMode)
   const dispatchScore = scoreDispatchMode(input.dispatchMode)
   const raw = qtyScore + distanceScore + opScore + dispatchScore
@@ -71,19 +71,16 @@ function computeScore(input: {
 }
 
 /**
- * Motor FARO (reglas): recomienda centros usando inventario + distancia + estado operativo
- * y modo de despacho (si está disponible).
- *
- * NOTA: `dispatchMode` se resuelve desde `CenterRecommendation.operationalMode` si aún no existe
- * una columna real; al introducir `dispatch_mode` en DB, el mapper puede poblarla sin romper el motor.
+ * Motor FARO: recomienda solo centros con el recurso EXACTO del caso.
+ * No usa fallback a "agua" cuando el recurso no está en catálogo.
  */
 export async function buildFaroRecommendations(caseData: CaseDomain): Promise<FaroRecommendationResult> {
-  const resourceType = resolveCatalogKey(caseData.category) ?? 'agua'
-  const requiredQty = Math.max(1, caseData.affectedCount || 1)
-  const resourceLabel = getResourceLabel(resourceType)
+  const resource = resolveCaseResource(caseData)
 
   const centers = await recommendCenters({
-    resourceType,
+    itemId: resource.itemId,
+    resourceType: resource.resourceType,
+    resourceLabel: resource.resourceLabel,
     minQty: 1,
     missionLat: caseData.location.lat,
     missionLng: caseData.location.lng,
@@ -97,7 +94,7 @@ export async function buildFaroRecommendations(caseData: CaseDomain): Promise<Fa
         ? rawDispatch
         : 'mixed'
     const score = computeScore({
-      requiredQty,
+      requiredQty: resource.requiredQty,
       available: c.available,
       distanceKm: c.distanceKm,
       operationalMode: c.operationalMode,
@@ -114,19 +111,19 @@ export async function buildFaroRecommendations(caseData: CaseDomain): Promise<Fa
       dispatchModeLabel: dispatchModeLabel(dispatchMode),
       score,
       matchPct: score,
-      resourceType,
-      resourceLabel,
-      requiredQty,
+      resourceType: resource.resourceType,
+      resourceLabel: resource.resourceLabel,
+      requiredQty: resource.requiredQty,
     } satisfies FaroCenterRecommendation
   })
 
   enriched.sort((a, b) => b.score - a.score)
 
   return {
-    resourceType,
-    resourceLabel,
-    requiredQty,
+    resourceType: resource.resourceType,
+    resourceLabel: resource.resourceLabel,
+    requiredQty: resource.requiredQty,
     centers: enriched,
+    noMatchingInventory: enriched.length === 0,
   }
 }
-

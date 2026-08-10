@@ -12,7 +12,7 @@ import { useTransitionCase, useStartCaseReview } from '@/hooks/useCaseMutations'
 import { assignCaseWithDispatchRules, canOpenRadarForCase, resolveCenterDispatchMode } from '@/services/faro-assignment-service'
 import { humanizeSupabaseError } from '@/lib/supabase-errors'
 import { useRequestInventoryFromCenter } from '@/hooks/useLogistics'
-import { resolveCatalogKey } from '@/lib/resource-catalog'
+import { resolveCaseResource } from '@/domain/case-resource'
 import { useToast } from '@/store/toast-context'
 import { FARO_QUERY_KEYS } from '@/hooks/query-keys'
 import {
@@ -42,6 +42,7 @@ import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { markCaseEventsViewed } from '@/lib/case-events-viewed-storage'
 import { cleanCaseTitle } from '@/components/operations-hub/case-ops-display'
 import { CommandKpiBar } from './command-kpi-bar'
+import { useCasesCoverageMap } from '@/hooks/useCaseCoverage'
 import { CaseKanbanBoard } from './case-kanban-board'
 import { CaseDetailDrawer } from './case-detail-drawer'
 import { OpsMapPanel } from './ops-map-panel'
@@ -172,6 +173,8 @@ export function OperationsHub() {
   const { data: interests = [] } = useNeedInterests(selectedNeedId)
 
   const sortedCases = useMemo(() => sortCasesByUrgency(opsCases), [opsCases])
+  const caseIdsForCoverage = useMemo(() => sortedCases.map((c) => c.id), [sortedCases])
+  const { data: coverageByCase = {} } = useCasesCoverageMap(caseIdsForCoverage)
   const mapCases = useMemo(
     () => sortedCases.filter((c) => isActiveStage(c.pipelineStage)),
     [sortedCases],
@@ -307,6 +310,7 @@ export function OperationsHub() {
       if (!selectedCase || !user?.id) return
       const tip = inventoryTips.find((t) => t.centerId === centerId)
 
+      const resource = resolveCaseResource(selectedCase)
       if (tip) {
         assignMutation.mutate({
           caseData: selectedCase,
@@ -314,10 +318,10 @@ export function OperationsHub() {
           actorId: user.id,
           inventoryTip: {
             available: tip.available,
-            resourceType: resolveCatalogKey(selectedCase.category) ?? 'agua',
+            resourceType: resource.resourceType,
             quantity: Math.max(
               1,
-              Math.min(tip.available, reco?.minQty ?? selectedCase.affectedCount ?? 1),
+              Math.min(tip.available, reco?.minQty ?? resource.requiredQty),
             ),
           },
         })
@@ -336,13 +340,14 @@ export function OperationsHub() {
   const handleUseInventory = useCallback(() => {
     const tip = inventoryTips[0]
     if (!selectedCase || !user?.id || !tip) return
+    const resource = resolveCaseResource(selectedCase)
     requestInventory.mutate({
       caseData: selectedCase,
       centerId: tip.centerId,
-      resourceType: resolveCatalogKey(selectedCase.category) ?? 'agua',
+      resourceType: resource.resourceType,
       quantity: Math.max(
         1,
-        Math.min(tip.available, reco?.minQty ?? selectedCase.affectedCount ?? 1),
+        Math.min(tip.available, reco?.minQty ?? resource.requiredQty),
       ),
       actorId: user.id,
     })
@@ -497,6 +502,7 @@ export function OperationsHub() {
                 pendingVerificationsByCase={pendingVerificationsByCase}
                 missionLiveByCase={missionLiveByCase}
                 unseenMissionEventsByCase={unseenMissionEventsByCase}
+                coverageByCase={coverageByCase}
                 onDelete={handleDeleteCase}
                 deletingCaseId={deleteCaseMutation.isPending ? deleteCaseMutation.variables ?? null : null}
               />

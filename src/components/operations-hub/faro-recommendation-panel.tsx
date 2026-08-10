@@ -11,18 +11,28 @@ import { cn } from '@/lib/utils'
 export function FaroRecommendationPanel({
   caseData,
   onAssignCenter,
+  onOpenVolunteerCall,
   /** Si hay centros viables, prioriza centro antes que convocatoria voluntaria. */
   centerFirst = true,
   className,
 }: {
   caseData: CaseDomain
   onAssignCenter?: (centerId: string) => void
+  /** CTA cuando no hay centros con el recurso. */
+  onOpenVolunteerCall?: () => void
   centerFirst?: boolean
   className?: string
 }) {
   const enabled = Boolean(caseData?.id && caseData.location?.lat && caseData.location?.lng)
   const { data, isLoading } = useQuery({
-    queryKey: [FARO_QUERY_KEYS.coverage, 'faro-reco', caseData.id, caseData.pipelineStage],
+    queryKey: [
+      FARO_QUERY_KEYS.coverage,
+      'faro-reco',
+      caseData.id,
+      caseData.pipelineStage,
+      caseData.category,
+      caseData.itemId,
+    ],
     queryFn: () => buildFaroRecommendations(caseData),
     enabled,
     staleTime: 20_000,
@@ -49,7 +59,7 @@ export function FaroRecommendationPanel({
             </p>
           ) : (
             <p className="mt-0.5 text-[11px] text-ink-muted">
-              Centros sugeridos por reglas operativas.
+              Centros con el recurso solicitado.
             </p>
           )}
         </div>
@@ -58,10 +68,21 @@ export function FaroRecommendationPanel({
       {isLoading || !data ? (
         <p className="text-[11px] text-ink-faint">Calculando recomendaciones…</p>
       ) : centers.length === 0 ? (
-        <p className="text-[11px] text-ink-muted">
-          No hay centros con inventario suficiente. Usa «Publicar necesidad» arriba para convocar
-          voluntarios en el mapa.
-        </p>
+        <div className="space-y-2">
+          <p className="text-[12px] text-warning">
+            No hay centros con este recurso disponible
+            {data.resourceLabel ? ` (${data.resourceLabel})` : ''}.
+          </p>
+          {onOpenVolunteerCall ? (
+            <EmergencyButton variant="primary" size="sm" className="w-full" onClick={onOpenVolunteerCall}>
+              Abrir convocatoria a voluntarios
+            </EmergencyButton>
+          ) : (
+            <p className="text-[11px] text-ink-muted">
+              Usa «Publicar necesidad» en Acciones para convocar voluntarios.
+            </p>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
           {centers.map((c) => (
@@ -72,6 +93,9 @@ export function FaroRecommendationPanel({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-ink">{c.centerName}</p>
+                  <p className="mt-0.5 text-[12px] text-ink/90">
+                    {c.available} unidades de {c.resourceLabel} disponibles
+                  </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-muted">
                     <span className="inline-flex items-center gap-1">
                       <Building2 className="h-3 w-3" />
@@ -85,8 +109,6 @@ export function FaroRecommendationPanel({
                   </p>
                   <p className="mt-0.5 text-[10px] text-ink-faint">
                     Modo logístico: <span className="text-ink-muted">{c.dispatchModeLabel}</span>
-                    <span className="text-ink-faint"> · </span>
-                    Coincidencia: <span className="text-ink-muted">{c.matchPct}%</span>
                   </p>
                 </div>
                 <span className="shrink-0 rounded-lg bg-white/[0.04] px-2 py-1 text-[10px] font-semibold text-ink-muted">
@@ -105,7 +127,7 @@ export function FaroRecommendationPanel({
                   </EmergencyButton>
                 )}
                 {c.dispatchMode === 'brigade' && (
-                  <span className="text-[10px] text-ink-faint self-center">Brigada propia</span>
+                  <span className="self-center text-[10px] text-ink-faint">Brigada propia</span>
                 )}
               </div>
             </div>
@@ -121,4 +143,3 @@ export function FaroRecommendationPanel({
     </GlassCard>
   )
 }
-

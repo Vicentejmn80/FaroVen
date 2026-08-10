@@ -14,7 +14,7 @@ import type { Mission } from '@/domain/mission.types'
 import type { MissionAssignment } from '@/domain/mission.types'
 import { getResourceLabel } from '@/lib/resource-catalog'
 import { cn } from '@/lib/utils'
-import { resolveCatalogKey } from '@/lib/resource-catalog'
+import { resolveCaseResource } from '@/domain/case-resource'
 
 const TIMELINE_ACTIONS: Array<{
   status: string
@@ -88,9 +88,13 @@ export function VolunteerMissionCommand({
     expiresMs != null ? Math.max(0, Math.ceil((expiresMs - Date.now()) / 60000)) : null
 
   const centers = reco?.centers ?? []
+  const caseResource = caseData ? resolveCaseResource(caseData) : null
   const resourceType =
-    mission.resourceType ?? resolveCatalogKey(caseData?.category ?? '') ?? 'agua'
-  const remainingQty = Math.max(1, mission.resourceQty ?? caseData?.affectedCount ?? 1)
+    mission.resourceType ?? caseResource?.resourceType ?? 'recurso'
+  const remainingQty = Math.max(
+    1,
+    mission.resourceQty ?? caseResource?.requiredQty ?? caseData?.affectedCount ?? 1,
+  )
 
   const mapsUrl =
     mission.location.lat != null && mission.location.lng != null

@@ -14,6 +14,7 @@ import type { RegisterSiteType } from '@/repositories/types'
 /** Recomienda centros con stock libre para una mision de recursos. */
 export async function recommendCenters(input: {
   resourceType?: string
+  resourceLabel?: string
   itemId?: string
   minQty: number
   missionLat: number
@@ -599,6 +600,25 @@ export async function markReservationDelivered(
     )
   } catch {
     // non-blocking
+  }
+
+  if (reservation.caseId) {
+    try {
+      const {
+        getCaseCoverage,
+        syncPublicNeedCoveredQuantity,
+        reopenCoverageIfNeeded,
+      } = await import('@/services/case-coverage-service')
+      const coverage = await getCaseCoverage(reservation.caseId)
+      await syncPublicNeedCoveredQuantity(reservation.caseId, coverage.covered)
+      if (!coverage.complete) {
+        const { caseService } = await import('@/services/case-service')
+        const caseData = await caseService.getById(reservation.caseId)
+        if (caseData) await reopenCoverageIfNeeded(caseData, actorId, coverage.remaining)
+      }
+    } catch {
+      // non-blocking
+    }
   }
 
   return reservation

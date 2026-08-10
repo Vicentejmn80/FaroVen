@@ -150,33 +150,25 @@ async function fetchCenterGeo(
 }
 
 export class LogisticsRepository {
-  /** Centros con stock libre (current - reserved) del recurso, ordenados por distancia/stock/modo. */
+  /** Centros con stock libre (current - reserved) del recurso EXACTO, ordenados por distancia/stock/modo. */
   async recommendCenters(input: {
     resourceType?: string
+    resourceLabel?: string
     itemId?: string
     minQty: number
     missionLat: number
     missionLng: number
     limit?: number
   }): Promise<CenterRecommendation[]> {
-    if (!input.itemId && !input.resourceType) return []
+    if (!input.itemId && !input.resourceType && !input.resourceLabel) return []
 
-    let query = supabase
-      .from('center_resources')
-      .select('center_id, current_level, reserved_level, unit, updated_at')
+    const matched = await this.findMatchingCenterResources({
+      itemId: input.itemId,
+      resourceType: input.resourceType,
+      resourceLabel: input.resourceLabel,
+    })
 
-    query = input.itemId ? query.eq('item_id', input.itemId) : query.eq('resource_type', input.resourceType ?? '')
-
-    const { data, error } = await query
-    if (error) throw error
-
-    const rows = ((data ?? []) as Array<{
-      center_id: string
-      current_level: number
-      reserved_level: number | null
-      unit: string
-      updated_at: string
-    }>)
+    const rows = matched
       .map((row) => ({
         centerId: row.center_id,
         available: Math.max(row.current_level - (row.reserved_level ?? 0), 0),
@@ -223,6 +215,83 @@ export class LogisticsRepository {
     })
 
     return recommendations.slice(0, input.limit ?? 5)
+  }
+
+  /**
+   * Busca center_resources por item_id o por resource_type/label del recurso solicitado.
+   * Nunca mezcla recursos distintos (p. ej. alcohol ≠ agua).
+   */
+  private async findMatchingCenterResources(input: {
+    itemId?: string
+    resourceType?: string
+    resourceLabel?: string
+  }): Promise<
+    Array<{
+      center_id: string
+      current_level: number
+      reserved_level: number | null
+      unit: string
+      updated_at: string
+      resource_type: string
+      item_id?: string | null
+    }>
+  > {
+    type Row = {
+      center_id: string
+      current_level: number
+      reserved_level: number | null
+      unit: string
+      updated_at: string
+      resource_type: string
+      item_id?: string | null
+    }
+
+    if (input.itemId) {
+      const { data, error } = await supabase
+        .from('center_resources')
+        .select('center_id, current_level, reserved_level, unit, updated_at, resource_type, item_id')
+        .eq('item_id', input.itemId)
+      if (error) throw error
+      if (data && data.length > 0) return data as Row[]
+    }
+
+    const terms = [
+      input.resourceType,
+      input.resourceLabel,
+      input.resourceType?.replace(/_/g, ' '),
+      input.resourceLabel?.replace(/\s+/g, '_'),
+    ]
+      .filter((t): t is string => Boolean(t?.trim()))
+      .map((t) => t.trim())
+
+    const uniqueTerms = [...new Set(terms.map((t) => t.toLowerCase()))]
+    if (uniqueTerms.length === 0) return []
+
+    // Exacto (case-insensitive) primero
+    for (const term of uniqueTerms) {
+      const { data, error } = await supabase
+        .from('center_resources')
+        .select('center_id, current_level, reserved_level, unit, updated_at, resource_type, item_id')
+        .ilike('resource_type', term)
+      if (error) throw error
+      if (data && data.length > 0) return data as Row[]
+    }
+
+    // Fallback: contiene el término (solo si el término es suficientemente específico)
+    const longTerms = uniqueTerms.filter((t) => t.length >= 4)
+    if (longTerms.length === 0) return []
+
+    const { data: all, error: allError } = await supabase
+      .from('center_resources')
+      .select('center_id, current_level, reserved_level, unit, updated_at, resource_type, item_id')
+      .gt('current_level', 0)
+      .limit(500)
+    if (allError) throw allError
+
+    return ((all ?? []) as Row[]).filter((row) => {
+      const rt = (row.resource_type ?? '').toLowerCase()
+      return longTerms.some((term) => rt === term || rt.includes(term) || term.includes(rt))
+    })
   }
 
   async createReservation(input: {

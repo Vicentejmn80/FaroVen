@@ -4,7 +4,7 @@ import { EmergencyButton } from '@/components/ui/emergency-button'
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { REQUEST_SOURCE_LABELS, OPERATION_TYPE_LABELS } from '@/domain/case-lifecycle.types'
 import { useRecommendedCenters } from '@/hooks/useLogistics'
-import { getResourceLabel, resolveCatalogKey } from '@/lib/resource-catalog'
+import { resolveCaseResource } from '@/domain/case-resource'
 import { cn } from '@/lib/utils'
 
 export type TransferExecutor = 'volunteer' | 'institution' | 'node'
@@ -32,11 +32,13 @@ export function GcDecisionPanel({
   onAssignInstitution,
   onTransfer,
 }: GcDecisionPanelProps) {
-  const catalogKey = resolveCatalogKey(caseData.category) ?? 'agua'
-  const minQty = Math.max(1, caseData.affectedCount || 1)
+  const resource = resolveCaseResource(caseData)
+  const minQty = resource.requiredQty
   const { data: recommended = [], isLoading } = useRecommendedCenters({
-    resourceType: catalogKey,
-    minQty,
+    resourceType: resource.resourceType,
+    resourceLabel: resource.resourceLabel,
+    itemId: resource.itemId,
+    minQty: 1,
     missionLat: caseData.location.lat,
     missionLng: caseData.location.lng,
   })
@@ -68,7 +70,7 @@ export function GcDecisionPanel({
         ) : hasStock ? (
           <>
             <p className="text-[11px] text-operational">
-              Hay stock de {getResourceLabel(catalogKey)} (≥{minQty}) en {candidates.length} nodo(s).
+              Hay stock de {resource.resourceLabel} (≥{minQty}) en {candidates.length} nodo(s).
               Recomendación: <strong>Transferencia</strong>.
             </p>
             <div className="space-y-1.5">
@@ -132,7 +134,7 @@ export function GcDecisionPanel({
                 onTransfer({
                   executor,
                   originCenterId: originId,
-                  resourceType: catalogKey,
+                  resourceType: resource.resourceType,
                 })
               }}
             >
@@ -142,7 +144,7 @@ export function GcDecisionPanel({
         ) : (
           <>
             <p className="text-[11px] text-warning">
-              Sin stock suficiente de {getResourceLabel(catalogKey)} en otros nodos.
+              Sin stock suficiente de {resource.resourceLabel} en otros nodos.
               Recomendación: <strong>Radar de voluntarios</strong> o asignar institución.
             </p>
             <div className="flex gap-2">

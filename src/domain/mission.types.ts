@@ -197,6 +197,8 @@ export interface MissionAssignment {
   missionId: string
   volunteerId: string
   status: MissionAssignmentStatus
+  /** Unidades ofrecidas/comprometidas por este voluntario. */
+  quantity: number
   assignedAt: Date
   respondedAt?: Date
   preparingAt?: Date

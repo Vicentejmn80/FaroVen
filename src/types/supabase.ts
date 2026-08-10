@@ -328,6 +328,7 @@ export interface MissionAssignmentRow {
   mission_id: string
   volunteer_id: string
   status: 'assigned' | 'accepted' | 'rejected' | 'preparing' | 'en_route' | 'on_site' | 'in_progress' | 'completed' | 'verified' | 'cancelled' | 'archived'
+  quantity?: number | null
   assigned_at: string
   responded_at: string | null
   preparing_at: string | null

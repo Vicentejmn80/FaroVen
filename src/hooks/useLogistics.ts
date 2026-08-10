@@ -22,6 +22,8 @@ import { useRealtimeSync } from '@/supabase/use-realtime-sync'
 /** Centros recomendados para una mision de recursos. */
 export function useRecommendedCenters(input: {
   resourceType?: string
+  resourceLabel?: string
+  itemId?: string
   minQty?: number
   missionLat?: number
   missionLng?: number
@@ -29,7 +31,7 @@ export function useRecommendedCenters(input: {
 }) {
   const enabled =
     (input.enabled ?? true) &&
-    Boolean(input.resourceType) &&
+    Boolean(input.resourceType || input.itemId || input.resourceLabel) &&
     input.missionLat != null &&
     input.missionLng != null
   return useQuery({
@@ -37,13 +39,17 @@ export function useRecommendedCenters(input: {
       FARO_QUERY_KEYS.centerResources,
       'recommended',
       input.resourceType,
+      input.resourceLabel,
+      input.itemId,
       input.minQty,
       input.missionLat,
       input.missionLng,
     ],
     queryFn: () =>
       recommendCenters({
-        resourceType: input.resourceType!,
+        resourceType: input.resourceType,
+        resourceLabel: input.resourceLabel,
+        itemId: input.itemId,
         minQty: input.minQty ?? 1,
         missionLat: input.missionLat!,
         missionLng: input.missionLng!,

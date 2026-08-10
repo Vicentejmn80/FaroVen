@@ -24,7 +24,10 @@ import {
   reporterShortLabel,
 } from '@/components/operations-hub/case-ops-display'
 import { parseQuantityOffered } from '@/domain/case-application-quantity'
+import { resolveCaseResource } from '@/domain/case-resource'
+import { useCaseCoverage } from '@/hooks/useCaseCoverage'
 import { useToast } from '@/store/toast-context'
+import { CoverageProgressBar } from '@/components/operations-hub/case-ops-display'
 
 interface CoverageBundle {
   applications: CaseApplicationWithApplicant[]
@@ -111,6 +114,7 @@ export function CaseDetailPanel({
   dense = false,
 }: CaseDetailPanelProps) {
   const { showToast } = useToast()
+  const { data: caseCoverage } = useCaseCoverage(caseItem?.id)
 
   if (!caseItem) {
     return (
@@ -125,7 +129,13 @@ export function CaseDetailPanel({
   const resolved = caseItem.pipelineStage === PIPELINE_STAGES.RESOLVED
   const archived = caseItem.pipelineStage === PIPELINE_STAGES.ARCHIVED
   const inProgress = isProgressStage(caseItem.pipelineStage)
-  const mayPublish = canPublishNeed(caseItem.pipelineStage)
+  const resourceSpec = resolveCaseResource(caseItem)
+  const coverageComplete = caseCoverage?.complete ?? false
+  const needsMoreCoverage = !resolved && !archived && !coverageComplete
+  const mayPublish =
+    canPublishNeed(caseItem.pipelineStage) ||
+    (needsMoreCoverage &&
+      (inProgress || caseItem.pipelineStage === PIPELINE_STAGES.OPEN_FOR_APPLICATIONS))
   const contextMessage = !mayPublish
     ? getPublishContextMessage(caseItem.pipelineStage, caseItem.resolvedAt)
     : null
@@ -134,7 +144,10 @@ export function CaseDetailPanel({
   const prio = priorityLabel(caseItem.priority)
   const ops = parseCaseOpsSummary(caseItem)
   const reporter = reporterShortLabel(caseItem)
-  const resourceTitle = (ops.resource || caseItem.title).toUpperCase()
+  const resourceTitle = (ops.resource || resourceSpec.resourceLabel || caseItem.title).toUpperCase()
+  const requiredQty = caseCoverage?.required ?? resourceSpec.requiredQty
+  const coveredQty = caseCoverage?.covered ?? 0
+  const remainingQty = caseCoverage?.remaining ?? Math.max(0, requiredQty - coveredQty)
 
   const descriptionText =
     ops.narrative &&
@@ -174,6 +187,9 @@ export function CaseDetailPanel({
               <div className="min-w-0 flex-1">
                 <h2 className="text-[15px] font-bold leading-tight tracking-wide text-ink">
                   {resourceTitle}
+                  <span className="ml-1 font-semibold text-ink-muted">
+                    — {requiredQty} {requiredQty === 1 ? 'unidad necesaria' : 'unidades necesarias'}
+                  </span>
                 </h2>
                 <p className="mt-1 text-[13px] text-ink/90">
                   📍 {ops.location || caseItem.zone}
@@ -230,6 +246,38 @@ export function CaseDetailPanel({
             </div>
           </DetailSection>
 
+          {/* COBERTURA ACUMULATIVA */}
+          <DetailSection title="Cobertura">
+            <div className="space-y-3">
+              <CoverageProgressBar current={coveredQty} total={requiredQty} />
+              <p className="text-[12px] text-ink-muted">
+                {coveredQty} de {requiredQty} cubiertas (
+                {Math.min(100, Math.round((coveredQty / Math.max(requiredQty, 1)) * 100))}%)
+              </p>
+              {(caseCoverage?.contributions.length ?? 0) > 0 && (
+                <ul className="space-y-1.5">
+                  {caseCoverage!.contributions.map((c) => (
+                    <li
+                      key={c.assignmentId}
+                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[13px] text-ink"
+                    >
+                      <span className="font-medium capitalize">{c.volunteerName}</span>
+                      <span className="text-ink-muted/80">
+                        {' '}
+                        — {c.quantity} u — {c.label} {c.icon}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {remainingQty > 0 && !resolved && (
+                <p className="text-[12px] font-medium text-warning">
+                  Faltan {remainingQty} {remainingQty === 1 ? 'unidad' : 'unidades'}
+                </p>
+              )}
+            </div>
+          </DetailSection>
+
           {/* COBERTURA DEL CENTRO */}
           {(caseItem.assignedCenterId ||
             isCoverageStage(caseItem.pipelineStage) ||
@@ -274,6 +322,7 @@ export function CaseDetailPanel({
               <FaroRecommendationPanel
                 caseData={caseItem}
                 onAssignCenter={onAssign}
+                onOpenVolunteerCall={onOpenRadar}
                 centerFirst={isReviewStage(caseItem.pipelineStage)}
               />
             </DetailSection>
@@ -299,7 +348,13 @@ export function CaseDetailPanel({
                 </EmergencyButton>
               )}
 
-              {mayPublish && !needPublished && onOpenRadar && canOpenRadar && (
+              {needsMoreCoverage && onOpenRadar && (canOpenRadar || inProgress) && (
+                <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
+                  Publicar necesidad
+                </EmergencyButton>
+              )}
+
+              {mayPublish && !needPublished && !needsMoreCoverage && onOpenRadar && canOpenRadar && (
                 <EmergencyButton variant="primary" size="sm" onClick={onOpenRadar}>
                   {caseItem.pipelineStage === PIPELINE_STAGES.OPEN_FOR_APPLICATIONS
                     ? 'Abrir convocatoria'
@@ -326,7 +381,10 @@ export function CaseDetailPanel({
                     disabled={isVerifying}
                     onClick={() => onVerifyAssignment(a.id)}
                   >
-                    Validar entrega
+                    {coverageComplete ||
+                    coveredQty + (a.quantity ?? 1) >= requiredQty
+                      ? 'Validar y cerrar caso'
+                      : 'Validar entrega'}
                   </EmergencyButton>
                 ))
               )}

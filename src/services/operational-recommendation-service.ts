@@ -1,7 +1,7 @@
 import type { CaseDomain } from '@/domain/case-lifecycle.types'
 import { recommendCenters, type CenterRecommendation } from '@/services/logistics-service'
 import { caseApplicationService } from '@/services/case-application-service'
-import { resolveCatalogKey, getResourceLabel } from '@/lib/resource-catalog'
+import { resolveCaseResource } from '@/domain/case-resource'
 import { supabase } from '@/lib/supabase'
 
 export type RecoPath = 'inventory' | 'volunteers' | 'institution'
@@ -29,9 +29,9 @@ export interface OperationalRecommendation {
 export async function buildOperationalRecommendation(
   caseData: CaseDomain,
 ): Promise<OperationalRecommendation> {
-  const legacyKey = resolveCatalogKey(caseData.category) ?? caseData.category ?? 'agua'
-  let resourceLabel = getResourceLabel(legacyKey)
-  const itemId = caseData.itemId
+  const resource = resolveCaseResource(caseData)
+  let resourceLabel = resource.resourceLabel
+  const itemId = resource.itemId
 
   if (itemId) {
     const { data } = await supabase
@@ -42,13 +42,14 @@ export async function buildOperationalRecommendation(
     if (data?.canonical_name) resourceLabel = String(data.canonical_name)
   }
 
-  const minQty = Math.max(1, caseData.affectedCount || 1)
+  const minQty = resource.requiredQty
 
   const [inventory, applications] = await Promise.all([
     recommendCenters({
       itemId: itemId ?? undefined,
-      resourceType: legacyKey,
-      minQty,
+      resourceType: resource.resourceType,
+      resourceLabel,
+      minQty: 1,
       missionLat: caseData.location.lat,
       missionLng: caseData.location.lng,
       limit: 5,

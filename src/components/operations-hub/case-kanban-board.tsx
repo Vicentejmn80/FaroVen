@@ -8,7 +8,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PublicNeed } from '@/domain/public-need.types'
 import {
   cleanCaseTitle,
-  CoverageProgressDots,
   getPriorityVisual,
   parseCaseOpsSummary,
   reporterShortLabel,
@@ -17,6 +16,8 @@ import {
   buildKanbanTimeline,
   type CaseMissionLive,
 } from '@/domain/kanban-mission-timeline'
+import type { CaseCoverageSnapshot } from '@/services/case-coverage-service'
+import { resolveCaseResource } from '@/domain/case-resource'
 
 /** Columnas del pipeline operacional COE (sin drag — movimiento automático por dominio). */
 export const KANBAN_COLUMNS = OPS_BOARD_COLUMNS.map((col) => ({
@@ -43,6 +44,8 @@ interface CaseKanbanBoardProps {
   missionLiveByCase?: Record<string, CaseMissionLive>
   /** Eventos de misión no vistos por el GC. */
   unseenMissionEventsByCase?: Record<string, number>
+  /** Cobertura acumulativa por caso (unidades verificadas / requeridas). */
+  coverageByCase?: Record<string, CaseCoverageSnapshot>
   /** Eliminar caso por completo del backend. */
   onDelete?: (c: CaseDomain) => void
   deletingCaseId?: string | null
@@ -67,6 +70,7 @@ export function CaseKanbanBoard({
   pendingVerificationsByCase = {},
   missionLiveByCase = {},
   unseenMissionEventsByCase = {},
+  coverageByCase = {},
   onDelete,
   deletingCaseId = null,
   className,
@@ -175,6 +179,7 @@ export function CaseKanbanBoard({
                         pendingApplications={pendingApplicationsByCase[c.id] ?? 0}
                         pendingVerifications={pendingVerificationsByCase[c.id] ?? 0}
                         unseenEvents={unseenMissionEventsByCase[c.id] ?? 0}
+                        coverage={coverageByCase[c.id]}
                         columnId={col.id}
                         selected={c.id === selectedId}
                         onSelect={() => onSelect(c)}
@@ -206,6 +211,7 @@ function KanbanCard({
   pendingApplications,
   pendingVerifications,
   unseenEvents,
+  coverage,
   columnId,
   selected,
   onSelect,
@@ -219,6 +225,7 @@ function KanbanCard({
   pendingApplications: number
   pendingVerifications: number
   unseenEvents: number
+  coverage?: CaseCoverageSnapshot
   columnId: KanbanColumnId
   selected: boolean
   onSelect: () => void
@@ -234,11 +241,18 @@ function KanbanCard({
   const title = ops.resource || headline
   const location = ops.location || subline || caseItem.zone
   const reporter = reporterShortLabel(caseItem)
-  const showCoverage =
-    metrics &&
-    (columnId === 'esperando_cobertura' || columnId === 'en_revision')
-  const volunteersAccepted = metrics?.volunteersAccepted ?? 0
-  const volunteersRequired = metrics?.volunteersRequired ?? 0
+  const resourceSpec = resolveCaseResource(caseItem)
+  const coveredUnits = coverage?.covered ?? metrics?.volunteersAccepted ?? 0
+  const requiredUnits = coverage?.required ?? metrics?.volunteersRequired ?? resourceSpec.requiredQty
+  const showQtyBar =
+    !resolved &&
+    requiredUnits > 0 &&
+    (columnId === 'esperando_cobertura' ||
+      columnId === 'en_progreso' ||
+      columnId === 'en_revision' ||
+      coveredUnits > 0)
+  const qtyPct = Math.min(100, Math.round((coveredUnits / Math.max(requiredUnits, 1)) * 100))
+  const activeVolunteers = coverage?.activeVolunteers ?? 0
 
   const showAppBadge = pendingApplications > 0 && !resolved
   const showVerifyBadge = pendingVerifications > 0 && !resolved
@@ -342,9 +356,29 @@ function KanbanCard({
         </p>
       )}
 
-      {showCoverage && volunteersRequired > 0 && (
-        <div className="mt-2 pl-[22px]">
-          <CoverageProgressDots accepted={volunteersAccepted} required={volunteersRequired} />
+      {showQtyBar && (
+        <div className="mt-2 space-y-1 pl-[22px]">
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all duration-500',
+                  qtyPct >= 100 ? 'bg-operational' : 'bg-gradient-to-r from-info to-operational',
+                )}
+                style={{ width: `${qtyPct}%` }}
+              />
+            </div>
+            <span className="shrink-0 text-[11px] font-semibold tabular-nums text-ink">
+              {qtyPct >= 100 ? '✅ ' : ''}
+              {coveredUnits}/{requiredUnits}
+            </span>
+          </div>
+          {activeVolunteers > 0 && (
+            <p className="text-[11px] text-ink-muted/70">
+              {activeVolunteers}{' '}
+              {activeVolunteers === 1 ? 'voluntario activo' : 'voluntarios activos'}
+            </p>
+          )}
         </div>
       )}
 
