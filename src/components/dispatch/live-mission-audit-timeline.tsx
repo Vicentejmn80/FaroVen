@@ -13,38 +13,39 @@ export interface AuditTimelineItem {
 }
 
 const CASE_EVENT_HUMAN: Record<string, { title: string; icon: string }> = {
-  case_submitted: { title: 'Solicitud recibida', icon: '📥' },
-  case_review_started: { title: 'Gestor inició la revisión', icon: '👀' },
-  case_validated: { title: 'Caso validado', icon: '✓' },
+  case_submitted: { title: 'Reporte recibido', icon: '📥' },
+  case_review_started: { title: 'Caso creado', icon: '✅' },
+  case_validated: { title: 'Caso validado', icon: '✅' },
   case_info_requested: { title: 'Se pidió más información', icon: '💬' },
   case_info_received: { title: 'Información recibida', icon: '💬' },
-  case_opened_for_applications: { title: 'Cobertura abierta', icon: '📢' },
+  case_opened_for_applications: { title: 'Necesidad publicada', icon: '📢' },
   case_awaiting_center: { title: 'Centro propuesto', icon: '🏥' },
-  case_center_confirmed: { title: 'Centro confirmó', icon: '✓' },
-  case_assigned: { title: 'Gestor aceptó la postulación', icon: '✓' },
-  case_accepted: { title: 'Voluntario aceptó la misión', icon: '✓' },
+  case_center_confirmed: { title: 'Centro confirmó', icon: '✅' },
+  case_assigned: { title: 'Postulación aceptada', icon: '✔️' },
+  case_accepted: { title: 'Voluntario aceptó la misión', icon: '✅' },
   case_attention_started: { title: 'Atención en curso', icon: '⚡' },
-  case_resolved: { title: 'Caso validado', icon: '✅' },
+  case_resolved: { title: 'Caso validado y cerrado', icon: '✅' },
   case_reopened: { title: 'Caso reabierto', icon: '↺' },
-  case_closed: { title: 'Caso archivado', icon: '📦' },
+  case_closed: { title: 'Archivado en historial', icon: '📦' },
   case_dismissed: { title: 'Caso descartado', icon: '✕' },
 }
 
 const MISSION_EVENT_ICON: Record<string, string> = {
   application_submitted: '🙋',
-  application_approved: '✓',
-  volunteer_assigned: '✓',
-  volunteer_accepted: '✓',
+  application_approved: '✔️',
+  application_rejected: '✕',
+  volunteer_assigned: '✔️',
+  volunteer_accepted: '✅',
   volunteer_preparing: '🧰',
   volunteer_en_route: '🚗',
   volunteer_on_site: '📍',
   mission_in_progress: '🤝',
   evidence_submitted: '📷',
-  mission_completed: '📦',
+  mission_completed: '✅',
   mission_verified: '✅',
-  eta_delay: '⌛',
+  eta_delay: '⏱️',
   delivery_partial: '📦',
-  awaiting_validation: '⌛',
+  awaiting_validation: '✅',
 }
 
 /** Une eventos de misión y caso en una auditoría humana tipo Uber. */
@@ -57,10 +58,17 @@ export function buildAuditTimeline(input: {
   for (const e of input.missionEvents ?? []) {
     const human = e.description?.trim()
     const fallback = label(MISSION_EVENT_LABELS, e.eventType)
+    let title = human || fallback
+    if (e.eventType === 'volunteer_en_route') title = 'Voluntario en camino'
+    if (e.eventType === 'volunteer_on_site') title = 'Llegó al sitio'
+    if (e.eventType === 'mission_completed') title = 'Entregado (esperando validación)'
+    if (e.eventType === 'eta_delay') {
+      title = human?.includes('retraso') ? human : `Retraso reportado${human ? `: ${human}` : ''}`
+    }
     items.push({
       id: `m-${e.id}`,
       at: e.createdAt,
-      title: human || fallback,
+      title,
       detail: e.actorName,
       icon: MISSION_EVENT_ICON[e.eventType] ?? '●',
       source: 'mission',

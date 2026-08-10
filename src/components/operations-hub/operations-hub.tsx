@@ -37,6 +37,7 @@ import { computeCaseSummary, sortCasesByUrgency, suggestCentersForCase } from '@
 import { operationalRecommendationService } from '@/services/operational-recommendation-service'
 import { isActiveStage } from '@/domain/case-lifecycle.service'
 import { isCoverageStage, isProgressStage, isReviewStage } from '@/domain/ops-pipeline'
+import { canPublishNeed } from '@/domain/case-publish-rules'
 import type { CaseDomain, PipelineStage } from '@/domain/case-lifecycle.types'
 import { markCaseEventsViewed } from '@/lib/case-events-viewed-storage'
 import { cleanCaseTitle } from '@/components/operations-hub/case-ops-display'
@@ -377,6 +378,8 @@ export function OperationsHub() {
     [selectedCase, assignedDispatchMode],
   )
 
+  const mayPublishSelected = selectedCase ? canPublishNeed(selectedCase.pipelineStage) : false
+
   const handlePublishNeed = useCallback(() => {
     if (!selectedCase) return
     if (!radarGate.allowed) {
@@ -536,8 +539,8 @@ export function OperationsHub() {
           onUseInventory={handleUseInventory}
           onStartReview={handleStartReview}
           onVerifyAssignment={handleVerify}
-          onOpenRadar={handlePublishNeed}
-          canOpenRadar={radarGate.allowed && !openCallMutation.isPending}
+          onOpenRadar={mayPublishSelected ? handlePublishNeed : undefined}
+          canOpenRadar={mayPublishSelected && radarGate.allowed && !openCallMutation.isPending}
           radarBlockedReason={radarGate.reason}
           needPublished={selectedNeedPublished}
           onViewOnMap={handleViewOnMap}

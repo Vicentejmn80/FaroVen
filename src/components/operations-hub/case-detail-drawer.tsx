@@ -113,7 +113,9 @@ export function CaseDetailDrawer({
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
                   Ficha operativa
                 </p>
-                <p className="truncate text-sm font-medium text-ink">{caseItem.title}</p>
+                <p className="truncate text-sm font-medium text-ink-muted">
+                  Detalle del caso seleccionado
+                </p>
               </div>
               <EmergencyButton variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar">
                 <X className="h-5 w-5" />
