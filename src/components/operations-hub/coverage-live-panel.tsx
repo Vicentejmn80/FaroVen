@@ -112,8 +112,10 @@ export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
     if (declinedReservation) {
       return `${name} no puede cubrir ${getResourceLabel(declinedReservation.resourceType)}`
     }
-    if (caseData.assignedCenterId && caseData.pipelineStage === 'awaiting_center_confirmation') {
-      return `Centro propuesto — esperando confirmación`
+    if (caseData.assignedCenterId) {
+      return caseData.pipelineStage === 'awaiting_center_confirmation'
+        ? `Centro propuesto — esperando confirmación`
+        : `Centro asignado: ${name}`
     }
     return null
   }, [
@@ -123,6 +125,9 @@ export function CoverageLivePanel({ caseData }: { caseData: CaseDomain }) {
     caseData.assignedCenterId,
     caseData.pipelineStage,
   ])
+
+  // Sin datos reales → quitar el contenedor completo (no "0/x" con barra vacía).
+  if (!centerStatusLine && stats.covered === 0 && stats.activeVolunteers === 0) return null
 
   return (
     <GlassCard className="!rounded-xl !border-white/[0.08] !bg-white/[0.02] !p-3 !shadow-none space-y-2">

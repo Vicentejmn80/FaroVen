@@ -200,6 +200,7 @@ export function LogisticsMapScreen({ onOpenDetail }: LogisticsMapScreenProps) {
               lat={selected.site.lat}
               lng={selected.site.lng}
               label={selected.site.name}
+              mobileHidden
               className="bottom-[calc(max(1rem,env(safe-area-inset-bottom))+7.5rem)]"
             />
           )}

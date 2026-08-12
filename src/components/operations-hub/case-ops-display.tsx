@@ -142,6 +142,8 @@ export function CoverageProgressBar({
   total: number
   className?: string
 }) {
+  // Sin cobertura real → ocultar el contenedor (no mostrar "0/x" con barra vacía).
+  if (!Number.isFinite(current) || current <= 0) return null
   const max = Math.max(total, 1)
   const pct = Math.min(100, Math.round((current / max) * 100))
 

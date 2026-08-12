@@ -479,14 +479,14 @@ export function MissionDetailSheet({
             </span>
           </EmergencyButton>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <EmergencyButton variant="glass" size="sm" className="w-full" onClick={handleShare}>
+        <div className="no-scrollbar flex gap-2 overflow-x-auto">
+          <EmergencyButton variant="glass" size="sm" className="shrink-0" onClick={handleShare}>
             <span className="inline-flex items-center gap-1.5">
               <Share2 className="h-3.5 w-3.5" />
               {OP_LABELS.share}
             </span>
           </EmergencyButton>
-          <EmergencyButton variant="glass" size="sm" className="w-full" onClick={handleReportProblem}>
+          <EmergencyButton variant="glass" size="sm" className="shrink-0" onClick={handleReportProblem}>
             Reportar problema
           </EmergencyButton>
         </div>

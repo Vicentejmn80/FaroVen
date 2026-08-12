@@ -48,7 +48,7 @@ export function NeedCard({ need, onEdit, onMarkCovered, isMarking }: NeedCardPro
         </span>
       </div>
 
-      {!isResolved && (
+      {!isResolved && coverage > 0 && (
         <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
           <div
             className={cn('h-full rounded-full transition-all', barColor)}

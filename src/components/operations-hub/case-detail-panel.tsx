@@ -1,3 +1,4 @@
+import { Children } from 'react'
 import { Copy, Phone } from 'lucide-react'
 import { EmergencyButton } from '@/components/ui/emergency-button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -78,6 +79,8 @@ function DetailSection({
   children: React.ReactNode
   className?: string
 }) {
+  // Sección huérfana (sin contenido) → ocultarla por completo.
+  if (Children.toArray(children).length === 0) return null
   return (
     <section className={cn('space-y-2 border-t border-white/[0.06] pt-3', className)}>
       <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">
@@ -246,37 +249,39 @@ export function CaseDetailPanel({
             </div>
           </DetailSection>
 
-          {/* COBERTURA ACUMULATIVA */}
-          <DetailSection title="Cobertura">
-            <div className="space-y-3">
-              <CoverageProgressBar current={coveredQty} total={requiredQty} />
-              <p className="text-[12px] text-ink-muted">
-                {coveredQty} de {requiredQty} cubiertas (
-                {Math.min(100, Math.round((coveredQty / Math.max(requiredQty, 1)) * 100))}%)
-              </p>
-              {(caseCoverage?.contributions.length ?? 0) > 0 && (
-                <ul className="space-y-1.5">
-                  {caseCoverage!.contributions.map((c) => (
-                    <li
-                      key={c.assignmentId}
-                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[13px] text-ink"
-                    >
-                      <span className="font-medium capitalize">{c.volunteerName}</span>
-                      <span className="text-ink-muted/80">
-                        {' '}
-                        — {c.quantity} u — {c.label} {c.icon}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {remainingQty > 0 && !resolved && (
-                <p className="text-[12px] font-medium text-warning">
-                  Faltan {remainingQty} {remainingQty === 1 ? 'unidad' : 'unidades'}
+          {/* COBERTURA ACUMULATIVA — solo cuando hay cobertura real */}
+          {(coveredQty > 0 || (caseCoverage?.contributions.length ?? 0) > 0) && (
+            <DetailSection title="Cobertura">
+              <div className="space-y-3">
+                <CoverageProgressBar current={coveredQty} total={requiredQty} />
+                <p className="text-[12px] text-ink-muted">
+                  {coveredQty} de {requiredQty} cubiertas (
+                  {Math.min(100, Math.round((coveredQty / Math.max(requiredQty, 1)) * 100))}%)
                 </p>
-              )}
-            </div>
-          </DetailSection>
+                {(caseCoverage?.contributions.length ?? 0) > 0 && (
+                  <ul className="space-y-1.5">
+                    {caseCoverage!.contributions.map((c) => (
+                      <li
+                        key={c.assignmentId}
+                        className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[13px] text-ink"
+                      >
+                        <span className="font-medium capitalize">{c.volunteerName}</span>
+                        <span className="text-ink-muted/80">
+                          {' '}
+                          — {c.quantity} u — {c.label} {c.icon}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {remainingQty > 0 && !resolved && (
+                  <p className="text-[12px] font-medium text-warning">
+                    Faltan {remainingQty} {remainingQty === 1 ? 'unidad' : 'unidades'}
+                  </p>
+                )}
+              </div>
+            </DetailSection>
+          )}
 
           {/* COBERTURA DEL CENTRO */}
           {(caseItem.assignedCenterId ||

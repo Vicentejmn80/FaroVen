@@ -235,6 +235,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
             sites={filteredSites}
             activeId={selectedId}
             onSelect={handleSelect}
+            mobileHideNav
             className="h-full w-full"
           />
         ) : (
@@ -251,8 +252,8 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
 
       {/* Bottom sheet card */}
       {nearest && (
-        <div className="absolute inset-x-0 bottom-0 z-20 px-4 pb-4 lg:mx-auto lg:max-w-3xl lg:px-6 lg:pb-6">
-          <div className={cn('relative', MAP_PANEL_SURFACE)}>
+        <div className="absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:mx-auto lg:max-w-3xl lg:px-6 lg:pb-6">
+          <div className={cn('relative max-h-[70dvh] overflow-y-auto', MAP_PANEL_SURFACE)}>
             <button
               type="button"
               onClick={handleClosePanel}
@@ -353,7 +354,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
                 <EmergencyButton
                   variant="primary"
                   size="sm"
-                  className="flex-1"
+                  className="min-h-11 flex-1"
                   disabled={!canNavigate}
                   onClick={handleNavigate}
                 >
@@ -362,7 +363,7 @@ export function CitizenMapView({ onReport, onViewResources }: CitizenMapViewProp
                 <EmergencyButton
                   variant="glass"
                   size="sm"
-                  className="flex-1"
+                  className="min-h-11 flex-1"
                   onClick={usingPublicNeeds ? handleHelpIntent : onReport}
                   disabled={usingPublicNeeds && !selectedPublicNeed}
                 >

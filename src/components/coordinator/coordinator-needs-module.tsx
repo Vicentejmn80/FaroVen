@@ -72,15 +72,17 @@ export function CoordinatorNeedsModule({ onCreateNeed }: CoordinatorNeedsModuleP
                   {isPending ? 'Cierre pendiente' : `${coverage}% cubierto`}
                 </span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all',
-                    covered ? 'bg-operational' : coverage < 40 ? 'bg-critical' : 'bg-warning',
-                  )}
-                  style={{ width: `${Math.min(100, coverage)}%` }}
-                />
-              </div>
+              {coverage > 0 && (
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      covered ? 'bg-operational' : coverage < 40 ? 'bg-critical' : 'bg-warning',
+                    )}
+                    style={{ width: `${Math.min(100, coverage)}%` }}
+                  />
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <EmergencyButton
                   variant="glass"

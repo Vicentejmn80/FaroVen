@@ -73,11 +73,14 @@ export function MapGoogleLinkButton({
   lng,
   label,
   className,
+  mobileHidden = false,
 }: {
   lat?: number | null
   lng?: number | null
   label?: string | null
   className?: string
+  /** En móvil el bottom sheet del detalle cubre la zona baja del mapa → ocultar los botones flotantes. */
+  mobileHidden?: boolean
 }) {
   const parsedLat = lat ?? NaN
   const parsedLng = lng ?? NaN
@@ -86,7 +89,13 @@ export function MapGoogleLinkButton({
   const viewUrl = buildGoogleMapsViewLink(parsedLat, parsedLng, label)
 
   return (
-    <div className={cn('absolute left-3 bottom-3 z-[1000] flex flex-col gap-1.5 sm:flex-row', className)}>
+    <div
+      className={cn(
+        'absolute left-3 bottom-3 z-[1000] flex flex-col gap-2 pb-[max(0rem,env(safe-area-inset-bottom))] sm:flex-row',
+        mobileHidden && 'hidden lg:flex',
+        className,
+      )}
+    >
       <MapControlButton
         label="Abrir en Google Maps"
         onClick={() => openExternalNavigation({ lat: parsedLat, lng: parsedLng, name: label })}

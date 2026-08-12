@@ -944,6 +944,7 @@ function VolunteerMapCanvas({
           lat={activeMission.location.lat}
           lng={activeMission.location.lng}
           label={activeMission.title}
+          mobileHidden
           className="bottom-4"
         />
       )}

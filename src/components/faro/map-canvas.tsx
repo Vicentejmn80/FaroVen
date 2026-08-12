@@ -16,6 +16,8 @@ interface MapCanvasProps {
   className?: string
   autoFit?: boolean
   showControls?: boolean
+  /** Oculta los botones flotantes del mapa en móvil (cuando un bottom sheet los cubre). */
+  mobileHideNav?: boolean
 }
 
 function sitesWithCoords(sites: Site[]): Site[] {
@@ -29,6 +31,7 @@ export function MapCanvas({
   className,
   autoFit = true,
   showControls = true,
+  mobileHideNav = false,
 }: MapCanvasProps) {
   const mappableSites = useMemo(() => sitesWithCoords(sites), [sites])
 
@@ -89,6 +92,7 @@ export function MapCanvas({
           lat={activeSite.lat}
           lng={activeSite.lng}
           label={activeSite.name}
+          mobileHidden={mobileHideNav}
           className="bottom-4 lg:bottom-6"
         />
       )}
